@@ -253,32 +253,6 @@ def api_create_order():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# ========== API ДЛЯ АДМИНКИ ==========
-@app.route('/api/admin/stats')
-def admin_stats():
-    """Статистика для админки"""
-    db = get_db()
-
-    total_products = db.execute('SELECT COUNT(*) FROM products').fetchone()[0]
-    total_orders = db.execute('SELECT COUNT(*) FROM orders').fetchone()[0]
-    pending_orders = db.execute(
-        "SELECT COUNT(*) FROM orders WHERE status = 'pending'"
-    ).fetchone()[0]
-
-    revenue_result = db.execute(
-        'SELECT SUM(total_price) FROM orders WHERE status = "completed"'
-    ).fetchone()[0]
-    total_revenue = revenue_result if revenue_result else 0
-
-    db.close()
-
-    return jsonify({
-        'total_products': total_products,
-        'total_orders': total_orders,
-        'pending_orders': pending_orders,
-        'total_revenue': total_revenue
-    })
-
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def admin_products():
     """Управление товарами"""

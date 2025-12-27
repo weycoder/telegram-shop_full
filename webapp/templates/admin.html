@@ -334,8 +334,8 @@
         // Ждем загрузки DOM
         document.addEventListener('DOMContentLoaded', function() {
             // Инициализируем админ-панель
-            if (typeof AdminPanelFixed !== 'undefined') {
-                const adminPanel = new AdminPanelFixed();
+            if (typeof Admin !== 'undefined') {
+                const adminPanel = new Admin();
                 window.admin = adminPanel; // Делаем глобально доступной
             } else {
                 console.error('AdminPanelFixed class not found!');

@@ -20,14 +20,13 @@ class Admin {
     }
 
     bindEvents() {
-        // ПРОСТАЯ ЗАГРУЗКА ИЗОБРАЖЕНИЙ
+        const imageFileInput = document.getElementById('imageFileInput'); // ПЕРЕИМЕНОВАН
         const uploadBtn = document.getElementById('uploadImageBtn');
-        const fileInput = document.getElementById('imageFileInput');
 
-        if (uploadBtn && fileInput) {
-            uploadBtn.addEventListener('click', () => fileInput.click());
+        if (uploadBtn && imageFileInput) {
+            uploadBtn.addEventListener('click', () => imageFileInput.click());
 
-            fileInput.addEventListener('change', (e) => {
+            imageFileInput.addEventListener('change', (e) => {
                 if (e.target.files.length) {
                     const file = e.target.files[0];
 
@@ -66,13 +65,12 @@ class Admin {
             this.previewImage(e.target.value);
         });
 
-            // Загрузка изображений
+        const productImageFile = document.getElementById('productImageFile'); // ПЕРЕИМЕНОВАН
         const imageUploadArea = document.getElementById('imageUploadArea');
-        const fileInput = document.getElementById('productImageFile');
 
-        if (imageUploadArea && fileInput) {
+        if (imageUploadArea && productImageFile) {
             // Клик по области загрузки
-            imageUploadArea.addEventListener('click', () => fileInput.click());
+            imageUploadArea.addEventListener('click', () => productImageFile.click());
 
             // Drag & Drop
             imageUploadArea.addEventListener('dragover', (e) => {
