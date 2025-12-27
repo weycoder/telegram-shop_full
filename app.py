@@ -208,56 +208,6 @@ def upload_image():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# ========== API ДЛЯ WEB APP ==========
-@app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
-def admin_products():
-    """Управление товарами"""
-    print(f"📦 API products called: {request.method}")
-
-    db = get_db()
-
-    if request.method == 'GET':
-        products = db.execute(
-            'SELECT * FROM products ORDER BY created_at DESC'
-        ).fetchall()
-        db.close()
-        print(f"✅ GET: Found {len(products)} products")
-        return jsonify([dict(product) for product in products])
-
-    elif request.method == 'POST':
-        try:
-            data = request.json
-            print(f"📝 POST data received: {data}")
-
-            # Проверка данных
-            if not data or 'name' not in data or 'price' not in data:
-                print("❌ Missing required fields")
-                return jsonify({'success': False, 'error': 'Отсутствуют обязательные поля'}), 400
-
-            db.execute('''
-                       INSERT INTO products (name, description, price, image_url, category, stock)
-                       VALUES (?, ?, ?, ?, ?, ?)
-                       ''', (
-                           data.get('name', ''),
-                           data.get('description', ''),
-                           data.get('price', 0),
-                           data.get('image_url', ''),
-                           data.get('category', ''),
-                           data.get('stock', 0)
-                       ))
-            db.commit()
-            product_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-            db.close()
-
-            print(f"✅ Product created with ID: {product_id}")
-            return jsonify({'success': True, 'id': product_id})
-
-        except Exception as e:
-            print(f"❌ Error creating product: {e}")
-            db.close()
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @app.route('/api/categories')
 def api_categories():
     """Получить список категорий"""
@@ -329,10 +279,11 @@ def admin_stats():
         'total_revenue': total_revenue
     })
 
-
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def admin_products():
     """Управление товарами"""
+    print(f"📦 API products called: {request.method}")
+
     db = get_db()
 
     if request.method == 'GET':
@@ -340,18 +291,26 @@ def admin_products():
             'SELECT * FROM products ORDER BY created_at DESC'
         ).fetchall()
         db.close()
+        print(f"✅ GET: Found {len(products)} products")
         return jsonify([dict(product) for product in products])
 
     elif request.method == 'POST':
-        data = request.json
         try:
+            data = request.json
+            print(f"📝 POST data received: {data}")
+
+            # Проверка данных
+            if not data or 'name' not in data or 'price' not in data:
+                print("❌ Missing required fields")
+                return jsonify({'success': False, 'error': 'Отсутствуют обязательные поля'}), 400
+
             db.execute('''
                        INSERT INTO products (name, description, price, image_url, category, stock)
                        VALUES (?, ?, ?, ?, ?, ?)
                        ''', (
-                           data['name'],
-                           data['description'],
-                           data['price'],
+                           data.get('name', ''),
+                           data.get('description', ''),
+                           data.get('price', 0),
                            data.get('image_url', ''),
                            data.get('category', ''),
                            data.get('stock', 0)
@@ -359,49 +318,12 @@ def admin_products():
             db.commit()
             product_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
             db.close()
+
+            print(f"✅ Product created with ID: {product_id}")
             return jsonify({'success': True, 'id': product_id})
-        except Exception as e:
-            db.close()
-            return jsonify({'success': False, 'error': str(e)}), 500
 
-    elif request.method == 'PUT':
-        data = request.json
-        product_id = request.args.get('id')
-
-        try:
-            db.execute('''
-                       UPDATE products
-                       SET name        = ?,
-                           description = ?,
-                           price       = ?,
-                           image_url   = ?,
-                           category    = ?,
-                           stock       = ?
-                       WHERE id = ?
-                       ''', (
-                           data['name'],
-                           data['description'],
-                           data['price'],
-                           data.get('image_url', ''),
-                           data.get('category', ''),
-                           data.get('stock', 0),
-                           product_id
-                       ))
-            db.commit()
-            db.close()
-            return jsonify({'success': True})
         except Exception as e:
-            db.close()
-            return jsonify({'success': False, 'error': str(e)}), 500
-
-    elif request.method == 'DELETE':
-        product_id = request.args.get('id')
-        try:
-            db.execute('DELETE FROM products WHERE id = ?', (product_id,))
-            db.commit()
-            db.close()
-            return jsonify({'success': True})
-        except Exception as e:
+            print(f"❌ Error creating product: {e}")
             db.close()
             return jsonify({'success': False, 'error': str(e)}), 500
 
