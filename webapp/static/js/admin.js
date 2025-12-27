@@ -26,7 +26,6 @@ class Admin {
             e.preventDefault();
             this.logout();
         });
-    }
 
                 // Добавьте метод logout
         logout() {
