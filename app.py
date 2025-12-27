@@ -347,6 +347,316 @@ def update_order_status(order_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ========== ПОЛНОЕ API ДЛЯ АДМИНКИ ==========
+
+@app.route('/api/admin/dashboard')
+def admin_dashboard():
+    """Полная статистика для дашборда"""
+    db = get_db()
+
+    try:
+        # Основная статистика
+        stats = db.execute('''
+                           SELECT COUNT(DISTINCT o.id)                                                             as total_orders,
+                                  COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_price ELSE 0 END),
+                                           0)                                                                      as total_revenue,
+                                  COUNT(CASE WHEN o.status = 'pending' THEN 1 END)                                 as pending_orders,
+                                  COUNT(DISTINCT p.id)                                                             as total_products,
+                                  COUNT(DISTINCT o.user_id)                                                        as total_customers,
+                                  COALESCE(AVG(CASE WHEN o.status = 'completed' THEN o.total_price END),
+                                           0)                                                                      as avg_order_value
+                           FROM orders o,
+                                products p
+                           ''').fetchone()
+
+        # Продажи по дням (последние 7 дней)
+        sales_by_day = db.execute('''
+                                  SELECT
+                                      DATE (created_at) as date, COUNT (*) as orders_count, COALESCE (SUM (total_price), 0) as revenue
+                                  FROM orders
+                                  WHERE status = 'completed'
+                                    AND created_at >= DATE ('now'
+                                      , '-7 days')
+                                  GROUP BY DATE (created_at)
+                                  ORDER BY date
+                                  ''').fetchall()
+
+        # Продажи по категориям
+        category_sales = db.execute('''
+                                    SELECT p.category,
+                                           COUNT(DISTINCT o.id)            as order_count,
+                                           COALESCE(SUM(o.total_price), 0) as revenue
+                                    FROM orders o,
+                                         json_each(o.items) j
+                                             LEFT JOIN products p ON json_extract(j.value, '$.id') = p.id
+                                    WHERE o.status = 'completed'
+                                    GROUP BY p.category
+                                    ORDER BY revenue DESC
+                                    ''').fetchall()
+
+        # Последние заказы
+        recent_orders = db.execute('''
+                                   SELECT id,
+                                          user_id,
+                                          username,
+                                          total_price,
+                                          status,
+                                          created_at,
+                                          (SELECT COUNT(*) FROM json_each(items)) as items_count
+                                   FROM orders
+                                   ORDER BY created_at DESC LIMIT 10
+                                   ''').fetchall()
+
+        result = {
+            'total_orders': stats['total_orders'] or 0,
+            'total_revenue': stats['total_revenue'] or 0,
+            'pending_orders': stats['pending_orders'] or 0,
+            'total_products': stats['total_products'] or 0,
+            'total_customers': stats['total_customers'] or 0,
+            'avg_order_value': stats['avg_order_value'] or 0,
+            'sales_by_day': [dict(row) for row in sales_by_day],
+            'category_sales': [dict(row) for row in category_sales],
+            'recent_orders': [dict(row) for row in recent_orders]
+        }
+
+        db.close()
+        return jsonify(result)
+
+    except Exception as e:
+        db.close()
+        print(f"Error in admin_dashboard: {e}")
+        return jsonify({
+            'total_orders': 0,
+            'total_revenue': 0,
+            'pending_orders': 0,
+            'total_products': 0,
+            'total_customers': 0,
+            'avg_order_value': 0,
+            'sales_by_day': [],
+            'category_sales': [],
+            'recent_orders': []
+        })
+
+
+@app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def admin_products():
+    """Полное управление товарами"""
+    db = get_db()
+
+    try:
+        if request.method == 'GET':
+            # Получить все товары
+            products = db.execute('''
+                                  SELECT *
+                                  FROM products
+                                  ORDER BY created_at DESC
+                                  ''').fetchall()
+
+            db.close()
+            return jsonify([dict(product) for product in products])
+
+        elif request.method == 'POST':
+            # Создать новый товар
+            data = request.json
+
+            # Валидация
+            if not data.get('name') or not data.get('price'):
+                db.close()
+                return jsonify({'success': False, 'error': 'Необходимо указать название и цену'}), 400
+
+            # Вставляем товар
+            cursor = db.execute('''
+                                INSERT INTO products (name, description, price, image_url, category, stock)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    data['name'],
+                                    data.get('description', ''),
+                                    float(data['price']),
+                                    data.get('image_url', ''),
+                                    data.get('category', ''),
+                                    int(data.get('stock', 0))
+                                ))
+
+            db.commit()
+            product_id = cursor.lastrowid
+
+            # Получаем созданный товар
+            product = db.execute(
+                'SELECT * FROM products WHERE id = ?',
+                (product_id,)
+            ).fetchone()
+
+            db.close()
+            return jsonify({'success': True, 'product': dict(product)})
+
+        elif request.method == 'PUT':
+            # Обновить товар
+            product_id = request.args.get('id')
+            data = request.json
+
+            if not product_id:
+                db.close()
+                return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
+
+            # Проверяем существование товара
+            existing = db.execute(
+                'SELECT id FROM products WHERE id = ?',
+                (product_id,)
+            ).fetchone()
+
+            if not existing:
+                db.close()
+                return jsonify({'success': False, 'error': 'Товар не найден'}), 404
+
+            # Обновляем товар
+            db.execute('''
+                       UPDATE products
+                       SET name        = ?,
+                           description = ?,
+                           price       = ?,
+                           image_url   = ?,
+                           category    = ?,
+                           stock       = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name', ''),
+                           data.get('description', ''),
+                           float(data.get('price', 0)),
+                           data.get('image_url', ''),
+                           data.get('category', ''),
+                           int(data.get('stock', 0)),
+                           product_id
+                       ))
+
+            db.commit()
+            db.close()
+            return jsonify({'success': True})
+
+        elif request.method == 'DELETE':
+            # Удалить товар
+            product_id = request.args.get('id')
+
+            if not product_id:
+                db.close()
+                return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
+
+            # Удаляем товар
+            db.execute('DELETE FROM products WHERE id = ?', (product_id,))
+            db.commit()
+            db.close()
+            return jsonify({'success': True})
+
+    except Exception as e:
+        db.close()
+        print(f"Error in admin_products: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/orders', methods=['GET'])
+def admin_orders():
+    """Получить все заказы"""
+    db = get_db()
+
+    try:
+        orders = db.execute('''
+                            SELECT *
+                            FROM orders
+                            ORDER BY created_at DESC
+                            ''').fetchall()
+
+        db.close()
+        return jsonify([dict(order) for order in orders])
+    except Exception as e:
+        db.close()
+        print(f"Error in admin_orders: {e}")
+        return jsonify([])
+
+
+@app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
+def update_order_status(order_id):
+    """Обновить статус заказа"""
+    db = get_db()
+
+    try:
+        data = request.json
+        new_status = data.get('status')
+
+        if new_status not in ['pending', 'processing', 'completed', 'cancelled']:
+            db.close()
+            return jsonify({'success': False, 'error': 'Неверный статус'}), 400
+
+        # Обновляем статус
+        db.execute(
+            'UPDATE orders SET status = ? WHERE id = ?',
+            (new_status, order_id)
+        )
+
+        db.commit()
+        db.close()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.close()
+        print(f"Error in update_order_status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ========== ДОПОЛНИТЕЛЬНЫЕ API ==========
+
+@app.route('/api/admin/categories')
+def admin_categories():
+    """Получить список категорий с количеством товаров"""
+    db = get_db()
+
+    try:
+        categories = db.execute('''
+                                SELECT category,
+                                       COUNT(*)   as product_count,
+                                       SUM(stock) as total_stock,
+                                       AVG(price) as avg_price
+                                FROM products
+                                WHERE category IS NOT NULL
+                                  AND category != ''
+                                GROUP BY category
+                                ORDER BY product_count DESC
+                                ''').fetchall()
+
+        db.close()
+        return jsonify([dict(row) for row in categories])
+    except Exception as e:
+        db.close()
+        print(f"Error in admin_categories: {e}")
+        return jsonify([])
+
+
+@app.route('/api/admin/cleanup', methods=['POST'])
+def admin_cleanup():
+    """Очистить старые/тестовые данные"""
+    db = get_db()
+
+    try:
+        # Удаляем товары с нулевым остатком (опционально)
+        # db.execute('DELETE FROM products WHERE stock = 0')
+
+        # Удаляем старые отмененные заказы (старше 30 дней)
+        db.execute('''
+                   DELETE
+                   FROM orders
+                   WHERE status = 'cancelled'
+                     AND created_at < DATE ('now'
+                       , '-30 days')
+                   ''')
+
+        db.commit()
+        db.close()
+        return jsonify({'success': True, 'message': 'Очистка выполнена'})
+
+    except Exception as e:
+        db.close()
+        print(f"Error in admin_cleanup: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ========== ЗАПУСК ==========
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

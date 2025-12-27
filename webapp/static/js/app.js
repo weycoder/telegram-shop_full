@@ -1,6 +1,31 @@
 // Telegram Shop Web App - Основной JS файл
 
 class TelegramShop {
+
+    closeCart() {
+    document.getElementById('cartOverlay').style.display = 'none';
+    this.updateBackButton();
+    }
+
+    closeProductModal() {
+    document.getElementById('productModal').style.display = 'none';
+    this.currentProduct = null;
+    this.updateBackButton();
+    }
+
+    updateBackButton() {
+    if (window.Telegram?.WebApp) {
+        const cartOpen = document.getElementById('cartOverlay').style.display === 'flex';
+        const modalOpen = document.getElementById('productModal').style.display === 'flex';
+
+        if (cartOpen || modalOpen) {
+            Telegram.WebApp.BackButton.show();
+        } else {
+            Telegram.WebApp.BackButton.hide();
+            }
+        }
+    }
+
     constructor() {
         this.cart = this.loadCart();
         this.currentProduct = null;
@@ -23,7 +48,46 @@ class TelegramShop {
     }
 
     bindEvents() {
-        // Корзина
+         // Кнопки закрытия
+        document.getElementById('closeCart')?.addEventListener('click', () => this.closeCart());
+        document.getElementById('closeProductModal')?.addEventListener('click', () => this.closeProductModal());
+
+        // Закрытие по клику на оверлей
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('cart-overlay')) this.closeCart();
+            if (e.target.classList.contains('product-modal-overlay')) this.closeProductModal();
+        });
+
+        // Escape для закрытия
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeCart();
+                this.closeProductModal();
+            }
+        });
+
+        // Telegram BackButton
+        if (window.Telegram?.WebApp) {
+            Telegram.WebApp.BackButton.onClick(() => {
+                if (this.isCartOpen()) {
+                    this.closeCart();
+                } else if (this.isProductModalOpen()) {
+                    this.closeProductModal();
+                } else {
+                    Telegram.WebApp.close();
+                    }
+                });
+            }
+        }
+
+    isCartOpen() {
+        return document.getElementById('cartOverlay')?.style.display === 'flex';
+        }
+
+    isProductModalOpen() {
+        return document.getElementById('productModal')?.style.display === 'flex';
+        }
+              // Корзина
         document.getElementById('cartBtn')?.addEventListener('click', () => this.toggleCart());
         document.getElementById('closeCart')?.addEventListener('click', () => this.closeCart());
         document.getElementById('clearCart')?.addEventListener('click', () => this.clearCart());

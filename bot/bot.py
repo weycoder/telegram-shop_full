@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Конфигурация
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_IDS = list(map(int, os.getenv('ADMIN_IDS', '').split(','))) if os.getenv('ADMIN_IDS') else []
-WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://ваш-проект.onrender.com')
+WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
