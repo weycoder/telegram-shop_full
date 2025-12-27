@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛍️ Telegram Shop - Главная</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <div class="logo">
+                <i class="fas fa-shopping-bag"></i>
+                <h1>Telegram Shop</h1>
+            </div>
+            <nav class="main-nav">
+                <a href="/webapp" class="nav-link active">
+                    <i class="fas fa-store"></i> Магазин
+                </a>
+                <a href="/admin" class="nav-link">
+                    <i class="fas fa-user-shield"></i> Админка
+                </a>
+                <a href="https://t.me/ваш_бот" class="nav-link telegram" target="_blank">
+                    <i class="fab fa-telegram"></i> Открыть в Telegram
+                </a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <section class="hero">
+                <div class="hero-content">
+                    <h2>Интернет-магазин <span class="highlight">в Telegram</span></h2>
+                    <p class="hero-subtitle">Красивый, современный и удобный магазин прямо в мессенджере</p>
+
+                    <div class="hero-buttons">
+                        <a href="/webapp" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt"></i> Посмотреть магазин
+                        </a>
+                        <a href="/admin" class="btn btn-secondary">
+                            <i class="fas fa-cogs"></i> Панель управления
+                        </a>
+                    </div>
+                </div>
+                <div class="hero-image">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3800/3800024.png" alt="Telegram Shop">
+                </div>
+            </section>
+
+            <section class="features">
+                <h3 class="section-title">✨ Почему наш магазин?</h3>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <h4>Быстро</h4>
+                        <p>Покупки за 2 клика прямо в Telegram</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h4>Безопасно</h4>
+                        <p>Оплата через Telegram без рисков</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <h4>Удобно</h4>
+                        <p>Работает на любом устройстве</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-headset"></i>
+                        </div>
+                        <h4>Поддержка</h4>
+                        <p>Помощь прямо в чате с ботом</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="how-it-works">
+                <h3 class="section-title">🚀 Как начать?</h3>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h4>Найдите бота</h4>
+                        <p>@ваш_бот в Telegram</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h4>Нажмите /start</h4>
+                        <p>Запустите бота командой</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <h4>Откройте магазин</h4>
+                        <p>Нажмите кнопку в боте</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <h4>Покупайте!</h4>
+                        <p>Выбирайте товары и оформляйте заказы</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="api-info">
+                <h3 class="section-title">🔧 Для разработчиков</h3>
+                <div class="api-endpoints">
+                    <div class="endpoint">
+                        <code>GET /api/products</code>
+                        <p>Список товаров</p>
+                    </div>
+                    <div class="endpoint">
+                        <code>GET /api/categories</code>
+                        <p>Список категорий</p>
+                    </div>
+                    <div class="endpoint">
+                        <code>POST /api/create-order</code>
+                        <p>Создание заказа</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="main-footer">
+            <p>© 2024 Telegram Shop. Все права защищены.</p>
+            <p>Разработано с <i class="fas fa-heart" style="color: #e74c3c;"></i> для Telegram</p>
+        </footer>
+    </div>
+
+    <script>
+        // Telegram Web App интеграция
+        if (window.Telegram && Telegram.WebApp) {
+            Telegram.WebApp.expand();
+            Telegram.WebApp.setHeaderColor('#667eea');
+
+            // Показываем сообщение для Telegram
+            const hero = document.querySelector('.hero-content h2');
+            if (hero) {
+                hero.innerHTML = 'Добро пожаловать в <span class="highlight">Telegram Shop</span>!';
+            }
+        }
+
+        // Анимация при скролле
+        document.addEventListener('DOMContentLoaded', function() {
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animated');
+                    }
+                });
+            }, observerOptions);
+
+            // Наблюдаем за карточками
+            document.querySelectorAll('.feature-card, .step, .endpoint').forEach(el => {
+                observer.observe(el);
+            });
+        });
+    </script>
+</body>
+</html>

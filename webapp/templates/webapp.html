@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛒 Магазин - Telegram Shop</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="webapp">
+    <div class="container">
+        <!-- Хедер магазина -->
+        <header class="shop-header">
+            <div class="shop-logo">
+                <i class="fas fa-shopping-bag"></i>
+                <h1>Telegram Shop</h1>
+            </div>
+            <div class="shop-actions">
+                <button class="cart-btn" id="cartBtn">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="cart-count" id="cartCount">0</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Категории -->
+        <div class="categories-container">
+            <div class="categories" id="categories">
+                <button class="category-btn active" data-category="all">
+                    <i class="fas fa-th-large"></i> Все товары
+                </button>
+                <!-- Категории загружаются через JS -->
+            </div>
+        </div>
+
+        <!-- Сетка товаров -->
+        <div class="products-grid" id="products">
+            <!-- Товары загружаются через JS -->
+            <div class="loading" id="loading">
+                <i class="fas fa-spinner fa-spin"></i> Загрузка товаров...
+            </div>
+        </div>
+
+        <!-- Корзина -->
+        <div class="cart-overlay" id="cartOverlay">
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
+                    <button class="close-cart" id="closeCart">&times;</button>
+                </div>
+
+                <div class="cart-items" id="cartItems">
+                    <div class="empty-cart" id="emptyCart">
+                        <i class="fas fa-shopping-cart"></i>
+                        <p>Корзина пуста</p>
+                        <p>Добавьте товары из каталога</p>
+                    </div>
+                </div>
+
+                <div class="cart-footer">
+                    <div class="cart-summary">
+                        <div class="cart-total">
+                            <span>Итого:</span>
+                            <span class="total-price" id="cartTotal">0</span> ₽
+                        </div>
+                        <div class="cart-actions">
+                            <button class="btn btn-outline" id="clearCart">
+                                Очистить корзину
+                            </button>
+                            <button class="btn btn-primary" id="checkoutBtn">
+                                <i class="fas fa-paper-plane"></i> Оформить заказ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно товара -->
+        <div class="product-modal-overlay" id="productModal">
+            <div class="product-modal">
+                <button class="close-product-modal" id="closeProductModal">&times;</button>
+                <div class="product-modal-content">
+                    <img class="product-modal-image" id="modalImage" src="" alt="">
+                    <div class="product-modal-info">
+                        <h3 id="modalTitle"></h3>
+                        <p class="product-modal-description" id="modalDescription"></p>
+
+                        <div class="product-modal-price">
+                            <span id="modalPrice"></span> ₽
+                        </div>
+
+                        <div class="product-modal-stock">
+                            <i class="fas fa-box"></i>
+                            В наличии: <span id="modalStock"></span> шт.
+                        </div>
+
+                        <div class="quantity-selector">
+                            <button class="qty-btn minus" id="qtyMinus">-</button>
+                            <input type="number" id="quantity" value="1" min="1" max="100">
+                            <button class="qty-btn plus" id="qtyPlus">+</button>
+                        </div>
+
+                        <button class="btn btn-primary btn-block" id="addToCartModal">
+                            <i class="fas fa-cart-plus"></i> Добавить в корзину
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Уведомления -->
+        <div class="notifications" id="notifications"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        // Telegram Web App интеграция
+        if (window.Telegram && Telegram.WebApp) {
+            // Расширяем на весь экран
+            Telegram.WebApp.expand();
+
+            // Настраиваем цвета
+            Telegram.WebApp.setHeaderColor('#667eea');
+            Telegram.WebApp.setBackgroundColor('#f5f7fa');
+
+            // Включаем подтверждение закрытия
+            Telegram.WebApp.enableClosingConfirmation();
+
+            // Показываем кнопку "Назад"
+            Telegram.WebApp.BackButton.show();
+            Telegram.WebApp.BackButton.onClick(function() {
+                window.history.back();
+            });
+
+            // Меняем тему в зависимости от Telegram
+            if (Telegram.WebApp.colorScheme === 'dark') {
+                document.body.classList.add('dark-mode');
+            }
+
+            console.log('✅ Telegram Web App инициализирован');
+            console.log('User:', Telegram.WebApp.initDataUnsafe.user);
+        } else {
+            console.log('ℹ️ Открыто в браузере, а не в Telegram');
+
+            // Для тестов в браузере добавляем заглушку
+            if (!window.Telegram) {
+                window.Telegram = {};
+                window.Telegram.WebApp = {
+                    expand: function() { console.log('WebApp расширен'); },
+                    setHeaderColor: function() { console.log('Цвет изменен'); },
+                    setBackgroundColor: function() { console.log('Фон изменен'); },
+                    enableClosingConfirmation: function() { console.log('Подтверждение включено'); },
+                    BackButton: {
+                        show: function() { console.log('Кнопка назад показана'); },
+                        onClick: function() { console.log('Клик по кнопке назад'); }
+                    },
+                    colorScheme: 'light'
+                };
+            }
+        }
+    </script>
+</body>
+</html>

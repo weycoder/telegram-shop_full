@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👨‍💼 Админ панель - Telegram Shop</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="admin">
+    <div class="admin-container">
+        <!-- Сайдбар -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-header">
+                <div class="admin-logo">
+                    <i class="fas fa-crown"></i>
+                    <h2>Админ панель</h2>
+                </div>
+                <div class="admin-user">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Администратор</span>
+                </div>
+            </div>
+
+            <nav class="admin-nav">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Статистика</span>
+                </a>
+                <a href="#" class="nav-item" data-page="products">
+                    <i class="fas fa-box"></i>
+                    <span>Товары</span>
+                </a>
+                <a href="#" class="nav-item" data-page="orders">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>Заказы</span>
+                </a>
+                <a href="#" class="nav-item" data-page="add-product">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Добавить товар</span>
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Настройки</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Выйти
+                </button>
+            </div>
+        </aside>
+
+        <!-- Основной контент -->
+        <main class="admin-main">
+            <!-- Хедер -->
+            <header class="admin-header">
+                <div class="header-left">
+                    <h1 id="pageTitle">Статистика</h1>
+                    <div class="last-updated">
+                        <i class="fas fa-sync-alt"></i>
+                        Обновлено: <span id="lastUpdated">только что</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button class="btn-refresh" id="refreshBtn">
+                        <i class="fas fa-redo"></i> Обновить
+                    </button>
+                    <button class="btn-notifications">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-count">3</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Контентные страницы -->
+            <div class="admin-content">
+                <!-- Статистика -->
+                <div class="page active" id="dashboard">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon revenue">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalRevenue">0 ₽</h3>
+                                <p>Общая выручка</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon orders">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalOrders">0</h3>
+                                <p>Всего заказов</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon products">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalProducts">0</h3>
+                                <p>Всего товаров</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon pending">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="pendingOrders">0</h3>
+                                <p>Ожидают обработки</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <canvas id="salesChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="categoriesChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="recent-orders">
+                        <h3>Последние заказы</h3>
+                        <div class="orders-table" id="recentOrders">
+                            <!-- Загружается через JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Управление товарами -->
+                <div class="page" id="products">
+                    <div class="products-header">
+                        <h2>Управление товарами</h2>
+                        <div class="products-actions">
+                            <button class="btn btn-primary" id="addProductBtn">
+                                <i class="fas fa-plus"></i> Добавить товар
+                            </button>
+                            <button class="btn btn-secondary" id="exportProducts">
+                                <i class="fas fa-file-export"></i> Экспорт
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="products-table-container">
+                        <table class="products-table" id="productsTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Изображение</th>
+                                    <th>Название</th>
+                                    <th>Цена</th>
+                                    <th>Остаток</th>
+                                    <th>Категория</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productsTableBody">
+                                <!-- Загружается через JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination" id="productsPagination">
+                        <!-- Пагинация -->
+                    </div>
+                </div>
+
+                <!-- Заказы -->
+                <div class="page" id="orders">
+                    <div class="orders-header">
+                        <h2>Управление заказами</h2>
+                        <div class="orders-filter">
+                            <select id="orderStatusFilter" class="filter-select">
+                                <option value="all">Все статусы</option>
+                                <option value="pending">Ожидают</option>
+                                <option value="processing">В обработке</option>
+                                <option value="completed">Завершены</option>
+                                <option value="cancelled">Отменены</option>
+                            </select>
+                            <input type="date" id="orderDateFilter" class="filter-date">
+                        </div>
+                    </div>
+
+                    <div class="orders-table-container">
+                        <table class="orders-table" id="ordersTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Пользователь</th>
+                                    <th>Товары</th>
+                                    <th>Сумма</th>
+                                    <th>Статус</th>
+                                    <th>Дата</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTableBody">
+                                <!-- Загружается через JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Добавление товара -->
+                <div class="page" id="add-product">
+                    <div class="add-product-header">
+                        <h2>Добавить новый товар</h2>
+                    </div>
+
+                    <form class="add-product-form" id="addProductForm">
+                        <div class="form-section">
+                            <h3>Основная информация</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="productName">Название товара *</label>
+                                    <input type="text" id="productName" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="productPrice">Цена (₽) *</label>
+                                    <input type="number" id="productPrice" step="0.01" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="productStock">Количество *</label>
+                                    <input type="number" id="productStock" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="productCategory">Категория</label>
+                                    <select id="productCategory">
+                                        <option value="">Выберите категорию</option>
+                                        <option value="Телефоны">Телефоны</option>
+                                        <option value="Ноутбуки">Ноутбуки</option>
+                                        <option value="Аксессуары">Аксессуары</option>
+                                        <option value="Гаджеты">Гаджеты</option>
+                                        <option value="Другое">Другое</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3>Описание и изображение</h3>
+                            <div class="form-group">
+                                <label for="productDescription">Описание</label>
+                                <textarea id="productDescription" rows="4"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="productImage">URL изображения</label>
+                                <input type="url" id="productImage"
+                                       placeholder="https://example.com/image.jpg">
+                                <div class="image-preview" id="imagePreview"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelAdd">
+                                Отмена
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Сохранить товар
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Настройки -->
+                <div class="page" id="settings">
+                    <h2>Настройки магазина</h2>
+                    <p>Раздел в разработке...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Модальные окна -->
+    <div class="modal-overlay" id="editProductModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Редактировать товар</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="editProductForm">
+                <input type="hidden" id="editProductId">
+                <div class="form-group">
+                    <label>Название</label>
+                    <input type="text" id="editProductName" required>
+                </div>
+                <div class="form-group">
+                    <label>Цена</label>
+                    <input type="number" id="editProductPrice" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Количество</label>
+                    <input type="number" id="editProductStock" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="orderDetailsModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>Детали заказа #<span id="orderDetailsId"></span></h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="orderDetailsBody">
+                <!-- Загружается через JS -->
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script>
+        // Telegram Web App для админки
+        if (window.Telegram && Telegram.WebApp) {
+            Telegram.WebApp.expand();
+            Telegram.WebApp.setHeaderColor('#2c3e50');
+
+            // Добавляем кнопку назад
+            Telegram.WebApp.BackButton.show();
+            Telegram.WebApp.BackButton.onClick(function() {
+                window.location.href = '/';
+            });
+        }
+    </script>
+</body>
+</html>
