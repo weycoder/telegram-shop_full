@@ -53,9 +53,8 @@ class Admin {
             });
         }
 
-        // Обновляем превью при изменении URL
         document.getElementById('productImage')?.addEventListener('input', (e) => {
-            this.previewImage(e.target.value);
+            this.previewImage(e.target.value); // Просто вызываем функцию
         });
 
         // Кнопка "Выйти"
