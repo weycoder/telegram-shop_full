@@ -1,4 +1,3 @@
-// Telegram Shop Admin Panel - Полностью рабочий
 class Admin {
     constructor() {
         this.currentPage = 'dashboard';
@@ -20,7 +19,8 @@ class Admin {
     }
 
     bindEvents() {
-        const imageFileInput = document.getElementById('imageFileInput'); // ПЕРЕИМЕНОВАН
+        // Исправленная загрузка изображений - только одно объявление
+        const imageFileInput = document.getElementById('imageFileInput');
         const uploadBtn = document.getElementById('uploadImageBtn');
 
         if (uploadBtn && imageFileInput) {
@@ -30,16 +30,13 @@ class Admin {
                 if (e.target.files.length) {
                     const file = e.target.files[0];
 
-                    // Проверяем что это изображение
                     if (!file.type.startsWith('image/')) {
                         this.showAlert('❌ Выберите файл изображения', 'error');
                         return;
                     }
 
-                    // Создаем превью
                     const reader = new FileReader();
                     reader.onload = (event) => {
-                        // Показываем превью
                         const preview = document.getElementById('imagePreview');
                         preview.innerHTML = `
                             <img src="${event.target.result}"
@@ -48,12 +45,8 @@ class Admin {
                             <p>Выбранное изображение</p>
                         `;
 
-                        // Для демо - используем base64 или placeholder
-                        // В реальном приложении нужно загрузить на сервер
-                        document.getElementById('productImage').value =
-                            'https://via.placeholder.com/300x200?text=Загруженное+изображение';
-
-                        this.showAlert('✅ Изображение выбрано. На Render загрузка файлов не работает.', 'info');
+                        document.getElementById('productImage').value = event.target.result;
+                        this.showAlert('✅ Изображение выбрано', 'info');
                     };
                     reader.readAsDataURL(file);
                 }
@@ -65,67 +58,12 @@ class Admin {
             this.previewImage(e.target.value);
         });
 
-        const productImageFile = document.getElementById('productImageFile'); // ПЕРЕИМЕНОВАН
-        const imageUploadArea = document.getElementById('imageUploadArea');
-
-        if (imageUploadArea && productImageFile) {
-            // Клик по области загрузки
-            imageUploadArea.addEventListener('click', () => productImageFile.click());
-
-            // Drag & Drop
-            imageUploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                imageUploadArea.style.borderColor = '#2ecc71';
-                imageUploadArea.style.background = '#e8f6ef';
-            });
-
-            imageUploadArea.addEventListener('dragleave', () => {
-                imageUploadArea.style.borderColor = '#3498db';
-                imageUploadArea.style.background = '#f8f9fa';
-            });
-
-            imageUploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                imageUploadArea.style.borderColor = '#3498db';
-                imageUploadArea.style.background = '#f8f9fa';
-
-                if (e.dataTransfer.files.length) {
-                    this.handleImageUpload(e.dataTransfer.files[0]);
-                }
-            });
-
-            // Выбор файла через диалог
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length) {
-                    this.handleImageUpload(e.target.files[0]);
-                }
-            });
-
-            // Обновление превью при вводе URL
-            document.getElementById('productImageUrl')?.addEventListener('input', (e) => {
-                this.previewImage(e.target.value);
-            });
-        }
-
-
         // Кнопка "Выйти"
         document.querySelector('.btn-logout')?.addEventListener('click', (e) => {
             e.preventDefault();
             this.logout();
         });
 
-                // Добавьте метод logout
-        logout() {
-            if (confirm('Вы уверены, что хотите выйти из админ-панели?')) {
-                // Очистка localStorage/sessionStorage если нужно
-                localStorage.removeItem('admin_auth');
-                sessionStorage.clear();
-
-                // Редирект
-                window.location.href = '/';
-                // или window.location.href = '/login';
-            }
-        }
         // Навигация
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
@@ -957,3 +895,5 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     document.head.appendChild(style);
 });
+
+window.Admin = Admin;
