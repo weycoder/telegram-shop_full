@@ -13,6 +13,19 @@ CORS(app)
 # Конфигурация
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['DATABASE'] = 'shop.db'
+# Создай папку для загрузок
+UPLOAD_FOLDER = 'webapp/static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB
+
+
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # ========== БАЗА ДАННЫХ ==========
@@ -147,6 +160,49 @@ def admin_page():
     """Админ панель"""
     return render_template('admin.html')
 
+
+@app.route('/api/admin/upload-image', methods=['POST'])
+def upload_image():
+    """Загрузка изображения для товара"""
+    if 'image' not in request.files:
+        return jsonify({'success': False, 'error': 'Файл не выбран'})
+
+    file = request.files['image']
+
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'Файл не выбран'})
+
+    if not allowed_file(file.filename):
+        return jsonify({'success': False, 'error': 'Недопустимый формат файла'})
+
+    try:
+        # Генерируем уникальное имя файла
+        filename = str(uuid.uuid4())[:8] + '_' + secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Создаем папку если нет
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+        # Сохраняем файл
+        file.save(filepath)
+
+        # Возвращаем URL для доступа к файлу
+        image_url = f'/static/uploads/{filename}'
+
+        return jsonify({
+            'success': True,
+            'url': image_url,
+            'filename': filename
+        })
+    except Exception as e:
+        print(f"Ошибка загрузки изображения: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Добавь статический маршрут для загрузок
+@app.route('/static/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # ========== API ДЛЯ WEB APP ==========
 @app.route('/api/products')

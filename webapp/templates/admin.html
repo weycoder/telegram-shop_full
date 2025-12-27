@@ -246,16 +246,23 @@
                         </div>
 
                         <div class="form-section">
-                            <h3>Описание и изображение</h3>
+                            <h3>Изображение товара</h3>
                             <div class="form-group">
-                                <label for="productDescription">Описание</label>
-                                <textarea id="productDescription" rows="4"></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label for="productImage">URL изображения</label>
-                                <input type="url" id="productImage"
-                                       placeholder="https://example.com/image.jpg">
-                                <div class="image-preview" id="imagePreview"></div>
+                                <label for="productImageFile">Загрузить фото с устройства</label>
+                                <input type="file" id="productImageFile" accept="image/*" style="display: none;">
+                                <div class="image-upload-area" id="imageUploadArea">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <p>Нажмите чтобы загрузить фото</p>
+                                    <span>Или перетащите файл сюда</span>
+                                </div>
+
+                                <label for="productImageUrl">Или укажите URL изображения</label>
+                                <input type="url" id="productImageUrl" placeholder="https://example.com/image.jpg">
+
+                                <div class="image-preview" id="imagePreview">
+                                    <i class="fas fa-image"></i>
+                                    <p>Превью изображения</p>
+                                </div>
                             </div>
                         </div>
 
@@ -356,7 +363,7 @@
         });
     </script>
     <script>
-    setTimeout(function() {
+        setTimeout(function() {
         console.log('🛠️ Включаем кнопки...');
 
         const buttons = document.querySelectorAll('.nav-item');

@@ -21,6 +21,50 @@ class Admin {
 
     bindEvents() {
 
+            // Загрузка изображений
+        const imageUploadArea = document.getElementById('imageUploadArea');
+        const fileInput = document.getElementById('productImageFile');
+
+        if (imageUploadArea && fileInput) {
+            // Клик по области загрузки
+            imageUploadArea.addEventListener('click', () => fileInput.click());
+
+            // Drag & Drop
+            imageUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                imageUploadArea.style.borderColor = '#2ecc71';
+                imageUploadArea.style.background = '#e8f6ef';
+            });
+
+            imageUploadArea.addEventListener('dragleave', () => {
+                imageUploadArea.style.borderColor = '#3498db';
+                imageUploadArea.style.background = '#f8f9fa';
+            });
+
+            imageUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                imageUploadArea.style.borderColor = '#3498db';
+                imageUploadArea.style.background = '#f8f9fa';
+
+                if (e.dataTransfer.files.length) {
+                    this.handleImageUpload(e.dataTransfer.files[0]);
+                }
+            });
+
+            // Выбор файла через диалог
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    this.handleImageUpload(e.target.files[0]);
+                }
+            });
+
+            // Обновление превью при вводе URL
+            document.getElementById('productImageUrl')?.addEventListener('input', (e) => {
+                this.previewImage(e.target.value);
+            });
+        }
+
+
         // Кнопка "Выйти"
         document.querySelector('.btn-logout')?.addEventListener('click', (e) => {
             e.preventDefault();
@@ -117,6 +161,50 @@ class Admin {
             });
         }
     }
+
+
+    async handleImageUpload(file) {
+    if (!file.type.startsWith('image/')) {
+        this.showAlert('❌ Пожалуйста, выберите файл изображения', 'error');
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB
+        this.showAlert('❌ Файл слишком большой (максимум 5MB)', 'error');
+        return;
+    }
+
+    try {
+        // Создаем превью
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            this.previewImage(e.target.result);
+        };
+        reader.readAsDataURL(file);
+
+        // Загружаем на сервер
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch('/api/admin/upload-image', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Сохраняем URL в поле ввода
+            document.getElementById('productImageUrl').value = result.url;
+            this.showAlert('✅ Изображение загружено!', 'success');
+        } else {
+            this.showAlert('❌ Ошибка загрузки изображения', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки изображения:', error);
+        this.showAlert('❌ Ошибка загрузки изображения', 'error');
+    }
+}
 
     // ========== ЗАГРУЗКА ДАННЫХ ==========
     async loadAllData() {
@@ -365,18 +453,22 @@ class Admin {
     }
 
     async addProduct() {
+        const imageUrl = document.getElementById('productImageUrl').value.trim();
+
         const formData = {
             name: document.getElementById('productName').value.trim(),
             description: document.getElementById('productDescription').value.trim(),
             price: parseFloat(document.getElementById('productPrice').value),
             stock: parseInt(document.getElementById('productStock').value),
             category: document.getElementById('productCategory').value.trim(),
-            image_url: document.getElementById('productImage').value.trim()
+            image_url: imageUrl || 'https://via.placeholder.com/300x200'
         };
+
+        console.log('📝 Данные для отправки:', formData); // ДЛЯ ДЕБАГА
 
         // Валидация
         if (!formData.name || !formData.price || isNaN(formData.price) || !formData.stock || isNaN(formData.stock)) {
-            this.showAlert('❌ Заполните обязательные поля корректно', 'error');
+            this.showAlert('❌ Заполните обязательные поля: название, цена и количество', 'error');
             return;
         }
 
@@ -390,17 +482,23 @@ class Admin {
             });
 
             const result = await response.json();
+            console.log('📤 Ответ сервера:', result); // ДЛЯ ДЕБАГА
 
             if (result.success) {
                 this.showAlert('✅ Товар успешно добавлен!', 'success');
-                this.loadAllData();
+                // Очищаем форму
+                document.getElementById('addProductForm').reset();
+                document.getElementById('imagePreview').innerHTML = '';
+                // Обновляем список товаров
+                this.loadProducts();
+                // Возвращаемся к списку товаров
                 this.showPage('products');
             } else {
                 this.showAlert('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
             }
         } catch (error) {
             console.error('Ошибка добавления товара:', error);
-            this.showAlert('❌ Ошибка добавления товара', 'error');
+            this.showAlert('❌ Ошибка соединения с сервером', 'error');
         }
     }
 
@@ -662,12 +760,20 @@ class Admin {
             return;
         }
 
-        preview.innerHTML = `
-            <img src="${url}"
-                 alt="Превью"
-                 style="max-width: 100%; max-height: 200px; border-radius: 8px;"
-                 onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\\'fas fa-exclamation-triangle\\'></i><p>Ошибка загрузки изображения</p>'">
-        `;
+        // Если это data URL (локальное превью)
+        if (url.startsWith('data:')) {
+            preview.innerHTML = `
+                <img src="${url}" alt="Превью" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                <p>Локальное изображение</p>
+            `;
+        } else {
+            preview.innerHTML = `
+                <img src="${url}" alt="Превью"
+                     style="max-width: 100%; max-height: 200px; border-radius: 8px;"
+                     onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200'; this.nextElementSibling.textContent='Ошибка загрузки'">
+                <p>Загруженное изображение</p>
+            `;
+        }
     }
 
     exportData() {
