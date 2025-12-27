@@ -1,9 +1,13 @@
 import os
 import sqlite3
 import json
+import uuid
+
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 from datetime import datetime
+
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__,
             template_folder='webapp/templates',
@@ -205,24 +209,53 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # ========== API ДЛЯ WEB APP ==========
-@app.route('/api/products')
-def api_products():
-    """Получить список товаров"""
-    category = request.args.get('category', 'all')
+@app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def admin_products():
+    """Управление товарами"""
+    print(f"📦 API products called: {request.method}")
+
     db = get_db()
 
-    if category != 'all':
+    if request.method == 'GET':
         products = db.execute(
-            'SELECT * FROM products WHERE category = ? AND stock > 0',
-            (category,)
+            'SELECT * FROM products ORDER BY created_at DESC'
         ).fetchall()
-    else:
-        products = db.execute(
-            'SELECT * FROM products WHERE stock > 0'
-        ).fetchall()
+        db.close()
+        print(f"✅ GET: Found {len(products)} products")
+        return jsonify([dict(product) for product in products])
 
-    db.close()
-    return jsonify([dict(product) for product in products])
+    elif request.method == 'POST':
+        try:
+            data = request.json
+            print(f"📝 POST data received: {data}")
+
+            # Проверка данных
+            if not data or 'name' not in data or 'price' not in data:
+                print("❌ Missing required fields")
+                return jsonify({'success': False, 'error': 'Отсутствуют обязательные поля'}), 400
+
+            db.execute('''
+                       INSERT INTO products (name, description, price, image_url, category, stock)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ''', (
+                           data.get('name', ''),
+                           data.get('description', ''),
+                           data.get('price', 0),
+                           data.get('image_url', ''),
+                           data.get('category', ''),
+                           data.get('stock', 0)
+                       ))
+            db.commit()
+            product_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+            db.close()
+
+            print(f"✅ Product created with ID: {product_id}")
+            return jsonify({'success': True, 'id': product_id})
+
+        except Exception as e:
+            print(f"❌ Error creating product: {e}")
+            db.close()
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/categories')

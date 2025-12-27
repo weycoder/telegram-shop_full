@@ -20,6 +20,51 @@ class Admin {
     }
 
     bindEvents() {
+        // ПРОСТАЯ ЗАГРУЗКА ИЗОБРАЖЕНИЙ
+        const uploadBtn = document.getElementById('uploadImageBtn');
+        const fileInput = document.getElementById('imageFileInput');
+
+        if (uploadBtn && fileInput) {
+            uploadBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    const file = e.target.files[0];
+
+                    // Проверяем что это изображение
+                    if (!file.type.startsWith('image/')) {
+                        this.showAlert('❌ Выберите файл изображения', 'error');
+                        return;
+                    }
+
+                    // Создаем превью
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        // Показываем превью
+                        const preview = document.getElementById('imagePreview');
+                        preview.innerHTML = `
+                            <img src="${event.target.result}"
+                                 alt="Превью"
+                                 style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                            <p>Выбранное изображение</p>
+                        `;
+
+                        // Для демо - используем base64 или placeholder
+                        // В реальном приложении нужно загрузить на сервер
+                        document.getElementById('productImage').value =
+                            'https://via.placeholder.com/300x200?text=Загруженное+изображение';
+
+                        this.showAlert('✅ Изображение выбрано. На Render загрузка файлов не работает.', 'info');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        // Обновляем превью при изменении URL
+        document.getElementById('productImage')?.addEventListener('input', (e) => {
+            this.previewImage(e.target.value);
+        });
 
             // Загрузка изображений
         const imageUploadArea = document.getElementById('imageUploadArea');
