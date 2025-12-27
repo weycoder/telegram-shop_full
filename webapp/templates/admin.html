@@ -331,5 +331,29 @@
             });
         }
     </script>
+    <script>
+        // Ждем загрузки DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            // Инициализируем админ-панель
+            if (typeof AdminPanelFixed !== 'undefined') {
+                const adminPanel = new AdminPanelFixed();
+                window.admin = adminPanel; // Делаем глобально доступной
+            } else {
+                console.error('AdminPanelFixed class not found!');
+            }
+
+            // Обработка кнопки "Выйти"
+            const logoutBtn = document.querySelector('.btn-logout');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (confirm('Вы уверены, что хотите выйти?')) {
+                        // Редирект на главную или страницу входа
+                        window.location.href = '/logout';
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>

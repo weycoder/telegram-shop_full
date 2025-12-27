@@ -1,5 +1,5 @@
 // Telegram Shop Admin Panel - Полностью рабочий
-class AdminPanelFixed {
+class Admin {
     constructor() {
         this.currentPage = 'dashboard';
         this.products = [];
@@ -20,6 +20,26 @@ class AdminPanelFixed {
     }
 
     bindEvents() {
+
+        // Кнопка "Выйти"
+        document.querySelector('.btn-logout')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.logout();
+        });
+    }
+
+                // Добавьте метод logout
+        logout() {
+            if (confirm('Вы уверены, что хотите выйти из админ-панели?')) {
+                // Очистка localStorage/sessionStorage если нужно
+                localStorage.removeItem('admin_auth');
+                sessionStorage.clear();
+
+                // Редирект
+                window.location.href = '/';
+                // или window.location.href = '/login';
+            }
+        }
         // Навигация
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
@@ -770,7 +790,7 @@ class AdminPanelFixed {
 }
 
 // Инициализация
-const admin = new AdminPanelFixed();
+const admin = new Admin();
 window.admin = admin;
 
 // Добавляем стили для анимаций
