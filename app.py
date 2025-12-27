@@ -328,24 +328,6 @@ def admin_orders():
     return jsonify([dict(order) for order in orders])
 
 
-@app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
-def update_order_status(order_id):
-    """Обновить статус заказа"""
-    data = request.json
-    db = get_db()
-
-    try:
-        db.execute(
-            'UPDATE orders SET status = ? WHERE id = ?',
-            (data['status'], order_id)
-        )
-        db.commit()
-        db.close()
-        return jsonify({'success': True})
-    except Exception as e:
-        db.close()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 
 # ========== ПОЛНОЕ API ДЛЯ АДМИНКИ ==========
 
@@ -436,27 +418,6 @@ def admin_dashboard():
             'category_sales': [],
             'recent_orders': []
         })
-
-
-@app.route('/api/admin/orders', methods=['GET'])
-def admin_orders():
-    """Получить все заказы"""
-    db = get_db()
-
-    try:
-        orders = db.execute('''
-                            SELECT *
-                            FROM orders
-                            ORDER BY created_at DESC
-                            ''').fetchall()
-
-        db.close()
-        return jsonify([dict(order) for order in orders])
-    except Exception as e:
-        db.close()
-        print(f"Error in admin_orders: {e}")
-        return jsonify([])
-
 
 @app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
 def update_order_status(order_id):
