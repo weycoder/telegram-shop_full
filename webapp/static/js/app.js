@@ -607,33 +607,34 @@ class TelegramShop {
     }
 
     removeFromCart(productId) {
-        console.log(`🗑️ Удаление товара #${productId} из корзины`);
+        console.log('УДАЛЯЕМ товар ID:', productId);
 
-        // Находим товар перед удалением для уведомления
-        const item = this.cart.find(item => item.id == productId);
+        // Удаляем из массива
+        this.cart = this.cart.filter(item => item.id.toString() !== productId.toString());
+        console.log('Осталось товаров:', this.cart.length);
 
-        // Фильтруем корзину (используем == вместо === для безопасности типов)
-        this.cart = this.cart.filter(item => item.id != productId);
+        // Сохраняем в localStorage
+        localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
 
-        console.log(`📊 В корзине осталось: ${this.cart.length} товаров`);
+        // ОБНОВЛЯЕМ интерфейс ПОЛНОСТЬЮ
+        this.updateCartUI();
 
-        this.saveCart();
-        this.updateCartCount();
+        this.showNotification('Товар удален', 'info');
+    }
 
-        // ОБЯЗАТЕЛЬНО обновляем отображение корзины
+    updateCartUI() {
+        console.log('=== ПОЛНОЕ ОБНОВЛЕНИЕ КОРЗИНЫ ===');
+
+        // 1. Обновляем счетчик
+        const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+        const cartCount = document.getElementById('cartCount');
+        if (cartCount) {
+            cartCount.textContent = totalItems;
+            cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
+        }
+
+        // 2. Обновляем содержимое корзины
         this.updateCartDisplay();
-
-        // Показываем уведомление только если товар был найден
-        if (item) {
-            this.showNotification(`🗑️ "${item.name}" удален из корзины`, 'info');
-        }
-
-        // Если корзина стала пустой, показываем отдельное уведомление
-        if (this.cart.length === 0) {
-            setTimeout(() => {
-                this.showNotification('🛒 Корзина пуста', 'info');
-            }, 500);
-        }
     }
 
     updateCartItem(productId, quantity) {
@@ -653,26 +654,38 @@ class TelegramShop {
         }
     }
 
-
-    updateCartItemQuantity(productId, quantity) {
-        this.updateCartItem(productId, quantity);
-    }
-
     clearCart() {
         if (this.cart.length === 0) {
-            this.showNotification('🛒 Корзина уже пуста', 'info');
+            this.showNotification('Корзина уже пуста', 'info');
             return;
         }
 
-        if (confirm('Вы уверены, что хотите очистить корзину?')) {
+        if (confirm('Очистить корзину?')) {
             this.cart = [];
-            this.saveCart();
-            this.updateCartCount();
+            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+            this.updateCartUI(); // ОБНОВЛЯЕМ весь интерфейс
+            this.showNotification('Корзина очищена', 'info');
+        }
+    }
 
-            // СРАЗУ обновляем отображение корзины
-            this.updateCartDisplay();
+    updateCartItemQuantity(productId, newQuantity) {
+        if (newQuantity < 1) {
+            this.removeFromCart(productId);
+            return;
+        }
 
-            this.showNotification('🗑️ Корзина очищена', 'info');
+        const itemIndex = this.cart.findIndex(item => item.id.toString() === productId.toString());
+        if (itemIndex !== -1) {
+            this.cart[itemIndex].quantity = newQuantity;
+            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+            this.updateCartUI(); // ОБНОВЛЯЕМ весь интерфейс
+        }
+    }
+        const itemIndex = this.cart.findIndex(item => item.id.toString() === productId.toString());
+        if (itemIndex !== -1) {
+            this.cart[itemIndex].quantity = newQuantity;
+            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+            this.updateCartUI(); // ОБНОВЛЯЕМ весь интерфейс
         }
     }
 
@@ -705,87 +718,66 @@ class TelegramShop {
     }
 
     updateCartDisplay() {
-        console.log(`🔄 Обновление отображения корзины. Товаров: ${this.cart.length}`);
-        
         const cartItems = document.getElementById('cartItems');
         const cartTotal = document.getElementById('cartTotal');
         const emptyCart = document.getElementById('emptyCart');
 
-        if (!cartItems || !cartTotal || !emptyCart) {
-            console.error('❌ Элементы корзины не найдены');
-            return;
-        }
+        if (!cartItems || !cartTotal || !emptyCart) return;
 
-        // Всегда проверяем состояние корзины
+        // Если корзина ПУСТАЯ
         if (this.cart.length === 0) {
-            console.log('🛒 Корзина пуста - показываем блок "Корзина пуста"');
-
-            // Очищаем список товаров
+            console.log('Показываем: Корзина пуста');
             cartItems.innerHTML = '';
-
-            // ПОКАЗЫВАЕМ сообщение о пустой корзине
-            emptyCart.style.display = 'flex';
-
-            // Обнуляем сумму
+            emptyCart.style.display = 'flex'; // ВАЖНО: flex а не block
             cartTotal.textContent = '0 ₽';
             return;
         }
 
-        console.log(`📦 В корзине ${this.cart.length} товаров, обновляем список...`);
-
-        // Если товары есть - СКРЫВАЕМ блок "Корзина пуста"
+        // Если корзина НЕ пустая
+        console.log('Показываем товары:', this.cart.length);
         emptyCart.style.display = 'none';
 
-        // Сортируем по дате добавления (новые сверху)
-        const sortedCart = [...this.cart].sort((a, b) =>
-            new Date(b.addedAt || 0) - new Date(a.addedAt || 0)
-        );
+        // Генерируем HTML ВРУЧНУЮ для контроля
+        let itemsHTML = '';
 
-        // Генерируем HTML для каждого товара
-        const itemsHTML = sortedCart.map(item => {
-            console.log(`📝 Генерация карточки для товара: ${item.name}, количество: ${item.quantity}`);
-            return `
-                <div class="cart-item" data-id="${item.id}">
-                    <img src="${item.image || 'https://via.placeholder.com/80'}"
-                         alt="${item.name}"
-                         class="cart-item-image"
-                         onerror="this.src='https://via.placeholder.com/80'">
-                    <div class="cart-item-info">
-                        <div class="cart-item-header">
-                            <h4 class="cart-item-name">${item.name}</h4>
-                            <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
-                                <i class="fas fa-trash"></i>
+        this.cart.forEach(item => {
+            itemsHTML += `
+            <div class="cart-item" data-id="${item.id}">
+                <img src="${item.image || 'https://via.placeholder.com/80'}"
+                     alt="${item.name}"
+                     class="cart-item-image">
+                <div class="cart-item-info">
+                    <div class="cart-item-header">
+                        <h4 class="cart-item-name">${item.name}</h4>
+                        <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                    <div class="cart-item-controls">
+                        <div class="quantity-selector small">
+                            <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})" ${item.quantity <= 1 ? 'disabled' : ''}>
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <span class="quantity">${item.quantity} шт.</span>
+                            <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                                <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
-                        <div class="cart-item-controls">
-                            <div class="quantity-selector small">
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
-                                        ${item.quantity <= 1 ? 'disabled' : ''}>
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                            <div class="cart-item-total">
-                                ${this.formatPrice(item.price * item.quantity)} ₽
-                            </div>
+                        <div class="cart-item-total">
+                            ${this.formatPrice(item.price * item.quantity)} ₽
                         </div>
                     </div>
                 </div>
-            `;
-        }).join('');
+            </div>`;
+        });
 
-        // ВСТАВЛЯЕМ сгенерированный HTML
+        // ВСТАВЛЯЕМ HTML
         cartItems.innerHTML = itemsHTML;
 
-        // Считаем общую сумму
+        // Обновляем сумму
         const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         cartTotal.textContent = `${this.formatPrice(total)} ₽`;
-
-        console.log('✅ Отображение корзины обновлено');
     }
         // Добавьте эту вспомогательную функцию для очистки уведомлений
     clearCartNotifications() {
