@@ -270,30 +270,6 @@ class TelegramShop {
         productsGrid.innerHTML = html;
     }
 
-        // Создаем строки по 2 товара в каждой
-        let html = '';
-        for (let i = 0; i < this.products.length; i += 2) {
-            html += '<div class="products-row">';
-
-            // Первый товар в строке
-            const product1 = this.products[i];
-            html += this.createProductCard(product1);
-
-            // Второй товар в строке (если есть)
-            if (i + 1 < this.products.length) {
-                const product2 = this.products[i + 1];
-                html += this.createProductCard(product2);
-            } else {
-                // Если товаров нечетное количество, добавляем пустую ячейку
-                html += '<div class="product-card empty"></div>';
-            }
-
-            html += '</div>';
-        }
-
-        productsGrid.innerHTML = html;
-    }
-
     createProductCard(product) {
         const inStock = product.stock > 0;
         return `
@@ -916,11 +892,11 @@ class TelegramShop {
     }
 
     // ========== СТИЛИ ==========
-       // В app.js заменяем всю функцию addStyles() на:
     addStyles() {
         // Стили уже в style.css, ничего не добавляем
         console.log('🎨 Стили уже подключены через style.css');
     }
+}
 
 // Автоматическая инициализация при загрузке страницы
 let shopInstance = null;
