@@ -7,6 +7,9 @@ class AdminPanel {
         this.products = [];
         this.orders = [];
         this.categories = [];
+        this.selectedFile = null;
+        this.uploadProgress = 0;
+        this.imageSourceType = 'url'; // 'url' или 'file'
         this.isEditing = false;
         this.editingProductId = null;
 
@@ -17,8 +20,7 @@ class AdminPanel {
     init() {
         this.bindEvents();
         this.loadInitialData();
-
-        // Добавляем стили для уведомлений
+        this.bindFileUploadEvents();
         this.addAlertStyles();
     }
 
@@ -31,6 +33,12 @@ class AdminPanel {
                 e.preventDefault();
                 const pageId = item.dataset.page;
                 this.showPage(pageId);
+            });
+        });
+        document.querySelectorAll('.toggle-option input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this.imageSourceType = e.target.value;
+                this.updateImageSourceUI();
             });
         });
 
@@ -317,6 +325,140 @@ class AdminPanel {
         tbody.innerHTML = html;
     }
 
+    bindFileUploadEvents() {
+        const fileInput = document.getElementById('productImageFile');
+        const uploadArea = document.getElementById('fileUploadArea');
+        const urlInput = document.getElementById('productImageUrl');
+
+        if (!fileInput || !uploadArea || !urlInput) return;
+
+        // Клик по области загрузки
+        uploadArea.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-info')) {
+                fileInput.click();
+            }
+        });
+
+        // Выбор файла
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.handleFileSelect(file);
+            }
+        });
+
+        // Drag & Drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#5a67d8';
+            uploadArea.style.background = 'rgba(102, 126, 234, 0.1)';
+        });
+
+        uploadArea.addEventListener('dragleave', (e) => {
+            uploadArea.style.borderColor = '#667eea';
+            uploadArea.style.background = 'rgba(102, 126, 234, 0.05)';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#667eea';
+            uploadArea.style.background = 'rgba(102, 126, 234, 0.05)';
+
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                this.handleFileSelect(file);
+            } else {
+                this.showAlert('❌ Пожалуйста, выберите файл изображения', 'error');
+            }
+        });
+
+        // Предпросмотр URL
+        urlInput.addEventListener('input', (e) => {
+            this.updateImagePreview(e.target.value);
+        });
+    }
+
+        // Обработка выбора файла
+    handleFileSelect(file) {
+        if (!file.type.startsWith('image/')) {
+            this.showAlert('❌ Пожалуйста, выберите файл изображения', 'error');
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) { // 10MB лимит
+            this.showAlert('❌ Файл слишком большой (макс. 10MB)', 'error');
+            return;
+        }
+
+        this.selectedFile = file;
+
+        // Показываем информацию о файле
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const filePreview = document.getElementById('filePreview');
+
+        fileName.textContent = file.name;
+
+        // Создаем превью
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            filePreview.src = e.target.result;
+            this.updateImagePreview(e.target.result);
+        };
+        reader.readAsDataURL(file);
+
+        fileInfo.style.display = 'flex';
+
+        // Автоматически переключаемся на режим файла
+        this.imageSourceType = 'file';
+        this.updateImageSourceUI();
+
+        this.showAlert(`✅ Файл "${file.name}" выбран`, 'success');
+    }
+
+        // Удаление файла
+    removeFile() {
+        this.selectedFile = null;
+
+        const fileInfo = document.getElementById('fileInfo');
+        const fileInput = document.getElementById('productImageFile');
+
+        fileInfo.style.display = 'none';
+        fileInput.value = '';
+
+        this.updateImagePreview('');
+        this.showAlert('🗑️ Файл удален', 'info');
+    }
+
+        // Обновление UI источника изображения
+    updateImageSourceUI() {
+        const fileSection = document.getElementById('fileUploadArea');
+        const urlInput = document.getElementById('productImageUrl');
+
+        if (this.imageSourceType === 'file') {
+            fileSection.parentElement.style.display = 'block';
+            urlInput.parentElement.style.display = 'none';
+        } else {
+            fileSection.parentElement.style.display = 'none';
+            urlInput.parentElement.style.display = 'block';
+        }
+    }
+
+
+    // Обновление предпросмотра
+    updateImagePreview(src) {
+        const previewContainer = document.getElementById('imagePreviewContainer');
+        const preview = document.getElementById('imagePreview');
+
+        if (src) {
+            preview.src = src;
+            previewContainer.style.display = 'block';
+        } else {
+            previewContainer.style.display = 'none';
+        }
+    }
+
+
     async loadCategories() {
         try {
             console.log('📂 Загрузка категорий...');
@@ -336,6 +478,7 @@ class AdminPanel {
             this.renderCategories();
         }
     }
+
 
     renderCategories() {
         const list = document.getElementById('categoriesList');
@@ -491,13 +634,27 @@ class AdminPanel {
             return;
         }
 
+        let finalImageUrl = imageUrl || 'https://via.placeholder.com/300x200';
+
+        // Если выбран файл, загружаем его
+        if (this.imageSourceType === 'file' && this.selectedFile) {
+            try {
+                this.showAlert('📤 Загрузка изображения...', 'info');
+                finalImageUrl = await this.uploadFile(this.selectedFile);
+            } catch (error) {
+                console.error('Ошибка загрузки файла:', error);
+                this.showAlert('❌ Ошибка загрузки изображения. Используйте URL или попробуйте позже.', 'error');
+                return;
+            }
+        }
+
         const productData = {
             name: name,
             description: description,
             price: price,
             stock: stock,
             category: category,
-            image_url: imageUrl || 'https://via.placeholder.com/300x200'
+            image_url: finalImageUrl
         };
 
         console.log('📤 Отправляем товар:', productData);
@@ -553,6 +710,87 @@ class AdminPanel {
         }
     }
 
+
+        // Показать прогресс загрузки
+    showUploadProgress(percent) {
+        let progressContainer = document.getElementById('uploadProgressContainer');
+
+        if (!progressContainer) {
+            progressContainer = document.createElement('div');
+            progressContainer.id = 'uploadProgressContainer';
+            progressContainer.className = 'upload-progress';
+            progressContainer.innerHTML = `
+                <div>Загрузка: <span id="uploadPercent">0</span>%</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            `;
+
+            const form = document.getElementById('addProductForm');
+            form.insertBefore(progressContainer, form.querySelector('.form-actions'));
+        }
+
+        document.getElementById('uploadPercent').textContent = Math.round(percent);
+        document.getElementById('progressFill').style.width = percent + '%';
+    }
+
+    // Скрыть прогресс загрузки
+    hideUploadProgress() {
+        const progressContainer = document.getElementById('uploadProgressContainer');
+        if (progressContainer) {
+            progressContainer.remove();
+        }
+    }
+
+        // Метод для загрузки файла на сервер
+    async uploadFile(file) {
+        return new Promise((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Создаем прогресс-бар
+            this.showUploadProgress(0);
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    this.showUploadProgress(percentComplete);
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            this.showUploadProgress(100);
+                            setTimeout(() => {
+                                this.hideUploadProgress();
+                            }, 1000);
+                            resolve(response.file_url);
+                        } else {
+                            reject(new Error(response.error || 'Ошибка сервера'));
+                        }
+                    } catch (e) {
+                        reject(new Error('Ошибка парсинга ответа'));
+                    }
+                } else {
+                    reject(new Error(`HTTP ${xhr.status}`));
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                reject(new Error('Ошибка сети'));
+            });
+
+            xhr.open('POST', '/api/admin/upload');
+            xhr.send(formData);
+        });
+    }
+
+       // Обновленный метод editProduct
     editProduct(id) {
         const product = this.products.find(p => p.id === id);
         if (!product) {
@@ -574,6 +812,21 @@ class AdminPanel {
         if (categorySelect && product.category) {
             categorySelect.value = product.category;
         }
+
+        // Сбрасываем файл
+        this.selectedFile = null;
+        document.getElementById('fileInfo').style.display = 'none';
+
+        // Показываем предпросмотр из URL
+        this.updateImagePreview(product.image_url);
+
+        // Определяем тип источника (файл или URL)
+        if (product.image_url && product.image_url.startsWith('http')) {
+            this.imageSourceType = 'url';
+        } else {
+            this.imageSourceType = 'file';
+        }
+        this.updateImageSourceUI();
 
         // Устанавливаем режим редактирования
         this.isEditing = true;
@@ -631,13 +884,30 @@ class AdminPanel {
         this.showPage('add-product');
     }
 
+    // Обновленный метод resetProductForm
     resetProductForm() {
         const form = document.getElementById('addProductForm');
         if (form) {
             form.reset();
-            document.getElementById('productImageUrl').value = 'https://via.placeholder.com/300x200';
+            document.getElementById('productImageUrl').value = '';
+
+            // Сбрасываем файл
+            this.selectedFile = null;
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('productImageFile').value = '';
+
+            // Скрываем предпросмотр
+            document.getElementById('imagePreviewContainer').style.display = 'none';
+
+            // Сбрасываем тип источника
+            this.imageSourceType = 'url';
+            this.updateImageSourceUI();
+
+            // Скрываем прогресс
+            this.hideUploadProgress();
         }
     }
+
 
     showPage(pageId) {
         console.log(`📄 Показываем страницу: ${pageId}`);

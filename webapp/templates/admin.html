@@ -216,15 +216,41 @@
                                 <textarea id="productDescription" rows="4" placeholder="Подробное описание товара..."></textarea>
                             </div>
                         </div>
-
-                        <!-- Изображение товара -->
                         <div class="form-section">
                             <h3>Изображение товара</h3>
+
+                            <!-- Секция загрузки файла -->
                             <div class="form-group">
-                                <label for="productImageUrl">URL изображения</label>
+                                <label for="productImageFile">Загрузить с компьютера</label>
+                                <div class="file-upload-area" id="fileUploadArea">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <p>Перетащите изображение сюда или <span>выберите файл</span></p>
+                                    <input type="file" id="productImageFile" accept="image/*" style="display: none;">
+                                    <div class="file-info" id="fileInfo" style="display: none;">
+                                        <img id="filePreview" style="max-width: 100px; max-height: 100px;">
+                                        <div>
+                                            <span id="fileName"></span>
+                                            <button type="button" onclick="admin.removeFile()" style="margin-left: 10px;">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Или URL -->
+                            <div class="form-group">
+                                <label for="productImageUrl">Или укажите URL изображения</label>
                                 <input type="url" id="productImageUrl"
-                                       placeholder="https://example.com/image.jpg"
-                                       value="https://via.placeholder.com/300x200">
+                                       placeholder="https://example.com/image.jpg">
+                            </div>
+
+                            <!-- Предпросмотр -->
+                            <div class="form-group" id="imagePreviewContainer" style="display: none;">
+                                <label>Предпросмотр:</label>
+                                <div class="image-preview">
+                                    <img id="imagePreview" style="max-width: 200px; max-height: 200px; border-radius: 10px; border: 2px solid #e9ecef;">
+                                </div>
                             </div>
                         </div>
 

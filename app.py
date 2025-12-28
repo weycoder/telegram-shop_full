@@ -23,18 +23,16 @@ CORS(app)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['DATABASE'] = 'shop.db'
 
-# Конфигурация загрузки файлов
-UPLOAD_FOLDER = 'webapp/static/uploads'
+# Настройки
+UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
-# Создаем папку для загрузок если её нет
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# В начале приложения
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 
 # ========== БАЗА ДАННЫХ ==========
 def get_db():
@@ -653,6 +651,37 @@ def admin_categories():
     finally:
         db.close()
 
+
+@app.route('/api/admin/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'Файл не найден'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'Файл не выбран'}), 400
+
+    if file and allowed_file(file.filename):
+        # Создаем уникальное имя файла
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = secure_filename(file.filename)
+        unique_filename = f"{timestamp}_{filename}"
+
+        # Сохраняем файл
+        file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+        file.save(file_path)
+
+        # URL для доступа к файлу
+        file_url = f"/static/uploads/{unique_filename}"
+
+        return jsonify({
+            'success': True,
+            'file_url': file_url,
+            'filename': unique_filename
+        })
+
+    return jsonify({'success': False, 'error': 'Недопустимый формат файла'}), 400
 
 @app.route('/api/admin/cleanup', methods=['POST'])
 def admin_cleanup():
