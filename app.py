@@ -208,27 +208,6 @@ def upload_image():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-@app.route('/api/categories')
-def api_categories():
-    """Получить список категорий"""
-    db = get_db()
-    try:
-        categories = db.execute('''
-            SELECT DISTINCT category 
-            FROM products 
-            WHERE category IS NOT NULL 
-            AND category != ''
-            AND stock > 0
-            ORDER BY category
-        ''').fetchall()
-        db.close()
-        return jsonify([row['category'] for row in categories])
-    except Exception as e:
-        print(f"Error in api_categories: {e}")
-        db.close()
-        return jsonify([])
-
-
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
     """Создать заказ"""
@@ -404,15 +383,49 @@ def api_products():
     """Получить все товары для магазина"""
     db = get_db()
     try:
-        products = db.execute('''
-            SELECT * FROM products 
-            WHERE stock > 0 
-            ORDER BY created_at DESC
-        ''').fetchall()
+        category = request.args.get('category', 'all')
+
+        if category and category != 'all':
+            products = db.execute('''
+                                  SELECT *
+                                  FROM products
+                                  WHERE stock > 0
+                                    AND category = ?
+                                  ORDER BY created_at DESC
+                                  ''', (category,)).fetchall()
+        else:
+            products = db.execute('''
+                                  SELECT *
+                                  FROM products
+                                  WHERE stock > 0
+                                  ORDER BY created_at DESC
+                                  ''').fetchall()
+
         db.close()
         return jsonify([dict(product) for product in products])
     except Exception as e:
         print(f"Error in api_products: {e}")
+        db.close()
+        return jsonify([])
+
+
+@app.route('/api/categories')
+def api_categories():
+    """Получить список категорий"""
+    db = get_db()
+    try:
+        categories = db.execute('''
+                                SELECT DISTINCT category
+                                FROM products
+                                WHERE category IS NOT NULL
+                                  AND category != ''
+            AND stock > 0
+                                ORDER BY category
+                                ''').fetchall()
+        db.close()
+        return jsonify([row['category'] for row in categories])
+    except Exception as e:
+        print(f"Error in api_categories: {e}")
         db.close()
         return jsonify([])
 
