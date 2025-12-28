@@ -594,6 +594,9 @@ class TelegramShop {
     }
 
     removeFromCart(productId) {
+        // Находим товар перед удалением
+        const item = this.cart.find(item => item.id === productId);
+
         this.cart = this.cart.filter(item => item.id !== productId);
         this.saveCart();
         this.updateCartCount();
@@ -601,7 +604,17 @@ class TelegramShop {
         // СРАЗУ обновляем отображение корзины
         this.updateCartDisplay();
 
-        this.showNotification('🗑️ Товар удален из корзины', 'info');
+        // Показываем уведомление только если товар был найден
+        if (item) {
+            this.showNotification(`🗑️ Товар "${item.name}" удален из корзины`, 'info');
+        }
+
+        // Дополнительно: если корзина стала пустой, показываем сообщение
+        if (this.cart.length === 0) {
+            setTimeout(() => {
+                this.showNotification('🛒 Корзина пуста', 'info');
+            }, 300);
+        }
     }
 
     updateCartItem(productId, quantity) {
@@ -628,7 +641,7 @@ class TelegramShop {
 
     clearCart() {
         if (this.cart.length === 0) {
-            this.showNotification('Корзина уже пуста', 'info');
+            this.showNotification('🛒 Корзина уже пуста', 'info');
             return;
         }
 
@@ -682,13 +695,18 @@ class TelegramShop {
             return;
         }
 
+        // Всегда проверяем состояние корзины
         if (this.cart.length === 0) {
             cartItems.innerHTML = '';
-            emptyCart.style.display = 'block';
+            emptyCart.style.display = 'flex'; // Изменено с 'block' на 'flex' для правильного отображения
             cartTotal.textContent = '0 ₽';
+
+            // Очищаем уведомления о пустой корзине, если они есть
+            this.clearCartNotifications();
             return;
         }
 
+        // Если товары есть - скрываем блок "Корзина пуста"
         emptyCart.style.display = 'none';
 
         // Сортируем по дате добавления (новые сверху)
@@ -732,6 +750,18 @@ class TelegramShop {
         const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         cartTotal.textContent = `${this.formatPrice(total)} ₽`;
     }
+
+        // Добавьте эту вспомогательную функцию для очистки уведомлений
+    clearCartNotifications() {
+        const notifications = document.querySelectorAll('.notification');
+        notifications.forEach(notification => {
+            const text = notification.textContent || '';
+            if (text.includes('Корзина уже пуста') || text.includes('Товар удален')) {
+                notification.remove();
+            }
+        });
+    }
+
 
     toggleCart() {
         // Всегда обновляем отображение перед открытием
