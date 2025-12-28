@@ -2,33 +2,29 @@ import os
 import sqlite3
 import json
 import uuid
-
 from flask import Flask, render_template, jsonify, request, send_from_directory, session
 from flask_cors import CORS
 from datetime import datetime
-import os
-import uuid
 from werkzeug.utils import secure_filename
-
-
-from werkzeug.utils import secure_filename
-
 
 app = Flask(__name__,
             template_folder='webapp/templates',
             static_folder='webapp/static')
 CORS(app)
 
-# Конфигурация
+# ========== КОНФИГУРАЦИЯ ==========
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['DATABASE'] = 'shop.db'
+app.config['UPLOAD_FOLDER'] = 'webapp/static/uploads'  # ИЗМЕНИЛ здесь!
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB лимит
 
-# Настройки
-UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-# В начале приложения
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+
+# Создаем папку для загрузок если её нет
+UPLOAD_PATH = app.config['UPLOAD_FOLDER']
+if not os.path.exists(UPLOAD_PATH):
+    os.makedirs(UPLOAD_PATH)
+    print(f"📁 Создана папка для загрузок: {UPLOAD_PATH}")
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -126,7 +122,6 @@ def admin_page():
     return render_template('admin.html')
 
 
-# Добавьте этот маршрут в app.py
 @app.route('/api/upload-image', methods=['POST'])
 def upload_image():
     """Загрузка изображения на сервер"""
@@ -152,6 +147,8 @@ def upload_image():
         # Возвращаем URL для доступа к файлу
         image_url = f'/static/uploads/{filename}'
 
+        print(f"✅ Изображение загружено: {filename}")
+
         return jsonify({
             'success': True,
             'url': image_url,
@@ -162,10 +159,13 @@ def upload_image():
         print(f"❌ Ошибка загрузки изображения: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# Добавьте маршрут для доступа к загруженным файлам
 @app.route('/static/uploads/<filename>')
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    except Exception as e:
+        print(f"❌ Ошибка загрузки файла {filename}: {e}")
+        return jsonify({'error': 'Файл не найден'}), 404
 
 
 
@@ -669,11 +669,13 @@ def upload_file():
         unique_filename = f"{timestamp}_{filename}"
 
         # Сохраняем файл
-        file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
 
         # URL для доступа к файлу
         file_url = f"/static/uploads/{unique_filename}"
+
+        print(f"✅ Файл загружен: {unique_filename} -> {file_url}")
 
         return jsonify({
             'success': True,
