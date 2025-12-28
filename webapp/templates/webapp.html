@@ -101,13 +101,36 @@
                         </button>
                     </div>
 
+                    <!-- Измененная структура: empty-cart ВНЕ cart-items -->
                     <div class="cart-items" id="cartItems">
-                        <div class="empty-cart" id="emptyCart">
-                            <i class="fas fa-shopping-cart"></i>
-                            <p>Корзина пуста</p>
-                            <p>Добавьте товары из каталога</p>
+                        <!-- Товары будут здесь -->
+                    </div>
+
+                    <!-- empty-cart теперь ОТДЕЛЬНО -->
+                    <div class="empty-cart" id="emptyCart">
+                        <i class="fas fa-shopping-cart"></i>
+                        <p>Корзина пуста</p>
+                        <p>Добавьте товары из каталога</p>
+                    </div>
+
+                    <div class="cart-footer">
+                        <div class="cart-summary">
+                            <div class="cart-total">
+                                <span>Итого:</span>
+                                <span class="total-price" id="cartTotal">0 ₽</span>
+                            </div>
+                            <div class="cart-actions">
+                                <button class="btn btn-outline" id="clearCart">
+                                    <i class="fas fa-trash"></i> Очистить
+                                </button>
+                                <button class="btn btn-primary" id="checkoutBtn">
+                                    <i class="fas fa-paper-plane"></i> Купить
+                                </button>
+                            </div>
                         </div>
                     </div>
+                </div>
+            </div>
 
                     <div class="cart-footer">
                         <div class="cart-summary">

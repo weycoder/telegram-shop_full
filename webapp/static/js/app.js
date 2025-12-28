@@ -720,8 +720,7 @@ class TelegramShop {
         const cartItems = document.getElementById('cartItems');
         const cartTotal = document.getElementById('cartTotal');
         const emptyCart = document.getElementById('emptyCart');
-
-        // Проверяем что элементы существуют
+    
         if (!cartItems || !cartTotal || !emptyCart) {
             console.error('❌ Элементы корзины не найдены!');
             console.log('cartItems:', cartItems);
@@ -732,15 +731,15 @@ class TelegramShop {
 
         // ЕСЛИ КОРЗИНА ПУСТА
         if (this.cart.length === 0) {
-            console.log('🛒 Корзина пуста - очищаем и показываем empty-cart');
+            console.log('🛒 Корзина пуста - показываем empty-cart');
 
-            // 1. Очищаем список товаров
+            // Очищаем список товаров
             cartItems.innerHTML = '';
 
-            // 2. ВАЖНО: Показываем блок "Корзина пуста"
+            // Показываем блок "Корзина пуста"
             emptyCart.style.display = 'flex';
 
-            // 3. Обнуляем сумму
+            // Обнуляем сумму
             cartTotal.textContent = '0 ₽';
 
             return;
@@ -749,10 +748,10 @@ class TelegramShop {
         // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
         console.log(`📦 В корзине ${this.cart.length} товаров, обновляем...`);
 
-        // 1. Скрываем блок "Корзина пуста"
+        // Скрываем блок "Корзина пуста"
         emptyCart.style.display = 'none';
 
-        // 2. Генерируем HTML для товаров
+        // Генерируем HTML для товаров
         let itemsHTML = '';
 
         this.cart.forEach(item => {
@@ -789,15 +788,17 @@ class TelegramShop {
             `;
         });
 
-        // 3. Вставляем HTML
+        // Вставляем HTML
         cartItems.innerHTML = itemsHTML;
 
-        // 4. Обновляем сумму
+        // Обновляем сумму
         const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         cartTotal.textContent = `${this.formatPrice(total)} ₽`;
 
         console.log('✅ Корзина обновлена');
     }
+
+
         // Добавьте эту вспомогательную функцию для очистки уведомлений
     clearCartNotifications() {
         const notifications = document.querySelectorAll('.notification');

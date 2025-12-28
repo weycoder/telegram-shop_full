@@ -455,11 +455,30 @@ body {
     background: #F9FBE7;
 }
 
+/* Обновленные стили для корзины с новой структурой */
+.cart-items {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #F9FBE7;
+    position: relative;
+}
+
 .empty-cart {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: none; /* По умолчанию скрыто */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     padding: 60px 20px;
     color: var(--gray-color);
+    background: #F9FBE7;
+    z-index: 1;
 }
 
 .empty-cart i {
@@ -475,7 +494,6 @@ body {
     color: var(--dark-color);
 }
 
-
 .cart-item {
     display: flex;
     gap: 12px;
@@ -486,6 +504,8 @@ body {
     align-items: center;
     border: 2px solid var(--border-color);
     transition: all 0.3s ease;
+    position: relative;
+    z-index: 2;
 }
 
 .cart-item:hover {
