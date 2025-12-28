@@ -433,6 +433,38 @@ def get_unique_categories():
         db.close()
 
 
+@app.route('/api/admin/categories/add', methods=['POST'])
+def add_category():
+    """Добавить новую категорию"""
+    db = get_db()
+    try:
+        data = request.json
+        category_name = data.get('name', '').strip()
+
+        if not category_name:
+            return jsonify({'success': False, 'error': 'Название категории не может быть пустым'})
+
+        # Добавляем тестовый товар для новой категории
+        db.execute('''
+                   INSERT INTO products (name, description, price, image_url, category, stock)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ''', (
+                       f'Товар категории {category_name}',
+                       f'Автоматически созданный товар для категории {category_name}',
+                       100,
+                       'https://via.placeholder.com/300x200',
+                       category_name,
+                       10
+                   ))
+
+        db.commit()
+        return jsonify({'success': True, 'message': f'Категория "{category_name}" добавлена'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        db.close()
+
 # Добавь этот маршрут в app.py
 @app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
 def admin_manage_categories():
@@ -642,31 +674,25 @@ def update_order_status(order_id):
 
 
 # ========== ДОПОЛНИТЕЛЬНЫЕ API ==========
-
-@app.route('/api/admin/categories')
+@app.route('/api/admin/categories', methods=['GET'])
 def admin_categories():
-    """Получить список категорий с количеством товаров"""
+    """Получить все категории для админки"""
     db = get_db()
-
     try:
         categories = db.execute('''
-                                SELECT category,
-                                       COUNT(*)   as product_count,
-                                       SUM(stock) as total_stock,
-                                       AVG(price) as avg_price
+                                SELECT DISTINCT category
                                 FROM products
                                 WHERE category IS NOT NULL
                                   AND category != ''
-                                GROUP BY category
-                                ORDER BY product_count DESC
+                                ORDER BY category
                                 ''').fetchall()
 
-        db.close()
-        return jsonify([dict(row) for row in categories])
+        return jsonify([c['category'] for c in categories])
     except Exception as e:
-        db.close()
-        print(f"Error in admin_categories: {e}")
+        print(f"Ошибка получения категорий: {e}")
         return jsonify([])
+    finally:
+        db.close()
 
 
 @app.route('/api/admin/cleanup', methods=['POST'])
