@@ -215,16 +215,30 @@
                         </div>
 
                         <div class="form-section">
-                            <h3>Изображение</h3>
+                            <h3>Изображение товара</h3>
                             <div class="form-group">
                                 <label for="productImageUrl">URL изображения</label>
                                 <input type="url" id="productImageUrl"
                                        placeholder="https://example.com/image.jpg"
                                        value="https://via.placeholder.com/300x200">
-                                <div class="image-preview" id="imagePreview">
+
+                                <div class="image-upload-area" id="imageUploadArea"
+                                     style="border: 2px dashed #3498db; border-radius: 10px; padding: 30px; text-align: center; cursor: pointer; margin: 15px 0; background: #f8f9fa;">
+                                    <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #3498db; margin-bottom: 15px;"></i>
+                                    <p style="font-weight: 600; margin-bottom: 5px; color: #2c3e50;">Нажмите или перетащите изображение</p>
+                                    <p style="color: #7f8c8d; font-size: 14px;">PNG, JPG, GIF до 5MB</p>
+                                </div>
+                                <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+
+                                <div class="image-preview" id="imagePreview"
+                                     style="margin-top: 15px; border: 2px solid #ecf0f1; border-radius: 10px; padding: 20px; text-align: center; min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                                     <img src="https://via.placeholder.com/300x200" alt="Превью"
                                          style="max-width: 100%; max-height: 200px; border-radius: 8px;">
-                                    <p>Изображение товара</p>
+                                    <p style="margin-top: 10px; color: #7f8c8d;">Изображение товара</p>
+                                </div>
+
+                                <div class="upload-progress" id="uploadProgress" style="display: none; width: 100%; height: 10px; background: #ecf0f1; border-radius: 5px; margin-top: 10px; overflow: hidden;">
+                                    <div class="progress-bar" id="progressBar" style="height: 100%; background: #3498db; width: 0%; transition: width 0.3s;"></div>
                                 </div>
                             </div>
                         </div>
@@ -310,19 +324,106 @@
             try {
                 console.log('📊 Загрузка статистики...');
                 const response = await fetch('/api/admin/dashboard');
-                const data = await response.json();
 
-                // Обновляем цифры
-                document.getElementById('totalRevenue').textContent = formatPrice(data.total_revenue || 0) + ' ₽';
-                document.getElementById('totalOrders').textContent = data.total_orders || 0;
-                document.getElementById('totalProducts').textContent = data.total_products || 0;
-                document.getElementById('pendingOrders').textContent = data.pending_orders || 0;
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('📈 Статистика:', data);
+
+                // Обновляем все элементы статистики
+                const elements = {
+                    'totalRevenue': document.getElementById('totalRevenue'),
+                    'totalOrders': document.getElementById('totalOrders'),
+                    'totalProducts': document.getElementById('totalProducts'),
+                    'pendingOrders': document.getElementById('pendingOrders')
+                };
+
+                // Форматируем и обновляем значения
+                if (elements.totalRevenue) {
+                    elements.totalRevenue.textContent = formatPrice(data.total_revenue || 0) + ' ₽';
+                }
+                if (elements.totalOrders) {
+                    elements.totalOrders.textContent = data.total_orders || 0;
+                }
+                if (elements.totalProducts) {
+                    elements.totalProducts.textContent = data.total_products || 0;
+                }
+                if (elements.pendingOrders) {
+                    elements.pendingOrders.textContent = data.pending_orders || 0;
+                }
+
+                // Если есть дополнительные данные, обновляем их
+                if (data.recent_orders && data.recent_orders.length > 0) {
+                    this.renderRecentOrders(data.recent_orders);
+                }
 
                 updateLastUpdated();
+
             } catch (error) {
-                console.error('Ошибка загрузки статистики:', error);
+                console.error('❌ Ошибка загрузки статистики:', error);
+                showAlert('❌ Ошибка загрузки статистики', 'error');
+
+                // Показываем заглушку
+                document.getElementById('totalRevenue').textContent = '0 ₽';
+                document.getElementById('totalOrders').textContent = '0';
+                document.getElementById('totalProducts').textContent = '0';
+                document.getElementById('pendingOrders').textContent = '0';
             }
         }
+
+        function renderRecentOrders(orders) {
+            const container = document.getElementById('recentOrdersContent');
+            if (!container || !orders || orders.length === 0) return;
+
+            let html = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #ecf0f1;">ID</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #ecf0f1;">Пользователь</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #ecf0f1;">Сумма</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #ecf0f1;">Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            orders.slice(0, 5).forEach(order => {
+                const statusClass = order.status === 'completed' ? 'status-completed' :
+                                  order.status === 'processing' ? 'status-processing' :
+                                  order.status === 'cancelled' ? 'status-cancelled' : 'status-pending';
+
+                const statusText = order.status === 'completed' ? 'Завершен' :
+                                  order.status === 'processing' ? 'В обработке' :
+                                  order.status === 'cancelled' ? 'Отменен' : 'Ожидает';
+
+                html += `
+                    <tr>
+                        <td style="padding: 12px; border-bottom: 1px solid #ecf0f1;">#${order.id}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #ecf0f1;">${order.username || 'Гость'}</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #ecf0f1;">${formatPrice(order.total_price)} ₽</td>
+                        <td style="padding: 12px; border-bottom: 1px solid #ecf0f1;">
+                            <span class="${statusClass}" style="padding: 4px 12px; border-radius: 12px; font-size: 12px;">
+                                ${statusText}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+                <p style="text-align: center; margin-top: 15px; color: #7f8c8d;">
+                    Показано ${Math.min(orders.length, 5)} из ${orders.length} заказов
+                </p>
+            `;
+
+            container.innerHTML = html;
+    }
+
 
         async function loadProducts() {
             try {
@@ -523,6 +624,70 @@
             }
         }
 
+        let currentImageUrl = 'https://via.placeholder.com/300x200';
+
+        async function uploadImage(file) {
+            console.log('📤 Загрузка изображения:', file.name);
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            // Показываем прогресс
+            document.getElementById('uploadProgress').style.display = 'block';
+            document.getElementById('progressBar').style.width = '30%';
+
+            try {
+                const response = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                document.getElementById('progressBar').style.width = '70%';
+
+                const result = await response.json();
+                document.getElementById('progressBar').style.width = '100%';
+
+                if (result.success) {
+                    console.log('✅ Изображение загружено:', result.url);
+                    currentImageUrl = result.url;
+                    document.getElementById('productImageUrl').value = result.url;
+                    previewImage(result.url);
+                    showAlert('✅ Изображение успешно загружено!', 'success');
+
+                    // Скрываем прогресс через секунду
+                    setTimeout(() => {
+                        document.getElementById('uploadProgress').style.display = 'none';
+                        document.getElementById('progressBar').style.width = '0%';
+                    }, 1000);
+
+                } else {
+                    throw new Error(result.error || 'Неизвестная ошибка');
+                }
+
+            } catch (error) {
+                console.error('❌ Ошибка загрузки:', error);
+                document.getElementById('uploadProgress').style.display = 'none';
+                document.getElementById('progressBar').style.width = '0%';
+                showAlert('❌ Ошибка загрузки изображения: ' + error.message, 'error');
+            }
+        }
+
+        function previewImage(url) {
+            const preview = document.getElementById('imagePreview');
+            if (!preview) return;
+
+            if (!url || url.trim() === '') {
+                url = 'https://via.placeholder.com/300x200';
+            }
+
+            preview.innerHTML = `
+                <img src="${url}" alt="Превью"
+                     style="max-width: 100%; max-height: 200px; border-radius: 8px;"
+                     onerror="this.onerror=null; this.src='https://via.placeholder.com/300x200'">
+                <p style="margin-top: 10px; color: #7f8c8d;">Изображение товара</p>
+            `;
+        }
+
         // ========== УДАЛЕНИЕ ТОВАРА ==========
         async function deleteProduct(id) {
             if (!confirm(`Удалить товар #${id}? Это действие нельзя отменить.`)) {
@@ -635,6 +800,60 @@
                 if (currentPage === 'products') loadProducts();
                 if (currentPage === 'orders') loadOrders();
                 showAlert('🔄 Данные обновляются...', 'info');
+            });
+
+            const imageUploadArea = document.getElementById('imageUploadArea');
+            const imageFileInput = document.getElementById('imageFileInput');
+
+            if (imageUploadArea && imageFileInput) {
+                // Клик по области загрузки
+                imageUploadArea.addEventListener('click', () => {
+                    imageFileInput.click();
+                });
+
+                // Drag & Drop
+                imageUploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    imageUploadArea.style.borderColor = '#2ecc71';
+                    imageUploadArea.style.background = '#e8f6ef';
+                });
+
+                imageUploadArea.addEventListener('dragleave', () => {
+                    imageUploadArea.style.borderColor = '#3498db';
+                    imageUploadArea.style.background = '#f8f9fa';
+                });
+
+                imageUploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    imageUploadArea.style.borderColor = '#3498db';
+                    imageUploadArea.style.background = '#f8f9fa';
+
+                    if (e.dataTransfer.files.length) {
+                        const file = e.dataTransfer.files[0];
+                        if (file.type.startsWith('image/')) {
+                            uploadImage(file);
+                        } else {
+                            showAlert('❌ Выберите файл изображения', 'error');
+                        }
+                    }
+                });
+
+                // Выбор файла через диалог
+                imageFileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length) {
+                        const file = e.target.files[0];
+                        if (file.type.startsWith('image/')) {
+                            uploadImage(file);
+                        } else {
+                            showAlert('❌ Выберите файл изображения', 'error');
+                        }
+                    }
+                });
+            }
+
+            // Обновляем превью при изменении URL
+            document.getElementById('productImageUrl')?.addEventListener('input', function(e) {
+                previewImage(e.target.value);
             });
 
             document.getElementById('logoutBtn')?.addEventListener('click', () => {

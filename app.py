@@ -6,8 +6,13 @@ import uuid
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 from datetime import datetime
+import os
+import uuid
+from werkzeug.utils import secure_filename
+
 
 from werkzeug.utils import secure_filename
+
 
 app = Flask(__name__,
             template_folder='webapp/templates',
@@ -17,15 +22,14 @@ CORS(app)
 # Конфигурация
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['DATABASE'] = 'shop.db'
-# Создай папку для загрузок
+
+# Конфигурация загрузки файлов
 UPLOAD_FOLDER = 'webapp/static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB
-
-
-
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+# Создаем папку для загрузок если её нет
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -165,9 +169,10 @@ def admin_page():
     return render_template('admin.html')
 
 
-@app.route('/api/admin/upload-image', methods=['POST'])
+# Добавьте этот маршрут в app.py
+@app.route('/api/upload-image', methods=['POST'])
 def upload_image():
-    """Загрузка изображения для товара"""
+    """Загрузка изображения на сервер"""
     if 'image' not in request.files:
         return jsonify({'success': False, 'error': 'Файл не выбран'})
 
@@ -177,15 +182,12 @@ def upload_image():
         return jsonify({'success': False, 'error': 'Файл не выбран'})
 
     if not allowed_file(file.filename):
-        return jsonify({'success': False, 'error': 'Недопустимый формат файла'})
+        return jsonify({'success': False, 'error': 'Недопустимый формат файла. Разрешены: PNG, JPG, JPEG, GIF, WEBP'})
 
     try:
         # Генерируем уникальное имя файла
-        filename = str(uuid.uuid4())[:8] + '_' + secure_filename(file.filename)
+        filename = f"{uuid.uuid4().hex[:8]}_{secure_filename(file.filename)}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        # Создаем папку если нет
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
         # Сохраняем файл
         file.save(filepath)
@@ -198,15 +200,17 @@ def upload_image():
             'url': image_url,
             'filename': filename
         })
+
     except Exception as e:
-        print(f"Ошибка загрузки изображения: {e}")
+        print(f"❌ Ошибка загрузки изображения: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
-# Добавь статический маршрут для загрузок
+# Добавьте маршрут для доступа к загруженным файлам
 @app.route('/static/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
 
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
@@ -460,55 +464,24 @@ def admin_dashboard():
     try:
         # Основная статистика
         stats = db.execute('''
-                           SELECT COUNT(DISTINCT o.id)                                                             as total_orders,
-                                  COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_price ELSE 0 END),
-                                           0)                                                                      as total_revenue,
-                                  COUNT(CASE WHEN o.status = 'pending' THEN 1 END)                                 as pending_orders,
-                                  COUNT(DISTINCT p.id)                                                             as total_products,
-                                  COUNT(DISTINCT o.user_id)                                                        as total_customers,
-                                  COALESCE(AVG(CASE WHEN o.status = 'completed' THEN o.total_price END),
-                                           0)                                                                      as avg_order_value
-                           FROM orders o,
-                                products p
-                           ''').fetchone()
-
-        # Продажи по дням (последние 7 дней)
-        sales_by_day = db.execute('''
-                                  SELECT
-                                      DATE (created_at) as date, COUNT (*) as orders_count, COALESCE (SUM (total_price), 0) as revenue
-                                  FROM orders
-                                  WHERE status = 'completed'
-                                    AND created_at >= DATE ('now'
-                                      , '-7 days')
-                                  GROUP BY DATE (created_at)
-                                  ORDER BY date
-                                  ''').fetchall()
-
-        # Продажи по категориям
-        category_sales = db.execute('''
-                                    SELECT p.category,
-                                           COUNT(DISTINCT o.id)            as order_count,
-                                           COALESCE(SUM(o.total_price), 0) as revenue
-                                    FROM orders o,
-                                         json_each(o.items) j
-                                             LEFT JOIN products p ON json_extract(j.value, '$.id') = p.id
-                                    WHERE o.status = 'completed'
-                                    GROUP BY p.category
-                                    ORDER BY revenue DESC
-                                    ''').fetchall()
+            SELECT 
+                COUNT(DISTINCT o.id) as total_orders,
+                COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as total_revenue,
+                COUNT(CASE WHEN o.status = 'pending' THEN 1 END) as pending_orders,
+                COUNT(DISTINCT p.id) as total_products,
+                COUNT(DISTINCT o.user_id) as total_customers,
+                COALESCE(AVG(CASE WHEN o.status = 'completed' THEN o.total_price END), 0) as avg_order_value
+            FROM orders o
+            CROSS JOIN products p
+        ''').fetchone()
 
         # Последние заказы
         recent_orders = db.execute('''
-                                   SELECT id,
-                                          user_id,
-                                          username,
-                                          total_price,
-                                          status,
-                                          created_at,
-                                          (SELECT COUNT(*) FROM json_each(items)) as items_count
-                                   FROM orders
-                                   ORDER BY created_at DESC LIMIT 10
-                                   ''').fetchall()
+            SELECT id, username, total_price, status, created_at
+            FROM orders 
+            ORDER BY created_at DESC 
+            LIMIT 10
+        ''').fetchall()
 
         result = {
             'total_orders': stats['total_orders'] or 0,
@@ -517,17 +490,16 @@ def admin_dashboard():
             'total_products': stats['total_products'] or 0,
             'total_customers': stats['total_customers'] or 0,
             'avg_order_value': stats['avg_order_value'] or 0,
-            'sales_by_day': [dict(row) for row in sales_by_day],
-            'category_sales': [dict(row) for row in category_sales],
             'recent_orders': [dict(row) for row in recent_orders]
         }
 
         db.close()
+        print(f"📊 Статистика отправлена: {result}")
         return jsonify(result)
 
     except Exception as e:
+        print(f"❌ Error in admin_dashboard: {e}")
         db.close()
-        print(f"Error in admin_dashboard: {e}")
         return jsonify({
             'total_orders': 0,
             'total_revenue': 0,
@@ -535,8 +507,6 @@ def admin_dashboard():
             'total_products': 0,
             'total_customers': 0,
             'avg_order_value': 0,
-            'sales_by_day': [],
-            'category_sales': [],
             'recent_orders': []
         })
 
