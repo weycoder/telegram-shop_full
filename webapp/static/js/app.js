@@ -1004,6 +1004,10 @@ class TelegramShop {
                                 <i class="fas fa-arrow-left"></i> Назад
                             </button>
                         ` : ''}
+                        <!-- ДОБАВЛЯЕМ КНОПКУ В КОРЗИНУ -->
+                        <button class="btn btn-outline" onclick="shop.returnToCart()">
+                            <i class="fas fa-shopping-cart"></i> В корзину
+                        </button>
                     </div>
                 </div>
             `;
@@ -1028,24 +1032,83 @@ class TelegramShop {
                 </div>
 
                 <div class="address-form">
-                    <!-- ... существующие поля формы ... -->
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Имя получателя *</label>
+                        <input type="text" id="recipientName" placeholder="Иван Иванов" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Телефон</label>
+                        <input type="tel" id="recipientPhone" placeholder="+7 (999) 123-45-67">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-city"></i> Город *</label>
+                        <input type="text" id="city" placeholder="Москва" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-road"></i> Улица *</label>
+                        <input type="text" id="street" placeholder="Ленина" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-home"></i> Дом *</label>
+                            <input type="text" id="house" placeholder="15" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fas fa-door-closed"></i> Квартира</label>
+                            <input type="text" id="apartment" placeholder="24">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-stairs"></i> Этаж</label>
+                            <input type="text" id="floor" placeholder="2">
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fas fa-key"></i> Домофон</label>
+                            <input type="text" id="doorcode" placeholder="123">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="delivery-actions">
                     <button class="btn btn-primary" onclick="shop.saveAddress()">
                         <i class="fas fa-save"></i> Сохранить адрес
                     </button>
-                    <!-- ДОБАВЛЯЕМ ЭТУ КНОПКУ -->
+                    <!-- КНОПКА НАЗАД К ВЫБОРУ ДОСТАВКИ -->
                     <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
-                        <i class="fas fa-arrow-left"></i> Назад к выбору доставки
+                        <i class="fas fa-arrow-left"></i> Назад
                     </button>
-                    <!-- ИЛИ ЕСЛИ ХОЧЕШЬ ПРЯМО В КОРЗИНУ -->
-                    <button class="btn btn-outline" onclick="shop.updateCartDisplay()">
-                        <i class="fas fa-shopping-cart"></i> Вернуться в корзину
+                    <!-- КНОПКА ВЕРНУТЬСЯ В КОРЗИНУ -->
+                    <button class="btn btn-outline" onclick="shop.returnToCart()">
+                        <i class="fas fa-shopping-cart"></i> Корзина
                     </button>
                 </div>
             </div>
         `;
+    }
+    returnToCart() {
+        console.log('↩️ Возврат в корзину');
+
+        // Очищаем данные о доставке
+        this.deliveryData = {
+            type: null,
+            address_id: null,
+            pickup_point: null,
+            address_details: null
+        };
+
+        // Обновляем отображение корзины
+        this.updateCartDisplay();
+
+        // Показываем уведомление (опционально)
+        this.showNotification('Возвращено в корзину', 'info');
     }
 
     async saveAddress() {
