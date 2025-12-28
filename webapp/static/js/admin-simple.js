@@ -16,7 +16,65 @@ class AdminSimple {
         this.loadAllData();
     }
 
+    bindEvents() {
+        console.log('🔗 Назначаем обработчики...');
 
+        // Навигация
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const pageId = item.dataset.page;
+                this.showPage(pageId);
+            });
+        });
+
+        // Кнопки
+        document.getElementById('refreshBtn')?.addEventListener('click', () => this.loadAllData());
+        document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
+        document.getElementById('addProductBtn')?.addEventListener('click', () => this.showPage('add-product'));
+        document.getElementById('cancelAdd')?.addEventListener('click', () => this.showPage('products'));
+
+        // Форма добавления товара
+        document.getElementById('addProductForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.addProduct();
+        });
+
+        // Загрузка изображений
+        const uploadBtn = document.getElementById('uploadImageBtn');
+        const fileInput = document.getElementById('imageFileInput');
+
+        if (uploadBtn && fileInput) {
+            uploadBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    this.handleImageUpload(e.target.files[0]);
+                }
+            });
+        }
+
+        // Превью по URL
+        document.getElementById('productImageUrl')?.addEventListener('input', (e) => {
+            this.previewImage(e.target.value);
+        });
+
+        // Закрытие модального окна
+        document.querySelectorAll('.close-modal').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('orderModal').style.display = 'none';
+            });
+        });
+
+        // Клик по оверлею
+        document.getElementById('orderModal')?.addEventListener('click', (e) => {
+            if (e.target === document.getElementById('orderModal')) {
+                document.getElementById('orderModal').style.display = 'none';
+            }
+        });
+
+        console.log('✅ Все обработчики назначены');
+    }
 
     async deleteProduct(id) {
     if (!confirm(`Удалить товар #${id}? Это действие нельзя отменить.`)) {
@@ -164,65 +222,6 @@ class AdminSimple {
     }
 
 
-    bindEvents() {
-        console.log('🔗 Назначаем обработчики...');
-
-        // Навигация
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const pageId = item.dataset.page;
-                this.showPage(pageId);
-            });
-        });
-
-        // Кнопки
-        document.getElementById('refreshBtn')?.addEventListener('click', () => this.loadAllData());
-        document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
-        document.getElementById('addProductBtn')?.addEventListener('click', () => this.showPage('add-product'));
-        document.getElementById('cancelAdd')?.addEventListener('click', () => this.showPage('products'));
-
-        // Форма добавления товара
-        document.getElementById('addProductForm')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.addProduct();
-        });
-
-        // Загрузка изображений
-        const uploadBtn = document.getElementById('uploadImageBtn');
-        const fileInput = document.getElementById('imageFileInput');
-
-        if (uploadBtn && fileInput) {
-            uploadBtn.addEventListener('click', () => fileInput.click());
-
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files && e.target.files[0]) {
-                    this.handleImageUpload(e.target.files[0]);
-                }
-            });
-        }
-
-        // Превью по URL
-        document.getElementById('productImageUrl')?.addEventListener('input', (e) => {
-            this.previewImage(e.target.value);
-        });
-
-        // Закрытие модального окна
-        document.querySelectorAll('.close-modal').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.getElementById('orderModal').style.display = 'none';
-            });
-        });
-
-        // Клик по оверлею
-        document.getElementById('orderModal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('orderModal')) {
-                document.getElementById('orderModal').style.display = 'none';
-            }
-        });
-
-        console.log('✅ Все обработчики назначены');
-    }
 
     async loadAllData() {
         console.log('📥 Загрузка всех данных...');
