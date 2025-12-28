@@ -724,47 +724,72 @@ class TelegramShop {
     updateCartDisplay() {
         console.log('🔄 Обновление корзины...');
 
-        // УБЕДИТЕСЬ, что показываем именно корзину, а не другие экраны
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (cartOverlay) {
-            // Устанавливаем обычный вид корзины
-            cartOverlay.innerHTML = `
-                <div class="cart-modal">
-                    <div class="cart-header">
-                        <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
-                        <button class="close-cart" id="closeCart" title="Закрыть">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
 
-                    <div class="cart-items" id="cartItems">
-                        <!-- Товары будут здесь -->
-                    </div>
+        if (!cartItems || !cartTotal) {
+            console.error('❌ Элементы корзины не найдены!');
+            return;
+        }
 
-                    <div class="cart-footer">
-                        <div class="cart-summary">
-                            <div class="cart-total">
-                                <span>Итого:</span>
-                                <span class="total-price" id="cartTotal">0 ₽</span>
+        // ЕСЛИ КОРЗИНА ПУСТА
+        if (this.cart.length === 0) {
+            console.log('🛒 Корзина пуста - показываем сообщение');
+
+            // Просто показываем сообщение прямо в cartItems
+            cartItems.innerHTML = `
+                <div class="empty-cart">
+                    <i class="fas fa-shopping-cart"></i>
+                    <p>Корзина пуста</p>
+                    <p>Добавьте товары из каталога</p>
+                </div>
+            `;
+
+            // Обнуляем сумму
+            cartTotal.textContent = '0 ₽';
+
+            return;
+        }
+
+        // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
+        console.log(`📦 В корзине ${this.cart.length} товаров`);
+
+        // Генерируем HTML для товаров
+        let itemsHTML = '';
+
+        this.cart.forEach(item => {
+            itemsHTML += `
+                <div class="cart-item" data-id="${item.id}">
+                    <img src="${item.image || 'https://via.placeholder.com/80'}"
+                         alt="${item.name}"
+                         class="cart-item-image">
+                    <div class="cart-item-info">
+                        <div class="cart-item-header">
+                            <h4 class="cart-item-name">${item.name}</h4>
+                            <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                        <div class="cart-item-controls">
+                            <div class="quantity-selector small">
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
+                                        ${item.quantity <= 1 ? 'disabled' : ''}>
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="quantity">${item.quantity} шт.</span>
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
+                                    <i class="fas fa-plus"></i>
+                                </button>
                             </div>
-                            <div class="cart-actions">
-                                <button class="btn btn-outline" id="clearCart">
-                                    <i class="fas fa-trash"></i> Очистить
-                                </button>
-                                <button class="btn btn-primary" id="checkoutBtn">
-                                    <i class="fas fa-paper-plane"></i> Купить
-                                </button>
+                            <div class="cart-item-total">
+                                ${this.formatPrice(item.price * item.quantity)} ₽
                             </div>
                         </div>
                     </div>
                 </div>
             `;
-
-            // ПЕРЕПРИВЯЗЫВАЕМ обработчики
-            document.getElementById('closeCart').addEventListener('click', () => this.closeCart());
-            document.getElementById('clearCart').addEventListener('click', () => this.clearCart());
-            document.getElementById('checkoutBtn').addEventListener('click', () => this.checkout());
-        }
+        });
 
         // Вставляем HTML
         cartItems.innerHTML = itemsHTML;
