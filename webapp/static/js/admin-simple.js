@@ -16,6 +16,154 @@ class AdminSimple {
         this.loadAllData();
     }
 
+
+
+    async deleteProduct(id) {
+    if (!confirm(`Удалить товар #${id}? Это действие нельзя отменить.`)) {
+        return;
+    }
+
+    console.log('🗑️ Удаление товара #' + id);
+
+    try {
+        const response = await fetch(`/api/admin/products?id=${id}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            this.showNotification('✅ Товар удален!', 'success');
+            // Удаляем из локального массива
+            this.products = this.products.filter(p => p.id !== id);
+            // Перерисовываем таблицу
+            this.renderProducts();
+        } else {
+            this.showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка удаления:', error);
+        this.showNotification('❌ Ошибка удаления товара', 'error');
+    }
+    }
+
+    async editProduct(id) {
+        const product = this.products.find(p => p.id === id);
+        if (!product) {
+            this.showNotification('❌ Товар не найден', 'error');
+            return;
+        }
+
+        console.log('✏️ Редактирование товара #' + id);
+
+        // Создаем модальное окно для редактирования
+        const modalHtml = `
+            <div class="modal-overlay" id="editModal" style="display: flex;">
+                <div class="modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>Редактировать товар #${id}</h3>
+                        <button class="close-modal" onclick="document.getElementById('editModal').style.display='none'">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editProductForm" style="display: flex; flex-direction: column; gap: 15px;">
+                            <input type="hidden" id="editProductId" value="${id}">
+
+                            <div class="form-group">
+                                <label>Название</label>
+                                <input type="text" id="editProductName" value="${product.name}" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Описание</label>
+                                <textarea id="editProductDescription" rows="3">${product.description || ''}</textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Цена (₽)</label>
+                                <input type="number" id="editProductPrice" value="${product.price}" step="0.01" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Количество</label>
+                                <input type="number" id="editProductStock" value="${product.stock}" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Категория</label>
+                                <input type="text" id="editProductCategory" value="${product.category || ''}">
+                            </div>
+
+                            <div class="form-group">
+                                <label>URL изображения</label>
+                                <input type="url" id="editProductImage" value="${product.image_url || ''}">
+                            </div>
+
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button type="button" class="btn btn-secondary" onclick="document.getElementById('editModal').style.display='none'">
+                                    Отмена
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    Сохранить изменения
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Добавляем модальное окно
+        const modalDiv = document.createElement('div');
+        modalDiv.innerHTML = modalHtml;
+        document.body.appendChild(modalDiv);
+
+        // Обработка формы
+        document.getElementById('editProductForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const editData = {
+                name: document.getElementById('editProductName').value.trim(),
+                description: document.getElementById('editProductDescription').value.trim(),
+                price: parseFloat(document.getElementById('editProductPrice').value),
+                stock: parseInt(document.getElementById('editProductStock').value),
+                category: document.getElementById('editProductCategory').value.trim(),
+                image_url: document.getElementById('editProductImage').value.trim()
+            };
+
+            try {
+                const response = await fetch(`/api/admin/products?id=${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(editData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.showNotification('✅ Товар успешно обновлен!', 'success');
+                    // Обновляем локальный массив
+                    const index = this.products.findIndex(p => p.id === id);
+                    if (index !== -1) {
+                        this.products[index] = { ...this.products[index], ...editData };
+                    }
+                    // Перерисовываем таблицу
+                    this.renderProducts();
+                    // Закрываем модальное окно
+                    document.getElementById('editModal').style.display = 'none';
+                    setTimeout(() => modalDiv.remove(), 300);
+                } else {
+                    this.showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка обновления:', error);
+                this.showNotification('❌ Ошибка обновления товара', 'error');
+            }
+        });
+    }
+
+
     bindEvents() {
         console.log('🔗 Назначаем обработчики...');
 
@@ -161,17 +309,38 @@ class AdminSimple {
         container.innerHTML = html;
     }
 
-    async loadProducts() {
+    async loadProducts(category = 'all') {
         try {
-            const response = await fetch('/api/admin/products');
-            if (!response.ok) throw new Error('Ошибка сервера');
+            console.log('🛍️ Загрузка товаров, категория:', category);
+            document.getElementById('loading')?.classList.add('active');
 
-            this.products = await response.json();
+            const url = category !== 'all'
+                ? `/api/products?category=${encodeURIComponent(category)}`
+                : '/api/products';
+
+            console.log('📡 Запрос к:', url);
+
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Получено товаров:', data.length);
+
+            this.products = data;
             this.renderProducts();
+
         } catch (error) {
-            console.error('Ошибка товаров:', error);
+            console.error('❌ Ошибка загрузки товаров:', error);
+            this.showNotification('❌ Ошибка загрузки товаров', 'error');
+
+            // Показываем пустое состояние
             this.products = [];
             this.renderProducts();
+        } finally {
+            document.getElementById('loading')?.classList.remove('active');
         }
     }
 
@@ -294,6 +463,38 @@ class AdminSimple {
         });
 
         tbody.innerHTML = html;
+
+
+        async updateOrderStatus(orderId, status) {
+        console.log('🔄 Обновление статуса заказа #' + orderId + ' на ' + status);
+
+        try {
+            const response = await fetch(`/api/admin/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: status })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showNotification(`✅ Статус заказа #${orderId} изменен`, 'success');
+                // Обновляем локальный массив
+                const order = this.orders.find(o => o.id === orderId);
+                if (order) {
+                    order.status = status;
+                }
+            } else {
+                this.showNotification('❌ Ошибка обновления статуса', 'error');
+            }
+        } catch (error) {
+            console.error('Ошибка обновления статуса:', error);
+            this.showNotification('❌ Ошибка соединения', 'error');
+        }
+    }
+
     }
 
     handleImageUpload(file) {

@@ -212,11 +212,21 @@ def uploaded_file(filename):
 def api_categories():
     """Получить список категорий"""
     db = get_db()
-    categories = db.execute(
-        'SELECT DISTINCT category FROM products WHERE category IS NOT NULL'
-    ).fetchall()
-    db.close()
-    return jsonify([row['category'] for row in categories])
+    try:
+        categories = db.execute('''
+            SELECT DISTINCT category 
+            FROM products 
+            WHERE category IS NOT NULL 
+            AND category != ''
+            AND stock > 0
+            ORDER BY category
+        ''').fetchall()
+        db.close()
+        return jsonify([row['category'] for row in categories])
+    except Exception as e:
+        print(f"Error in api_categories: {e}")
+        db.close()
+        return jsonify([])
 
 
 @app.route('/api/create-order', methods=['POST'])
@@ -255,18 +265,23 @@ def api_create_order():
 
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def admin_products():
-    """Управление товарами"""
+    """Управление товарами (с поддержкой DELETE)"""
     print(f"📦 API products called: {request.method}")
 
     db = get_db()
 
     if request.method == 'GET':
-        products = db.execute(
-            'SELECT * FROM products ORDER BY created_at DESC'
-        ).fetchall()
-        db.close()
-        print(f"✅ GET: Found {len(products)} products")
-        return jsonify([dict(product) for product in products])
+        try:
+            products = db.execute(
+                'SELECT * FROM products ORDER BY created_at DESC'
+            ).fetchall()
+            db.close()
+            print(f"✅ GET: Found {len(products)} products")
+            return jsonify([dict(product) for product in products])
+        except Exception as e:
+            print(f"❌ Error in GET products: {e}")
+            db.close()
+            return jsonify([])
 
     elif request.method == 'POST':
         try:
@@ -301,6 +316,77 @@ def admin_products():
             db.close()
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    elif request.method == 'PUT':
+        try:
+            product_id = request.args.get('id')
+            data = request.json
+
+            if not product_id:
+                return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
+
+            db.execute('''
+                       UPDATE products
+                       SET name        = ?,
+                           description = ?,
+                           price       = ?,
+                           image_url   = ?,
+                           category    = ?,
+                           stock       = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name', ''),
+                           data.get('description', ''),
+                           data.get('price', 0),
+                           data.get('image_url', ''),
+                           data.get('category', ''),
+                           data.get('stock', 0),
+                           product_id
+                       ))
+            db.commit()
+            db.close()
+
+            return jsonify({'success': True})
+
+        except Exception as e:
+            print(f"❌ Error updating product: {e}")
+            db.close()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    elif request.method == 'DELETE':
+        try:
+            product_id = request.args.get('id')
+            print(f"🗑️ DELETE request for product ID: {product_id}")
+
+            if not product_id:
+                return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
+
+            # Проверяем, есть ли заказы с этим товаром
+            orders_with_product = db.execute('''
+                                             SELECT COUNT(*)
+                                             FROM orders
+                                             WHERE items LIKE ?
+                                             ''', ('%' + str(product_id) + '%',)).fetchone()[0]
+
+            if orders_with_product > 0:
+                db.close()
+                return jsonify({
+                    'success': False,
+                    'error': 'Нельзя удалить товар, так как он есть в заказах'
+                }), 400
+
+            # Удаляем товар
+            db.execute('DELETE FROM products WHERE id = ?', (product_id,))
+            db.commit()
+            db.close()
+
+            print(f"✅ Product {product_id} deleted")
+            return jsonify({'success': True})
+
+        except Exception as e:
+            print(f"❌ Error deleting product: {e}")
+            db.close()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/admin/orders', methods=['GET'])
 def admin_orders():
@@ -311,6 +397,43 @@ def admin_orders():
     ).fetchall()
     db.close()
     return jsonify([dict(order) for order in orders])
+
+
+@app.route('/api/products')
+def api_products():
+    """Получить все товары для магазина"""
+    db = get_db()
+    try:
+        products = db.execute('''
+            SELECT * FROM products 
+            WHERE stock > 0 
+            ORDER BY created_at DESC
+        ''').fetchall()
+        db.close()
+        return jsonify([dict(product) for product in products])
+    except Exception as e:
+        print(f"Error in api_products: {e}")
+        db.close()
+        return jsonify([])
+
+@app.route('/api/products/<int:product_id>')
+def api_product_detail(product_id):
+    """Получить информацию о конкретном товаре"""
+    db = get_db()
+    try:
+        product = db.execute(
+            'SELECT * FROM products WHERE id = ?',
+            (product_id,)
+        ).fetchone()
+        db.close()
+        if product:
+            return jsonify(dict(product))
+        return jsonify({'error': 'Товар не найден'}), 404
+    except Exception as e:
+        print(f"Error in api_product_detail: {e}")
+        db.close()
+        return jsonify({'error': str(e)}), 500
+
 
 
 
