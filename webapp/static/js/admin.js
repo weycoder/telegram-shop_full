@@ -890,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
             from { transform: translateX(0); opacity: 1; }
             to { transform: translateX(100%); opacity: 0; }
         }
-        .admin-alert { position: fixed; top: 20px; right: 20px; z-index: 10000; }
+        .admin-alert { position: fixed; top: 20px; right: 20px; z-index: 10000; }a
     `;
     document.head.appendChild(style);
 });

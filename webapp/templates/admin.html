@@ -6,7 +6,14 @@
     <title>👨‍💼 Админ панель - Telegram Shop</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js с резервной загрузкой -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        // Fallback если Chart.js не загрузился
+        if (typeof Chart === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"><\/script>');
+        }
+    </script>
 </head>
 <body class="admin">
     <div class="admin-container">
@@ -47,7 +54,7 @@
             </nav>
 
             <div class="sidebar-footer">
-                <button class="btn-logout">
+                <button class="btn-logout" id="logoutBtn">
                     <i class="fas fa-sign-out-alt"></i> Выйти
                 </button>
             </div>
@@ -70,7 +77,7 @@
                     </button>
                     <button class="btn-notifications">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-count">3</span>
+                        <span class="notification-count">0</span>
                     </button>
                 </div>
             </header>
@@ -129,8 +136,10 @@
 
                     <div class="recent-orders">
                         <h3>Последние заказы</h3>
-                        <div class="orders-table" id="recentOrders">
-                            <!-- Загружается через JS -->
+                        <div id="recentOrdersContent">
+                            <p style="text-align: center; color: #666; padding: 40px;">
+                                <i class="fas fa-spinner fa-spin"></i> Загрузка данных...
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -163,13 +172,13 @@
                                 </tr>
                             </thead>
                             <tbody id="productsTableBody">
-                                <!-- Загружается через JS -->
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 40px;">
+                                        <i class="fas fa-spinner fa-spin"></i> Загрузка товаров...
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
-                    </div>
-
-                    <div class="pagination" id="productsPagination">
-                        <!-- Пагинация -->
                     </div>
                 </div>
 
@@ -203,7 +212,11 @@
                                 </tr>
                             </thead>
                             <tbody id="ordersTableBody">
-                                <!-- Загружается через JS -->
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 40px;">
+                                        <i class="fas fa-spinner fa-spin"></i> Загрузка заказов...
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -221,15 +234,15 @@
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="productName">Название товара *</label>
-                                    <input type="text" id="productName" required>
+                                    <input type="text" id="productName" required placeholder="Например: iPhone 15 Pro">
                                 </div>
                                 <div class="form-group">
                                     <label for="productPrice">Цена (₽) *</label>
-                                    <input type="number" id="productPrice" step="0.01" required>
+                                    <input type="number" id="productPrice" step="0.01" required placeholder="99999">
                                 </div>
                                 <div class="form-group">
                                     <label for="productStock">Количество *</label>
-                                    <input type="number" id="productStock" required>
+                                    <input type="number" id="productStock" required placeholder="10">
                                 </div>
                                 <div class="form-group">
                                     <label for="productCategory">Категория</label>
@@ -244,20 +257,39 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-section">
-                        <h3>Изображение товара</h3>
-                        <div class="form-group">
-                            <label for="productImage">URL изображения</label>
-                            <input type="url" id="productImage" placeholder="https://example.com/image.jpg">
-                            <div class="image-preview" id="imagePreview"></div>
 
-                            <!-- ПРОСТАЯ КНОПКА ЗАГРУЗКИ -->
-                            <button type="button" id="uploadImageBtn" class="btn btn-secondary" style="margin-top: 10px;">
-                                <i class="fas fa-upload"></i> Загрузить фото с устройства
-                            </button>
-                            <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+                        <div class="form-section">
+                            <h3>Описание</h3>
+                            <div class="form-group">
+                                <label for="productDescription">Описание товара</label>
+                                <textarea id="productDescription" rows="4" placeholder="Подробное описание товара..."></textarea>
                             </div>
                         </div>
+
+                        <div class="form-section">
+                            <h3>Изображение товара</h3>
+                            <div class="form-group">
+                                <label for="productImageUrl">URL изображения</label>
+                                <input type="url" id="productImageUrl"
+                                       placeholder="https://example.com/image.jpg"
+                                       value="https://via.placeholder.com/300x200">
+                                <div class="image-preview" id="imagePreview">
+                                    <img src="https://via.placeholder.com/300x200" alt="Превью"
+                                         style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                                    <p>Изображение-заглушка</p>
+                                </div>
+
+                                <button type="button" class="btn btn-secondary" id="uploadImageBtn" style="margin-top: 15px;">
+                                    <i class="fas fa-upload"></i> Загрузить фото
+                                </button>
+                                <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+
+                                <small style="color: #666; display: block; margin-top: 10px;">
+                                    ⚠️ Для демо используйте URL изображений или placeholder
+                                </small>
+                            </div>
+                        </div>
+
                         <div class="form-actions">
                             <button type="button" class="btn btn-secondary" id="cancelAdd">
                                 Отмена
@@ -271,133 +303,42 @@
 
                 <!-- Настройки -->
                 <div class="page" id="settings">
-                    <h2>Настройки магазина</h2>
-                    <p>Раздел в разработке...</p>
+                    <div class="settings-header">
+                        <h2>Настройки магазина</h2>
+                    </div>
+                    <div class="settings-content">
+                        <p style="text-align: center; padding: 40px; color: #666;">
+                            <i class="fas fa-cogs fa-3x" style="margin-bottom: 20px;"></i><br>
+                            Раздел в разработке...
+                        </p>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Модальные окна -->
-    <div class="modal-overlay" id="editProductModal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Редактировать товар</h3>
-                <button class="close-modal">&times;</button>
-            </div>
-            <form id="editProductForm">
-                <input type="hidden" id="editProductId">
-                <div class="form-group">
-                    <label>Название</label>
-                    <input type="text" id="editProductName" required>
-                </div>
-                <div class="form-group">
-                    <label>Цена</label>
-                    <input type="number" id="editProductPrice" step="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label>Количество</label>
-                    <input type="number" id="editProductStock" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
-            </form>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="orderDetailsModal">
+    <!-- Модальное окно заказа -->
+    <div class="modal-overlay" id="orderModal" style="display: none;">
         <div class="modal modal-lg">
             <div class="modal-header">
-                <h3>Детали заказа #<span id="orderDetailsId"></span></h3>
+                <h3>Детали заказа #<span id="orderModalId">0</span></h3>
                 <button class="close-modal">&times;</button>
             </div>
-            <div class="modal-body" id="orderDetailsBody">
-                <!-- Загружается через JS -->
+            <div class="modal-body" id="orderModalBody">
+                Загрузка...
             </div>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <!-- Подключаем ОДИН чистый JS файл -->
+    <script src="{{ url_for('static', filename='js/admin-simple.js') }}"></script>
+
     <script>
-        // Telegram Web App для админки
+        // Telegram Web App интеграция (простая)
         if (window.Telegram && Telegram.WebApp) {
             Telegram.WebApp.expand();
             Telegram.WebApp.setHeaderColor('#2c3e50');
-
-            // Добавляем кнопку назад
-            Telegram.WebApp.BackButton.show();
-            Telegram.WebApp.BackButton.onClick(function() {
-                window.location.href = '/';
-            });
         }
     </script>
-    <script>
-        // Ждем загрузки DOM
-        document.addEventListener('DOMContentLoaded', function() {
-            // Инициализируем админ-панель
-            if (typeof Admin !== 'undefined') {
-                const adminPanel = new Admin();
-                window.admin = adminPanel; // Делаем глобально доступной
-            } else {
-                console.error();
-            }
-
-            // Обработка кнопки "Выйти"
-            const logoutBtn = document.querySelector('.btn-logout');
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    if (confirm('Вы уверены, что хотите выйти?')) {
-                        // Редирект на главную или страницу входа
-                        window.location.href = '/';
-                    }
-                });
-            }
-        });
-    </script>
-    <script>
-        setTimeout(function() {
-        console.log('🛠️ Включаем кнопки...');
-
-        const buttons = document.querySelectorAll('.nav-item');
-        console.log('Найдено кнопок:', buttons.length);
-
-        buttons.forEach(btn => {
-            btn.style.cursor = 'pointer';
-
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-
-                // Скрываем все страницы
-                document.querySelectorAll('.page').forEach(page => {
-                    page.style.display = 'none';
-                    page.classList.remove('active');
-                });
-
-                // Убираем активность у всех кнопок
-                buttons.forEach(b => b.classList.remove('active'));
-
-                // Показываем нужную страницу
-                const pageId = this.getAttribute('data-page');
-                const targetPage = document.getElementById(pageId);
-
-                if (targetPage) {
-                    targetPage.style.display = 'block';
-                    targetPage.classList.add('active');
-                    this.classList.add('active');
-                    console.log('✅ Переключились на:', pageId);
-                } else {
-                    console.error('❌ Страница не найдена:', pageId);
-                }
-            });
-        });
-
-        // Принудительно показываем первую страницу
-        const firstPage = document.getElementById('dashboard');
-        if (firstPage) firstPage.style.display = 'block';
-
-        console.log('✅ Кнопки готовы! Теперь работают: Товары, Заказы, Добавить товар, Настройки');
-
-    }, 1000); // Ждем 1 секунду чтобы все загрузилось
-</script>
 </body>
 </html>
