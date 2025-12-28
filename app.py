@@ -3,7 +3,7 @@ import sqlite3
 import json
 import uuid
 
-from flask import Flask, render_template, jsonify, request, send_from_directory
+from flask import Flask, render_template, jsonify, request, send_from_directory, session
 from flask_cors import CORS
 from datetime import datetime
 import os
@@ -52,71 +52,30 @@ def init_db():
 
         # Таблица товаров
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS products
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           name
-                           TEXT
-                           NOT
-                           NULL,
-                           description
-                           TEXT,
-                           price
-                           REAL
-                           NOT
-                           NULL,
-                           image_url
-                           TEXT,
-                           category
-                           TEXT,
-                           stock
-                           INTEGER
-                           DEFAULT
-                           0,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                price REAL NOT NULL,
+                image_url TEXT,
+                category TEXT,
+                stock INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         # Таблица заказов
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS orders
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           user_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           username
-                           TEXT,
-                           items
-                           TEXT
-                           NOT
-                           NULL,
-                           total_price
-                           REAL
-                           NOT
-                           NULL,
-                           status
-                           TEXT
-                           DEFAULT
-                           'pending',
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                items TEXT NOT NULL,
+                total_price REAL NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         # Тестовые товары
         cursor.execute("SELECT COUNT(*) FROM products")
@@ -137,9 +96,9 @@ def init_db():
             ]
 
             cursor.executemany('''
-                               INSERT INTO products (name, description, price, image_url, category, stock)
-                               VALUES (?, ?, ?, ?, ?, ?)
-                               ''', test_products)
+                INSERT INTO products (name, description, price, image_url, category, stock)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', test_products)
 
         db.commit()
         db.close()
@@ -153,8 +112,8 @@ init_db()
 # ========== ГЛАВНЫЕ СТРАНИЦЫ ==========
 @app.route('/')
 def index():
-    """Главная страница"""
-    return render_template('base.html')
+    """Главная страница (перенаправляем на магазин)"""
+    return render_template('webapp.html')
 
 
 @app.route('/webapp')
@@ -220,14 +179,14 @@ def api_create_order():
 
     try:
         db.execute('''
-                   INSERT INTO orders (user_id, username, items, total_price, status)
-                   VALUES (?, ?, ?, ?, 'pending')
-                   ''', (
-                       data.get('user_id', 0),
-                       data.get('username', 'Гость'),
-                       json.dumps(data['items'], ensure_ascii=False),
-                       data['total']
-                   ))
+            INSERT INTO orders (user_id, username, items, total_price, status)
+            VALUES (?, ?, ?, ?, 'pending')
+        ''', (
+            data.get('user_id', 0),
+            data.get('username', 'Гость'),
+            json.dumps(data['items'], ensure_ascii=False),
+            data['total']
+        ))
 
         # Обновляем остатки
         for item in data['items']:
@@ -277,16 +236,16 @@ def admin_products():
                 return jsonify({'success': False, 'error': 'Отсутствуют обязательные поля'}), 400
 
             db.execute('''
-                       INSERT INTO products (name, description, price, image_url, category, stock)
-                       VALUES (?, ?, ?, ?, ?, ?)
-                       ''', (
-                           data.get('name', ''),
-                           data.get('description', ''),
-                           data.get('price', 0),
-                           data.get('image_url', ''),
-                           data.get('category', ''),
-                           data.get('stock', 0)
-                       ))
+                INSERT INTO products (name, description, price, image_url, category, stock)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                data.get('name', ''),
+                data.get('description', ''),
+                data.get('price', 0),
+                data.get('image_url', ''),
+                data.get('category', ''),
+                data.get('stock', 0)
+            ))
             db.commit()
             product_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
             db.close()
@@ -308,23 +267,23 @@ def admin_products():
                 return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
 
             db.execute('''
-                       UPDATE products
-                       SET name        = ?,
-                           description = ?,
-                           price       = ?,
-                           image_url   = ?,
-                           category    = ?,
-                           stock       = ?
-                       WHERE id = ?
-                       ''', (
-                           data.get('name', ''),
-                           data.get('description', ''),
-                           data.get('price', 0),
-                           data.get('image_url', ''),
-                           data.get('category', ''),
-                           data.get('stock', 0),
-                           product_id
-                       ))
+                UPDATE products
+                SET name = ?,
+                    description = ?,
+                    price = ?,
+                    image_url = ?,
+                    category = ?,
+                    stock = ?
+                WHERE id = ?
+            ''', (
+                data.get('name', ''),
+                data.get('description', ''),
+                data.get('price', 0),
+                data.get('image_url', ''),
+                data.get('category', ''),
+                data.get('stock', 0),
+                product_id
+            ))
             db.commit()
             db.close()
 
@@ -345,10 +304,10 @@ def admin_products():
 
             # Проверяем, есть ли заказы с этим товаром
             orders_with_product = db.execute('''
-                                             SELECT COUNT(*)
-                                             FROM orders
-                                             WHERE items LIKE ?
-                                             ''', ('%' + str(product_id) + '%',)).fetchone()[0]
+                SELECT COUNT(*)
+                FROM orders
+                WHERE items LIKE ?
+            ''', ('%' + str(product_id) + '%',)).fetchone()[0]
 
             if orders_with_product > 0:
                 db.close()
@@ -391,19 +350,19 @@ def api_products():
 
         if category and category != 'all':
             products = db.execute('''
-                                  SELECT *
-                                  FROM products
-                                  WHERE stock > 0
-                                    AND category = ?
-                                  ORDER BY created_at DESC
-                                  ''', (category,)).fetchall()
+                SELECT *
+                FROM products
+                WHERE stock > 0
+                AND category = ?
+                ORDER BY created_at DESC
+            ''', (category,)).fetchall()
         else:
             products = db.execute('''
-                                  SELECT *
-                                  FROM products
-                                  WHERE stock > 0
-                                  ORDER BY created_at DESC
-                                  ''').fetchall()
+                SELECT *
+                FROM products
+                WHERE stock > 0
+                ORDER BY created_at DESC
+            ''').fetchall()
 
         db.close()
         return jsonify([dict(product) for product in products])
@@ -419,12 +378,12 @@ def get_unique_categories():
     db = get_db()
     try:
         categories = db.execute('''
-                                SELECT DISTINCT category
-                                FROM products
-                                WHERE category IS NOT NULL
-                                  AND category != ''
-                                ORDER BY category
-                                ''').fetchall()
+            SELECT DISTINCT category
+            FROM products
+            WHERE category IS NOT NULL
+            AND category != ''
+            ORDER BY category
+        ''').fetchall()
         return [row['category'] for row in categories]
     except Exception as e:
         print(f"Error getting categories: {e}")
@@ -446,16 +405,16 @@ def add_category():
 
         # Добавляем тестовый товар для новой категории
         db.execute('''
-                   INSERT INTO products (name, description, price, image_url, category, stock)
-                   VALUES (?, ?, ?, ?, ?, ?)
-                   ''', (
-                       f'Товар категории {category_name}',
-                       f'Автоматически созданный товар для категории {category_name}',
-                       100,
-                       'https://via.placeholder.com/300x200',
-                       category_name,
-                       10
-                   ))
+            INSERT INTO products (name, description, price, image_url, category, stock)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            f'Товар категории {category_name}',
+            f'Автоматически созданный товар для категории {category_name}',
+            100,
+            'https://via.placeholder.com/300x200',
+            category_name,
+            10
+        ))
 
         db.commit()
         return jsonify({'success': True, 'message': f'Категория "{category_name}" добавлена'})
@@ -475,12 +434,12 @@ def admin_manage_categories():
         # Получаем все уникальные категории
         try:
             categories = db.execute('''
-                                    SELECT DISTINCT category
-                                    FROM products
-                                    WHERE category IS NOT NULL
-                                      AND category != ''
-                                    ORDER BY category
-                                    ''').fetchall()
+                SELECT DISTINCT category
+                FROM products
+                WHERE category IS NOT NULL
+                AND category != ''
+                ORDER BY category
+            ''').fetchall()
             db.close()
             return jsonify([row['category'] for row in categories])
         except Exception as e:
@@ -512,16 +471,16 @@ def admin_manage_categories():
 
             # Добавляем тестовый товар с этой категорией
             db.execute('''
-                       INSERT INTO products (name, description, price, image_url, category, stock)
-                       VALUES (?, ?, ?, ?, ?, ?)
-                       ''', (
-                           f'Товар категории {new_category}',
-                           f'Это тестовый товар для категории {new_category}',
-                           100,
-                           'https://via.placeholder.com/300x200',
-                           new_category,
-                           10
-                       ))
+                INSERT INTO products (name, description, price, image_url, category, stock)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                f'Товар категории {new_category}',
+                f'Это тестовый товар для категории {new_category}',
+                100,
+                'https://via.placeholder.com/300x200',
+                new_category,
+                10
+            ))
 
             db.commit()
             db.close()
@@ -680,12 +639,12 @@ def admin_categories():
     db = get_db()
     try:
         categories = db.execute('''
-                                SELECT DISTINCT category
-                                FROM products
-                                WHERE category IS NOT NULL
-                                  AND category != ''
-                                ORDER BY category
-                                ''').fetchall()
+            SELECT DISTINCT category
+            FROM products
+            WHERE category IS NOT NULL
+            AND category != ''
+            ORDER BY category
+        ''').fetchall()
 
         return jsonify([c['category'] for c in categories])
     except Exception as e:
@@ -706,12 +665,10 @@ def admin_cleanup():
 
         # Удаляем старые отмененные заказы (старше 30 дней)
         db.execute('''
-                   DELETE
-                   FROM orders
-                   WHERE status = 'cancelled'
-                     AND created_at < DATE ('now'
-                       , '-30 days')
-                   ''')
+            DELETE FROM orders
+            WHERE status = 'cancelled'
+            AND created_at < DATE('now', '-30 days')
+        ''')
 
         db.commit()
         db.close()
