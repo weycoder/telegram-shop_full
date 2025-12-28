@@ -45,6 +45,7 @@ class TelegramShop {
         this.bindEvent('clearCart', 'click', () => this.clearCart());
         this.bindEvent('checkoutBtn', 'click', () => this.checkout());
 
+
         // Модальное окно товара
         this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
 
@@ -550,8 +551,12 @@ class TelegramShop {
         }
 
         this.saveCart();
-        this.updateCartDisplay();
         this.updateCartCount();
+
+        // ОБНОВЛЯЕМ отображение корзины, если она открыта
+        if (this.isCartOpen()) {
+            this.updateCartDisplay();
+        }
 
         // Показываем уведомление с кнопкой перехода в корзину
         this.showCartNotification(name, quantity);
@@ -591,8 +596,11 @@ class TelegramShop {
     removeFromCart(productId) {
         this.cart = this.cart.filter(item => item.id !== productId);
         this.saveCart();
-        this.updateCartDisplay();
         this.updateCartCount();
+
+        // СРАЗУ обновляем отображение корзины
+        this.updateCartDisplay();
+
         this.showNotification('🗑️ Товар удален из корзины', 'info');
     }
 
@@ -605,11 +613,14 @@ class TelegramShop {
             } else {
                 this.cart[itemIndex].quantity = quantity;
                 this.saveCart();
-                this.updateCartDisplay();
                 this.updateCartCount();
+
+                // СРАЗУ обновляем отображение корзины
+                this.updateCartDisplay();
             }
         }
     }
+
 
     updateCartItemQuantity(productId, quantity) {
         this.updateCartItem(productId, quantity);
@@ -624,8 +635,11 @@ class TelegramShop {
         if (confirm('Вы уверены, что хотите очистить корзину?')) {
             this.cart = [];
             this.saveCart();
-            this.updateCartDisplay();
             this.updateCartCount();
+
+            // СРАЗУ обновляем отображение корзины
+            this.updateCartDisplay();
+
             this.showNotification('🗑️ Корзина очищена', 'info');
         }
     }
@@ -663,7 +677,10 @@ class TelegramShop {
         const cartTotal = document.getElementById('cartTotal');
         const emptyCart = document.getElementById('emptyCart');
 
-        if (!cartItems || !cartTotal || !emptyCart) return;
+        if (!cartItems || !cartTotal || !emptyCart) {
+            console.error('❌ Элементы корзины не найдены');
+            return;
+        }
 
         if (this.cart.length === 0) {
             cartItems.innerHTML = '';
@@ -717,6 +734,7 @@ class TelegramShop {
     }
 
     toggleCart() {
+        // Всегда обновляем отображение перед открытием
         this.updateCartDisplay();
         const cartOverlay = document.getElementById('cartOverlay');
         if (cartOverlay) {
