@@ -909,8 +909,9 @@ class TelegramShop {
                     </button>
                 </div>
                 <div class="delivery-actions">
+                    <!-- ИСПРАВЛЕННАЯ КНОПКА -->
                     <button class="btn btn-outline" id="backToCartBtn">
-                        <i class="fas fa-arrow-left"></i> Вернуться в корзину
+                        <i class="fas fa-arrow-left"></i> Назад
                     </button>
                 </div>
             </div>
@@ -920,10 +921,13 @@ class TelegramShop {
         document.getElementById('courierOption').addEventListener('click', () => this.selectDeliveryType('courier'));
         document.getElementById('pickupOption').addEventListener('click', () => this.selectDeliveryType('pickup'));
 
-        // ФИКС: правильный обработчик для кнопки "Вернуться в корзину"
+        // ФИКС: правильный обработчик для кнопки "Назад"
         document.getElementById('backToCartBtn').addEventListener('click', () => {
-            // Закрываем текущий вид и возвращаем обычную корзину
-            this.updateCartDisplay(); // Обновляем отображение
+            // ВОЗВРАЩАЕМ ОБЫЧНУЮ КОРЗИНУ
+            this.closeCart(); // Сначала закрываем
+            setTimeout(() => {
+                this.toggleCart(); // Потом открываем нормальную корзину
+            }, 100);
         });
 
         document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
@@ -994,7 +998,6 @@ class TelegramShop {
                             </div>
                         `}
                     </div>
-
                     <div class="delivery-actions">
                         <button class="btn btn-primary" onclick="shop.showAddressForm()">
                             <i class="fas fa-plus"></i> Добавить новый адрес
@@ -1004,14 +1007,10 @@ class TelegramShop {
                                 <i class="fas fa-arrow-left"></i> Назад
                             </button>
                         ` : ''}
-                        <!-- ДОБАВЛЯЕМ КНОПКУ В КОРЗИНУ -->
-                        <button class="btn btn-outline" onclick="shop.returnToCart()">
-                            <i class="fas fa-shopping-cart"></i> В корзину
-                        </button>
                     </div>
                 </div>
             `;
-
+а
         } catch (error) {
             console.error('Ошибка загрузки адресов:', error);
             this.showNotification('❌ Ошибка загрузки адресов', 'error');
@@ -1076,18 +1075,13 @@ class TelegramShop {
                         </div>
                     </div>
                 </div>
-
                 <div class="delivery-actions">
                     <button class="btn btn-primary" onclick="shop.saveAddress()">
                         <i class="fas fa-save"></i> Сохранить адрес
                     </button>
-                    <!-- КНОПКА НАЗАД К ВЫБОРУ ДОСТАВКИ -->
-                    <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
+                    <!-- ТОЛЬКО НАЗАД -->
+                    <button class="btn btn-outline" onclick="shop.showAddressSelection()">
                         <i class="fas fa-arrow-left"></i> Назад
-                    </button>
-                    <!-- КНОПКА ВЕРНУТЬСЯ В КОРЗИНУ -->
-                    <button class="btn btn-outline" onclick="shop.returnToCart()">
-                        <i class="fas fa-shopping-cart"></i> Корзина
                     </button>
                 </div>
             </div>

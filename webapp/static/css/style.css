@@ -1419,23 +1419,6 @@ html {
     background: #66BB6A;
 }
 
-/* Стили для уведомлений добавленных через JS */
-.cart-notification {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: white;
-    border-radius: var(--radius-sm);
-    padding: 15px;
-    box-shadow: var(--shadow-lg);
-    z-index: 1003;
-    max-width: 300px;
-    transform: translateY(100%);
-    opacity: 0;
-    transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.4s;
-    border: 2px solid var(--primary-color);
-}
-
 .dark-mode .cart-notification {
     background: #2D2D2D;
     color: #E8F5E9;
