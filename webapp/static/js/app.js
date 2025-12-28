@@ -223,6 +223,19 @@ class TelegramShop {
         }
     }
 
+    // Добавьте эту функцию в класс TelegramShop
+    forceCartRefresh() {
+        console.log('🔄 Принудительное обновление корзины');
+        this.updateCartDisplay();
+
+        // Также обновляем счетчик
+        this.updateCartCount();
+
+        // Проверяем состояние
+        console.log(`Состояние корзины: ${this.cart.length} товаров`);
+        console.log('Содержимое корзины:', this.cart);
+    }
+
     async loadCategories() {
         try {
             console.log('📂 Загрузка категорий...');
@@ -594,26 +607,32 @@ class TelegramShop {
     }
 
     removeFromCart(productId) {
-        // Находим товар перед удалением
-        const item = this.cart.find(item => item.id === productId);
+        console.log(`🗑️ Удаление товара #${productId} из корзины`);
 
-        this.cart = this.cart.filter(item => item.id !== productId);
+        // Находим товар перед удалением для уведомления
+        const item = this.cart.find(item => item.id == productId);
+
+        // Фильтруем корзину (используем == вместо === для безопасности типов)
+        this.cart = this.cart.filter(item => item.id != productId);
+
+        console.log(`📊 В корзине осталось: ${this.cart.length} товаров`);
+
         this.saveCart();
         this.updateCartCount();
 
-        // СРАЗУ обновляем отображение корзины
+        // ОБЯЗАТЕЛЬНО обновляем отображение корзины
         this.updateCartDisplay();
 
         // Показываем уведомление только если товар был найден
         if (item) {
-            this.showNotification(`🗑️ Товар "${item.name}" удален из корзины`, 'info');
+            this.showNotification(`🗑️ "${item.name}" удален из корзины`, 'info');
         }
 
-        // Дополнительно: если корзина стала пустой, показываем сообщение
+        // Если корзина стала пустой, показываем отдельное уведомление
         if (this.cart.length === 0) {
             setTimeout(() => {
                 this.showNotification('🛒 Корзина пуста', 'info');
-            }, 300);
+            }, 500);
         }
     }
 
@@ -686,6 +705,8 @@ class TelegramShop {
     }
 
     updateCartDisplay() {
+        console.log(`🔄 Обновление отображения корзины. Товаров: ${this.cart.length}`);
+        
         const cartItems = document.getElementById('cartItems');
         const cartTotal = document.getElementById('cartTotal');
         const emptyCart = document.getElementById('emptyCart');
@@ -697,16 +718,22 @@ class TelegramShop {
 
         // Всегда проверяем состояние корзины
         if (this.cart.length === 0) {
-            cartItems.innerHTML = '';
-            emptyCart.style.display = 'flex'; // Изменено с 'block' на 'flex' для правильного отображения
-            cartTotal.textContent = '0 ₽';
+            console.log('🛒 Корзина пуста - показываем блок "Корзина пуста"');
 
-            // Очищаем уведомления о пустой корзине, если они есть
-            this.clearCartNotifications();
+            // Очищаем список товаров
+            cartItems.innerHTML = '';
+
+            // ПОКАЗЫВАЕМ сообщение о пустой корзине
+            emptyCart.style.display = 'flex';
+
+            // Обнуляем сумму
+            cartTotal.textContent = '0 ₽';
             return;
         }
 
-        // Если товары есть - скрываем блок "Корзина пуста"
+        console.log(`📦 В корзине ${this.cart.length} товаров, обновляем список...`);
+
+        // Если товары есть - СКРЫВАЕМ блок "Корзина пуста"
         emptyCart.style.display = 'none';
 
         // Сортируем по дате добавления (новые сверху)
@@ -714,43 +741,52 @@ class TelegramShop {
             new Date(b.addedAt || 0) - new Date(a.addedAt || 0)
         );
 
-        cartItems.innerHTML = sortedCart.map(item => `
-            <div class="cart-item" data-id="${item.id}">
-                <img src="${item.image || 'https://via.placeholder.com/80'}"
-                     alt="${item.name}"
-                     class="cart-item-image"
-                     onerror="this.src='https://via.placeholder.com/80'">
-                <div class="cart-item-info">
-                    <div class="cart-item-header">
-                        <h4 class="cart-item-name">${item.name}</h4>
-                        <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                    <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
-                    <div class="cart-item-controls">
-                        <div class="quantity-selector small">
-                            <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
-                                    ${item.quantity <= 1 ? 'disabled' : ''}>
-                                <i class="fas fa-minus"></i>
-                            </button>
-                            <span class="quantity">${item.quantity} шт.</span>
-                            <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
-                                <i class="fas fa-plus"></i>
+        // Генерируем HTML для каждого товара
+        const itemsHTML = sortedCart.map(item => {
+            console.log(`📝 Генерация карточки для товара: ${item.name}, количество: ${item.quantity}`);
+            return `
+                <div class="cart-item" data-id="${item.id}">
+                    <img src="${item.image || 'https://via.placeholder.com/80'}"
+                         alt="${item.name}"
+                         class="cart-item-image"
+                         onerror="this.src='https://via.placeholder.com/80'">
+                    <div class="cart-item-info">
+                        <div class="cart-item-header">
+                            <h4 class="cart-item-name">${item.name}</h4>
+                            <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </div>
-                        <div class="cart-item-total">
-                            ${this.formatPrice(item.price * item.quantity)} ₽
+                        <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                        <div class="cart-item-controls">
+                            <div class="quantity-selector small">
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
+                                        ${item.quantity <= 1 ? 'disabled' : ''}>
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="quantity">${item.quantity} шт.</span>
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="cart-item-total">
+                                ${this.formatPrice(item.price * item.quantity)} ₽
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
+        // ВСТАВЛЯЕМ сгенерированный HTML
+        cartItems.innerHTML = itemsHTML;
+
+        // Считаем общую сумму
         const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         cartTotal.textContent = `${this.formatPrice(total)} ₽`;
-    }
 
+        console.log('✅ Отображение корзины обновлено');
+    }
         // Добавьте эту вспомогательную функцию для очистки уведомлений
     clearCartNotifications() {
         const notifications = document.querySelectorAll('.notification');
