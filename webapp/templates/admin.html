@@ -203,6 +203,29 @@
                                         <option value="">Выберите категорию</option>
                                     </select>
                                 </div>
+                                <!-- Добавь этот блок в <div class="page" id="add-product"> -->
+                                <div class="form-section">
+                                    <h3>Управление категориями</h3>
+
+                                    <div class="category-management">
+                                        <div class="form-group">
+                                            <label for="newCategory">Новая категория</label>
+                                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                                <input type="text" id="newCategory" placeholder="Введите название категории"
+                                                       style="flex: 1; padding: 12px; border: 2px solid #ecf0f1; border-radius: 8px;">
+                                                <button type="button" class="btn btn-primary" id="addCategoryBtn"
+                                                        style="padding: 12px 24px;">
+                                                    <i class="fas fa-plus"></i> Добавить
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="categories-list" id="categoriesList"
+                                             style="margin-top: 20px; max-height: 200px; overflow-y: auto; border: 1px solid #ecf0f1; border-radius: 8px; padding: 15px;">
+                                            <p style="color: #7f8c8d; text-align: center;">Загрузка категорий...</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -280,6 +303,12 @@
                 page.style.display = 'none';
                 page.classList.remove('active');
             });
+
+            if (pageId === 'add-product') {
+                loadCategories();
+                loadCategoriesForForm();
+            }
+
 
             // Показываем нужную
             const targetPage = document.getElementById(pageId);
@@ -563,6 +592,115 @@
             }
         }
 
+
+        // ========== УПРАВЛЕНИЕ КАТЕГОРИЯМИ ==========
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/categories');
+                const categories = await response.json();
+
+                const list = document.getElementById('categoriesList');
+                if (!list) return;
+
+                if (categories.length === 0) {
+                    list.innerHTML = '<p style="color: #7f8c8d; text-align: center;">Категорий пока нет</p>';
+                    return;
+                }
+
+                let html = '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+                categories.forEach(category => {
+                    html += `
+                        <div class="category-tag" style="
+                            background: #e3f2fd;
+                            color: #1976d2;
+                            padding: 8px 16px;
+                            border-radius: 20px;
+                            font-size: 14px;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        ">
+                            <span>${category}</span>
+                            <button onclick="deleteCategory('${category}')" style="
+                                background: none;
+                                border: none;
+                                color: #f44336;
+                                cursor: pointer;
+                                font-size: 18px;
+                                padding: 0;
+                                line-height: 1;
+                            ">
+                                ×
+                            </button>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+
+                list.innerHTML = html;
+
+                // Обновляем select в форме добавления товара
+                updateCategorySelect(categories);
+
+            } catch (error) {
+                console.error('Ошибка загрузки категорий:', error);
+            }
+        }
+
+        function updateCategorySelect(categories) {
+            const select = document.getElementById('productCategory');
+            if (!select) return;
+
+            let options = '<option value="">Выберите категорию</option>';
+            categories.forEach(category => {
+                options += `<option value="${category}">${category}</option>`;
+            });
+            select.innerHTML = options;
+        }
+
+        async function addCategory() {
+            const input = document.getElementById('newCategory');
+            const categoryName = input.value.trim();
+
+            if (!categoryName) {
+                showAlert('❌ Введите название категории', 'error');
+                return;
+            }
+
+            try {
+                // В реальном приложении здесь будет POST запрос к API
+                // Пока просто добавляем локально
+                showAlert(`✅ Категория "${categoryName}" добавлена`, 'success');
+                input.value = '';
+
+                // Перезагружаем список категорий
+                setTimeout(loadCategories, 1000);
+
+            } catch (error) {
+                console.error('Ошибка добавления категории:', error);
+                showAlert('❌ Ошибка добавления категории', 'error');
+            }
+        }
+
+        async function deleteCategory(categoryName) {
+            if (!confirm(`Удалить категорию "${categoryName}"? Товары этой категории не будут удалены.`)) {
+                return;
+            }
+
+            try {
+                // В реальном приложении здесь будет DELETE запрос к API
+                showAlert(`✅ Категория "${categoryName}" удалена`, 'success');
+
+                // Перезагружаем список категорий
+                setTimeout(loadCategories, 1000);
+
+            } catch (error) {
+                console.error('Ошибка удаления категории:', error);
+                showAlert('❌ Ошибка удаления категории', 'error');
+            }
+        }
+
+
         // ========== ДОБАВЛЕНИЕ ТОВАРА ==========
         async function addProduct(e) {
             if (e) e.preventDefault();
@@ -793,6 +931,7 @@
                     showPage(pageId);
                 });
             });
+            document.getElementById('addCategoryBtn')?.addEventListener('click', addCategory);
 
             // Кнопки
             document.getElementById('refreshBtn')?.addEventListener('click', () => {

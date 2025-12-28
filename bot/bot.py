@@ -31,7 +31,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp")
         )]
     ]
-
     # Если пользователь админ - добавляем кнопку админки
     if user.id in ADMIN_IDS:
         keyboard.append([
