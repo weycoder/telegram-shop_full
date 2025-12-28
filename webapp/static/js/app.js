@@ -7,6 +7,13 @@ class TelegramShop {
         this.products = [];
         this.categories = [];
         this.isInitialized = false;
+        this.deliveryData = {
+            type: null, // 'courier' или 'pickup'
+            address_id: null,
+            pickup_point: null,
+            address_details: null
+        };
+
 
         console.log('🛍️ Telegram Shop создан');
     }
@@ -1176,6 +1183,55 @@ class TelegramShop {
     async selectPickupPoint(pointId) {
         this.deliveryData.pickup_point = pointId;
         await this.confirmOrder();
+    }
+
+    async selectAddress(addressId) {
+        try {
+            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+
+            // Можно сохранить адрес по умолчанию
+            this.deliveryData.address_id = addressId;
+
+            // Переходим к подтверждению заказа
+            await this.confirmOrder();
+
+        } catch (error) {
+            console.error('Ошибка выбора адреса:', error);
+            this.showNotification('❌ Ошибка выбора адреса', 'error');
+        }
+    }
+
+    async setDefaultAddress(addressId, userId) {
+        try {
+            event.stopPropagation(); // Останавливаем всплытие
+
+            const response = await fetch('/api/user/addresses/set-default', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    address_id: addressId
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showNotification('✅ Адрес установлен по умолчанию', 'success');
+                // Обновляем список адресов
+                setTimeout(() => {
+                    this.showAddressSelection();
+                }, 1000);
+            } else {
+                throw new Error(result.error || 'Ошибка установки адреса');
+            }
+
+        } catch (error) {
+            console.error('Ошибка установки адреса:', error);
+            this.showNotification(`❌ ${error.message}`, 'error');
+        }
     }
 
     async confirmOrder() {
