@@ -1498,3 +1498,296 @@ html {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
 }
+
+/* ДОБАВИТЬ В КОНЕЦ ФАЙЛА: */
+
+/* Стили для системы доставки */
+.delivery-options {
+    padding: 20px;
+}
+
+.delivery-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 15px;
+    margin-bottom: 10px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: left;
+}
+
+.delivery-option:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+}
+
+.option-icon {
+    width: 40px;
+    height: 40px;
+    background: #667eea;
+    color: white;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    font-size: 18px;
+}
+
+.option-info {
+    flex: 1;
+}
+
+.option-info h3 {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    color: #333;
+}
+
+.option-info p {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+}
+
+.delivery-option i.fa-chevron-right {
+    color: #999;
+    font-size: 14px;
+}
+
+/* Адреса */
+.addresses-list, .pickup-list {
+    padding: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.address-card, .pickup-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.address-card:hover, .pickup-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.address-header, .pickup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.address-header h3, .pickup-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #333;
+}
+
+.default-badge {
+    background: #10b981;
+    color: white;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.pickup-status {
+    color: #10b981;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.address-details p, .pickup-details p {
+    margin: 5px 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.address-details i, .pickup-details i {
+    width: 16px;
+    margin-right: 8px;
+    color: #667eea;
+}
+
+.address-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+    background: #f3f4f6;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #667eea;
+}
+
+.no-addresses {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.no-addresses i {
+    font-size: 48px;
+    color: #cbd5e1;
+    margin-bottom: 15px;
+}
+
+/* Форма адреса */
+.address-form {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-row {
+    display: flex;
+    gap: 10px;
+}
+
+.form-row .form-group {
+    flex: 1;
+    margin-bottom: 15px;
+}
+
+/* Действия доставки */
+.delivery-actions {
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 10px;
+}
+
+.delivery-actions .btn {
+    flex: 1;
+}
+
+/* Подтверждение заказа */
+.order-confirmation {
+    padding: 40px 20px;
+    text-align: center;
+}
+
+.confirmation-icon {
+    width: 80px;
+    height: 80px;
+    background: #10b981;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 40px;
+}
+
+.order-confirmation h2 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.order-details {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.order-details p {
+    margin: 10px 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.confirmation-message {
+    color: #666;
+    margin-bottom: 30px;
+}
+
+/* Уведомление корзины */
+.cart-notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: white;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    border-radius: 12px;
+    padding: 15px;
+    z-index: 99999;
+    opacity: 0;
+    transition: all 0.3s ease;
+    max-width: 400px;
+    width: 90%;
+}
+
+.cart-notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.notification-message {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #333;
+    font-weight: 500;
+}
+
+.notification-message i {
+    color: #10b981;
+    font-size: 18px;
+}
+
+.notification-action {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    margin-left: 15px;
+}

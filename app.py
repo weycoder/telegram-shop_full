@@ -37,7 +37,6 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-
 def init_db():
     """Инициализация БД"""
     with app.app_context():
@@ -67,7 +66,44 @@ def init_db():
                 items TEXT NOT NULL,
                 total_price REAL NOT NULL,
                 status TEXT DEFAULT 'pending',
+                delivery_type TEXT,
+                delivery_address TEXT,
+                pickup_point TEXT,
+                recipient_name TEXT,
+                phone_number TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Таблица для адресов пользователей
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_addresses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                city TEXT NOT NULL,
+                street TEXT NOT NULL,
+                house TEXT NOT NULL,
+                apartment TEXT,
+                floor TEXT,
+                doorcode TEXT,
+                recipient_name TEXT NOT NULL,
+                phone TEXT,
+                is_default INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Таблица для точек самовывоза
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS pickup_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                address TEXT NOT NULL,
+                working_hours TEXT,
+                phone TEXT,
+                latitude REAL,
+                longitude REAL,
+                is_active INTEGER DEFAULT 1
             )
         ''')
 
@@ -94,14 +130,26 @@ def init_db():
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', test_products)
 
+        # Тестовые точки самовывоза
+        cursor.execute("SELECT COUNT(*) FROM pickup_points")
+        if cursor.fetchone()[0] == 0:
+            pickup_points = [
+                ('Магазин на Ленина', 'ул. Ленина, 15', '09:00-21:00', '+7 (999) 123-45-67'),
+                ('ТЦ Центральный', 'пр. Мира, 42, 2 этаж', '10:00-22:00', '+7 (999) 765-43-21'),
+                ('Склад на Заводской', 'ул. Заводская, 7', '08:00-20:00', '+7 (999) 555-55-55')
+            ]
+
+            cursor.executemany('''
+                INSERT INTO pickup_points (name, address, working_hours, phone)
+                VALUES (?, ?, ?, ?)
+            ''', pickup_points)
+
         db.commit()
         db.close()
         print("✅ База данных инициализирована")
 
-
 # Инициализируем БД при старте
 init_db()
-
 
 # ========== ГЛАВНЫЕ СТРАНИЦЫ ==========
 @app.route('/')
@@ -109,19 +157,299 @@ def index():
     """Главная страница (перенаправляем на магазин)"""
     return render_template('webapp.html')
 
-
 @app.route('/webapp')
 def webapp_page():
     """Web App магазин"""
     return render_template('webapp.html')
-
 
 @app.route('/admin')
 def admin_page():
     """Админ панель"""
     return render_template('admin.html')
 
+# ========== API ДЛЯ ДОСТАВКИ ==========
+@app.route('/api/user/addresses', methods=['GET', 'POST', 'DELETE'])
+def user_addresses():
+    """Управление адресами пользователя"""
+    db = get_db()
 
+    try:
+        user_id = request.args.get('user_id', type=int)
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Не указан user_id'}), 400
+
+        if request.method == 'GET':
+            # Получить все адреса пользователя
+            addresses = db.execute('''
+                SELECT * FROM user_addresses 
+                WHERE user_id = ? 
+                ORDER BY is_default DESC, created_at DESC
+            ''', (user_id,)).fetchall()
+
+            return jsonify([dict(addr) for addr in addresses])
+
+        elif request.method == 'POST':
+            # Добавить новый адрес
+            data = request.json
+
+            # Если это первый адрес, делаем его адресом по умолчанию
+            count = db.execute(
+                'SELECT COUNT(*) FROM user_addresses WHERE user_id = ?',
+                (user_id,)
+            ).fetchone()[0]
+
+            is_default = 1 if count == 0 else data.get('is_default', 0)
+
+            # Сохраняем адрес
+            cursor = db.execute('''
+                INSERT INTO user_addresses 
+                (user_id, city, street, house, apartment, floor, doorcode, recipient_name, phone, is_default)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                data['city'],
+                data['street'],
+                data['house'],
+                data.get('apartment', ''),
+                data.get('floor', ''),
+                data.get('doorcode', ''),
+                data['recipient_name'],
+                data.get('phone', ''),
+                is_default
+            ))
+
+            # Если этот адрес стал адресом по умолчанию, сбрасываем default у других адресов
+            if is_default:
+                db.execute('''
+                    UPDATE user_addresses 
+                    SET is_default = 0 
+                    WHERE user_id = ? AND id != ?
+                ''', (user_id, cursor.lastrowid))
+
+            db.commit()
+            return jsonify({'success': True, 'id': cursor.lastrowid})
+
+        elif request.method == 'DELETE':
+            # Удалить адрес
+            address_id = request.args.get('address_id', type=int)
+            if not address_id:
+                return jsonify({'success': False, 'error': 'Не указан address_id'}), 400
+
+            db.execute(
+                'DELETE FROM user_addresses WHERE id = ? AND user_id = ?',
+                (address_id, user_id)
+            )
+            db.commit()
+            return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+@app.route('/api/user/addresses/set-default', methods=['POST'])
+def set_default_address():
+    """Установить адрес по умолчанию"""
+    db = get_db()
+
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        address_id = data.get('address_id')
+
+        if not user_id or not address_id:
+            return jsonify({'success': False, 'error': 'Не указаны user_id или address_id'}), 400
+
+        # Сначала сбрасываем все адреса пользователя
+        db.execute('''
+            UPDATE user_addresses 
+            SET is_default = 0 
+            WHERE user_id = ?
+        ''', (user_id,))
+
+        # Устанавливаем выбранный адрес как адрес по умолчанию
+        db.execute('''
+            UPDATE user_addresses 
+            SET is_default = 1 
+            WHERE id = ? AND user_id = ?
+        ''', (address_id, user_id))
+
+        db.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+@app.route('/api/pickup-points', methods=['GET'])
+def get_pickup_points():
+    """Получить все точки самовывоза"""
+    db = get_db()
+
+    try:
+        points = db.execute('''
+            SELECT * FROM pickup_points 
+            WHERE is_active = 1 
+            ORDER BY name
+        ''').fetchall()
+
+        return jsonify([dict(point) for point in points])
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+# ========== ОБНОВЛЕННЫЙ API ДЛЯ СОЗДАНИЯ ЗАКАЗА ==========
+@app.route('/api/create-order', methods=['POST'])
+def api_create_order():
+    """Создать заказ с доставкой"""
+    data = request.json
+    db = get_db()
+
+    try:
+        # Извлекаем данные о доставке
+        delivery_type = data.get('delivery_type')
+        delivery_address = data.get('delivery_address')
+        pickup_point = data.get('pickup_point')
+        recipient_name = data.get('recipient_name')
+        phone_number = data.get('phone_number')
+
+        # Сохраняем заказ с информацией о доставке
+        cursor = db.execute('''
+            INSERT INTO orders 
+            (user_id, username, items, total_price, status, 
+             delivery_type, delivery_address, pickup_point, recipient_name, phone_number)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+        ''', (
+            data.get('user_id', 0),
+            data.get('username', 'Гость'),
+            json.dumps(data['items'], ensure_ascii=False),
+            data['total'],
+            delivery_type,
+            delivery_address,
+            pickup_point,
+            recipient_name,
+            phone_number
+        ))
+
+        # Обновляем остатки товаров
+        for item in data['items']:
+            db.execute(
+                'UPDATE products SET stock = stock - ? WHERE id = ?',
+                (item['quantity'], item['id'])
+            )
+
+        db.commit()
+        order_id = cursor.lastrowid
+        db.close()
+
+        return jsonify({'success': True, 'order_id': order_id})
+    except Exception as e:
+        db.close()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========== API ДЛЯ АДМИНИСТРИРОВАНИЯ ТОЧЕК САМОВЫВОЗА ==========
+@app.route('/api/admin/pickup-points', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def admin_pickup_points():
+    """Управление точками самовывоза"""
+    db = get_db()
+
+    if request.method == 'GET':
+        try:
+            points = db.execute(
+                'SELECT * FROM pickup_points ORDER BY name'
+            ).fetchall()
+            return jsonify([dict(point) for point in points])
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    elif request.method == 'POST':
+        try:
+            data = request.json
+
+            db.execute('''
+                INSERT INTO pickup_points (name, address, working_hours, phone, latitude, longitude)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                data.get('name', ''),
+                data.get('address', ''),
+                data.get('working_hours', ''),
+                data.get('phone', ''),
+                data.get('latitude'),
+                data.get('longitude')
+            ))
+
+            db.commit()
+            point_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+            return jsonify({'success': True, 'id': point_id})
+
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    elif request.method == 'PUT':
+        try:
+            point_id = request.args.get('id', type=int)
+            data = request.json
+
+            if not point_id:
+                return jsonify({'success': False, 'error': 'Не указан ID точки'}), 400
+
+            db.execute('''
+                UPDATE pickup_points
+                SET name = ?, address = ?, working_hours = ?, phone = ?,
+                    latitude = ?, longitude = ?, is_active = ?
+                WHERE id = ?
+            ''', (
+                data.get('name', ''),
+                data.get('address', ''),
+                data.get('working_hours', ''),
+                data.get('phone', ''),
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('is_active', 1),
+                point_id
+            ))
+
+            db.commit()
+            return jsonify({'success': True})
+
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    elif request.method == 'DELETE':
+        try:
+            point_id = request.args.get('id', type=int)
+
+            if not point_id:
+                return jsonify({'success': False, 'error': 'Не указан ID точки'}), 400
+
+            # Проверяем, есть ли заказы на эту точку
+            orders_count = db.execute(
+                'SELECT COUNT(*) FROM orders WHERE pickup_point LIKE ?',
+                (f'%{point_id}%',)
+            ).fetchone()[0]
+
+            if orders_count > 0:
+                # Деактивируем вместо удаления
+                db.execute(
+                    'UPDATE pickup_points SET is_active = 0 WHERE id = ?',
+                    (point_id,)
+                )
+            else:
+                # Удаляем полностью
+                db.execute('DELETE FROM pickup_points WHERE id = ?', (point_id,))
+
+            db.commit()
+            return jsonify({'success': True})
+
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    db.close()
+    return jsonify({'success': False, 'error': 'Метод не поддерживается'}), 405
+
+# ========== ОСТАЛЬНЫЕ API ФУНКЦИИ (без изменений) ==========
 @app.route('/api/upload-image', methods=['POST'])
 def upload_image():
     """Загрузка изображения на сервер"""
@@ -166,42 +494,6 @@ def uploaded_file(filename):
     except Exception as e:
         print(f"❌ Ошибка загрузки файла {filename}: {e}")
         return jsonify({'error': 'Файл не найден'}), 404
-
-
-
-@app.route('/api/create-order', methods=['POST'])
-def api_create_order():
-    """Создать заказ"""
-    data = request.json
-    db = get_db()
-
-    try:
-        db.execute('''
-            INSERT INTO orders (user_id, username, items, total_price, status)
-            VALUES (?, ?, ?, ?, 'pending')
-        ''', (
-            data.get('user_id', 0),
-            data.get('username', 'Гость'),
-            json.dumps(data['items'], ensure_ascii=False),
-            data['total']
-        ))
-
-        # Обновляем остатки
-        for item in data['items']:
-            db.execute(
-                'UPDATE products SET stock = stock - ? WHERE id = ?',
-                (item['quantity'], item['id'])
-            )
-
-        db.commit()
-        order_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-        db.close()
-
-        return jsonify({'success': True, 'order_id': order_id})
-    except Exception as e:
-        db.close()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def admin_products():
@@ -327,7 +619,6 @@ def admin_products():
             db.close()
             return jsonify({'success': False, 'error': str(e)}), 500
 
-
 @app.route('/api/admin/orders', methods=['GET'])
 def admin_orders():
     """Получить все заказы"""
@@ -337,7 +628,6 @@ def admin_orders():
     ).fetchall()
     db.close()
     return jsonify([dict(order) for order in orders])
-
 
 @app.route('/api/products')
 def api_products():
@@ -369,8 +659,6 @@ def api_products():
         db.close()
         return jsonify([])
 
-
-# Добавь эту функцию для получения уникальных категорий
 def get_unique_categories():
     """Получить все уникальные категории из БД"""
     db = get_db()
@@ -388,7 +676,6 @@ def get_unique_categories():
         return []
     finally:
         db.close()
-
 
 @app.route('/api/admin/categories/add', methods=['POST'])
 def add_category():
@@ -422,7 +709,6 @@ def add_category():
     finally:
         db.close()
 
-# Добавь этот маршрут в app.py
 @app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
 def admin_manage_categories():
     """Управление категориями (для админа)"""
@@ -516,8 +802,6 @@ def admin_manage_categories():
             db.close()
             return jsonify({'success': False, 'error': str(e)}), 500
 
-
-# Обнови существующий маршрут api_categories чтобы использовать новую функцию
 @app.route('/api/categories')
 def api_categories():
     """Получить список категорий"""
@@ -542,11 +826,7 @@ def api_product_detail(product_id):
         db.close()
         return jsonify({'error': str(e)}), 500
 
-
-
-
 # ========== ПОЛНОЕ API ДЛЯ АДМИНКИ ==========
-
 @app.route('/api/admin/dashboard')
 def admin_dashboard():
     """Полная статистика для дашборда"""
@@ -567,7 +847,7 @@ def admin_dashboard():
 
         # Последние заказы
         recent_orders = db.execute('''
-            SELECT id, username, total_price, status, created_at
+            SELECT id, username, total_price, status, delivery_type, created_at
             FROM orders 
             ORDER BY created_at DESC 
             LIMIT 10
@@ -629,8 +909,6 @@ def update_order_status(order_id):
         print(f"Error in update_order_status: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
-# ========== ДОПОЛНИТЕЛЬНЫЕ API ==========
 @app.route('/api/admin/categories', methods=['GET'])
 def admin_categories():
     """Получить все категории для админки"""
@@ -650,7 +928,6 @@ def admin_categories():
         return jsonify([])
     finally:
         db.close()
-
 
 @app.route('/api/admin/upload', methods=['POST'])
 def upload_file():
@@ -709,7 +986,6 @@ def admin_cleanup():
         db.close()
         print(f"Error in admin_cleanup: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 # ========== ЗАПУСК ==========
 if __name__ == '__main__':

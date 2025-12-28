@@ -827,42 +827,316 @@ class TelegramShop {
         }
     }
 
-    // ========== ОФОРМЛЕНИЕ ЗАКАЗА ==========
     async checkout() {
         if (this.cart.length === 0) {
             this.showNotification('❌ Корзина пуста!', 'error');
             return;
         }
 
-        // Проверяем наличие товаров
-        const unavailableItems = [];
-        for (const item of this.cart) {
-            try {
-                const response = await fetch(`/api/products/${item.id}`);
-                if (response.ok) {
-                    const product = await response.json();
-                    if (product.stock < item.quantity) {
-                        unavailableItems.push({
-                            name: item.name,
-                            available: product.stock,
-                            requested: item.quantity
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error(`Ошибка проверки товара ${item.id}:`, error);
+        // Показываем экран выбора доставки
+        this.showDeliverySelection();
+    }
+
+    // ДОБАВИТЬ НОВЫЕ ФУНКЦИИ ПОСЛЕ checkout:
+    async showDeliverySelection() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-shipping-fast"></i> Способ получения</h2>
+                    <button class="close-cart" onclick="shop.closeCart()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="delivery-options">
+                    <button class="delivery-option" onclick="shop.selectDeliveryType('courier')">
+                        <div class="option-icon">
+                            <i class="fas fa-truck"></i>
+                        </div>
+                        <div class="option-info">
+                            <h3>🚗 Доставка курьером</h3>
+                            <p>Привезем прямо к вашей двери</p>
+                        </div>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+
+                    <button class="delivery-option" onclick="shop.selectDeliveryType('pickup')">
+                        <div class="option-icon">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <div class="option-info">
+                            <h3>🏪 Самовывоз</h3>
+                            <p>Заберите из ближайшей точки</p>
+                        </div>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    async selectDeliveryType(type) {
+        this.deliveryData.type = type;
+
+        if (type === 'courier') {
+            await this.showAddressSelection();
+        } else if (type === 'pickup') {
+            await this.showPickupPoints();
+        }
+    }
+
+    async showAddressSelection() {
+        try {
+            // Получаем user_id из Telegram или используем 0 для гостя
+            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+
+            const response = await fetch(`/api/user/addresses?user_id=${userId}`);
+            const addresses = await response.json();
+
+            const cartOverlay = document.getElementById('cartOverlay');
+            if (!cartOverlay) return;
+
+            let addressesHTML = '';
+
+            if (addresses.length > 0) {
+                addresses.forEach(addr => {
+                    addressesHTML += `
+                        <div class="address-card" onclick="shop.selectAddress(${addr.id})">
+                            <div class="address-header">
+                                <h3>${addr.recipient_name}</h3>
+                                ${addr.is_default ? '<span class="default-badge">По умолчанию</span>' : ''}
+                            </div>
+                            <div class="address-details">
+                                <p><i class="fas fa-city"></i> ${addr.city}</p>
+                                <p><i class="fas fa-road"></i> ${addr.street}, ${addr.house}</p>
+                                ${addr.apartment ? `<p><i class="fas fa-door-closed"></i> Кв. ${addr.apartment}</p>` : ''}
+                                ${addr.phone ? `<p><i class="fas fa-phone"></i> ${addr.phone}</p>` : ''}
+                            </div>
+                            <div class="address-actions">
+                                <button class="btn-small" onclick="event.stopPropagation(); shop.setDefaultAddress(${addr.id}, ${userId})">
+                                    <i class="fas fa-star"></i> Сделать основным
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
             }
-        }
 
-        if (unavailableItems.length > 0) {
-            let message = 'Некоторые товары недоступны в запрошенном количестве:\n';
-            unavailableItems.forEach(item => {
-                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
+            cartOverlay.innerHTML = `
+                <div class="cart-modal">
+                    <div class="cart-header">
+                        <h2><i class="fas fa-map-marker-alt"></i> Выберите адрес</h2>
+                        <button class="close-cart" onclick="shop.closeCart()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="addresses-list">
+                        ${addresses.length > 0 ? addressesHTML : `
+                            <div class="no-addresses">
+                                <i class="fas fa-map-marker-slash"></i>
+                                <h3>Нет сохраненных адресов</h3>
+                                <p>Добавьте адрес для доставки</p>
+                            </div>
+                        `}
+                    </div>
+
+                    <div class="delivery-actions">
+                        <button class="btn btn-primary" onclick="shop.showAddressForm()">
+                            <i class="fas fa-plus"></i> Добавить новый адрес
+                        </button>
+                        ${addresses.length > 0 ? `
+                            <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
+                                <i class="fas fa-arrow-left"></i> Назад
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Ошибка загрузки адресов:', error);
+            this.showNotification('❌ Ошибка загрузки адресов', 'error');
+        }
+    }
+
+    async showAddressForm() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-address-card"></i> Новый адрес</h2>
+                    <button class="close-cart" onclick="shop.closeCart()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="address-form">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Имя получателя</label>
+                        <input type="text" id="recipientName" placeholder="Иван Иванов" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Телефон</label>
+                        <input type="tel" id="recipientPhone" placeholder="+7 (999) 123-45-67">
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-city"></i> Город</label>
+                        <input type="text" id="city" placeholder="Москва" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-road"></i> Улица</label>
+                        <input type="text" id="street" placeholder="Ленина" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-home"></i> Дом</label>
+                            <input type="text" id="house" placeholder="15" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fas fa-door-closed"></i> Квартира</label>
+                            <input type="text" id="apartment" placeholder="24">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-stairs"></i> Этаж</label>
+                            <input type="text" id="floor" placeholder="2">
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fas fa-key"></i> Домофон</label>
+                            <input type="text" id="doorcode" placeholder="123">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="delivery-actions">
+                    <button class="btn btn-primary" onclick="shop.saveAddress()">
+                        <i class="fas fa-save"></i> Сохранить адрес
+                    </button>
+                    <button class="btn btn-outline" onclick="shop.showAddressSelection()">
+                        <i class="fas fa-arrow-left"></i> Назад
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    async saveAddress() {
+        try {
+            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+            const addressData = {
+                user_id: userId,
+                city: document.getElementById('city').value,
+                street: document.getElementById('street').value,
+                house: document.getElementById('house').value,
+                apartment: document.getElementById('apartment').value,
+                floor: document.getElementById('floor').value,
+                doorcode: document.getElementById('doorcode').value,
+                recipient_name: document.getElementById('recipientName').value,
+                phone: document.getElementById('recipientPhone').value
+            };
+
+            // Проверка обязательных полей
+            if (!addressData.city || !addressData.street || !addressData.house || !addressData.recipient_name) {
+                this.showNotification('❌ Заполните обязательные поля', 'error');
+                return;
+            }
+
+            const response = await fetch('/api/user/addresses', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(addressData)
             });
-            this.showNotification(message, 'error');
-            return;
-        }
 
+            const result = await response.json();
+
+            if (result.success) {
+                this.deliveryData.address_id = result.id;
+                this.showNotification('✅ Адрес сохранен', 'success');
+                await this.confirmOrder();
+            } else {
+                throw new Error(result.error || 'Ошибка сохранения');
+            }
+
+        } catch (error) {
+            console.error('Ошибка сохранения адреса:', error);
+            this.showNotification(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    async showPickupPoints() {
+        try {
+            const response = await fetch('/api/pickup-points');
+            const points = await response.json();
+
+            const cartOverlay = document.getElementById('cartOverlay');
+            if (!cartOverlay) return;
+
+            let pointsHTML = '';
+
+            points.forEach(point => {
+                pointsHTML += `
+                    <div class="pickup-card" onclick="shop.selectPickupPoint(${point.id})">
+                        <div class="pickup-header">
+                            <h3>${point.name}</h3>
+                            <span class="pickup-status">🟢 Открыто</span>
+                        </div>
+                        <div class="pickup-details">
+                            <p><i class="fas fa-map-marker-alt"></i> ${point.address}</p>
+                            <p><i class="fas fa-clock"></i> ${point.working_hours || 'Ежедневно 10:00-22:00'}</p>
+                            ${point.phone ? `<p><i class="fas fa-phone"></i> ${point.phone}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            cartOverlay.innerHTML = `
+                <div class="cart-modal">
+                    <div class="cart-header">
+                        <h2><i class="fas fa-store"></i> Выберите точку самовывоза</h2>
+                        <button class="close-cart" onclick="shop.closeCart()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="pickup-list">
+                        ${pointsHTML}
+                    </div>
+
+                    <div class="delivery-actions">
+                        <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
+                            <i class="fas fa-arrow-left"></i> Назад
+                        </button>
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Ошибка загрузки точек:', error);
+            this.showNotification('❌ Ошибка загрузки точек самовывоза', 'error');
+        }
+    }
+
+    async selectPickupPoint(pointId) {
+        this.deliveryData.pickup_point = pointId;
+        await this.confirmOrder();
+    }
+
+    async confirmOrder() {
         try {
             let userData = {
                 user_id: 0,
@@ -871,7 +1145,6 @@ class TelegramShop {
                 last_name: ''
             };
 
-            // Получаем данные пользователя из Telegram
             if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
                 const user = Telegram.WebApp.initDataUnsafe.user;
                 userData = {
@@ -882,6 +1155,7 @@ class TelegramShop {
                 };
             }
 
+            // Подготавливаем данные заказа с доставкой
             const orderData = {
                 ...userData,
                 items: this.cart.map(item => ({
@@ -891,10 +1165,13 @@ class TelegramShop {
                     quantity: item.quantity
                 })),
                 total: this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+                delivery_type: this.deliveryData.type,
+                delivery_address: this.deliveryData.address_id ? `address_id:${this.deliveryData.address_id}` : null,
+                pickup_point: this.deliveryData.pickup_point,
                 created_at: new Date().toISOString()
             };
 
-            console.log('📤 Отправка заказа:', orderData);
+            console.log('📤 Отправка заказа с доставкой:', orderData);
 
             const response = await fetch('/api/create-order', {
                 method: 'POST',
@@ -911,19 +1188,10 @@ class TelegramShop {
                 // Очищаем корзину
                 this.cart = [];
                 this.saveCart();
-                this.updateCartDisplay();
                 this.updateCartCount();
-                this.closeCart();
 
-                // Показываем уведомление
-                let message = `✅ Заказ #${result.order_id} успешно оформлен!`;
-                if (window.Telegram?.WebApp) {
-                    Telegram.WebApp.showAlert(message);
-                }
-                this.showNotification(message, 'success');
-
-                // Обновляем список товаров (могли измениться остатки)
-                this.loadProducts();
+                // Показываем подтверждение
+                this.showOrderConfirmation(result.order_id);
 
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка сервера');
@@ -931,8 +1199,43 @@ class TelegramShop {
 
         } catch (error) {
             console.error('❌ Ошибка оформления заказа:', error);
-            this.showNotification(`❌ Ошибка оформления заказа: ${error.message}`, 'error');
+            this.showNotification(`❌ Ошибка: ${error.message}`, 'error');
+            this.showDeliverySelection(); // Возвращаем к выбору доставки
         }
+    }
+
+    showOrderConfirmation(orderId) {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        const deliveryText = this.deliveryData.type === 'courier'
+            ? 'Доставка курьером'
+            : 'Самовывоз';
+
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="order-confirmation">
+                    <div class="confirmation-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h2>Заказ оформлен!</h2>
+                    <div class="order-details">
+                        <p><strong>Номер заказа:</strong> #${orderId}</p>
+                        <p><strong>Способ получения:</strong> ${deliveryText}</p>
+                        <p><strong>Сумма:</strong> ${this.formatPrice(
+                            this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                        )} ₽</p>
+                        <p><strong>Статус:</strong> Ожидает обработки</p>
+                    </div>
+                    <div class="confirmation-message">
+                        <p>Мы свяжемся с вами для уточнения деталей</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="shop.closeCart()">
+                        <i class="fas fa-home"></i> Вернуться в магазин
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
