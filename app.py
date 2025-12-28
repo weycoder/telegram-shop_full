@@ -433,7 +433,7 @@ def get_unique_categories():
         db.close()
 
 
-# Добавь этот маршрут для админ-управления категориями
+# Добавь этот маршрут в app.py
 @app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
 def admin_manage_categories():
     """Управление категориями (для админа)"""
@@ -441,50 +441,89 @@ def admin_manage_categories():
 
     if request.method == 'GET':
         # Получаем все уникальные категории
-        categories = get_unique_categories()
-        return jsonify(categories)
+        try:
+            categories = db.execute('''
+                                    SELECT DISTINCT category
+                                    FROM products
+                                    WHERE category IS NOT NULL
+                                      AND category != ''
+                                    ORDER BY category
+                                    ''').fetchall()
+            db.close()
+            return jsonify([row['category'] for row in categories])
+        except Exception as e:
+            print(f"Error getting categories: {e}")
+            db.close()
+            return jsonify([])
 
     elif request.method == 'POST':
         # Добавить новую категорию
-        data = request.json
-        new_category = data.get('name', '').strip()
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'success': False, 'error': 'Нет данных'}), 400
 
-        if not new_category:
-            return jsonify({'success': False, 'error': 'Название категории не может быть пустым'}), 400
+            new_category = data.get('name', '').strip()
+            print(f"📝 Добавление категории: {new_category}")
 
-        # Проверяем, существует ли уже такая категория
-        existing = db.execute(
-            'SELECT COUNT(*) as count FROM products WHERE category = ?',
-            (new_category,)
-        ).fetchone()
+            if not new_category:
+                return jsonify({'success': False, 'error': 'Название категории не может быть пустым'}), 400
 
-        if existing['count'] > 0:
-            return jsonify({'success': False, 'error': 'Такая категория уже существует'}), 400
+            # Проверяем, существует ли уже такая категория
+            existing = db.execute(
+                'SELECT COUNT(*) as count FROM products WHERE LOWER(category) = LOWER(?)',
+                (new_category,)
+            ).fetchone()
 
-        # Создаем тестовый товар с этой категорией (или можно создать отдельную таблицу categories)
-        # Для простоты просто возвращаем успех
-        db.close()
-        return jsonify({'success': True, 'message': f'Категория "{new_category}" добавлена'})
+            if existing['count'] > 0:
+                return jsonify({'success': False, 'error': 'Такая категория уже существует'}), 400
+
+            # Добавляем тестовый товар с этой категорией
+            db.execute('''
+                       INSERT INTO products (name, description, price, image_url, category, stock)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ''', (
+                           f'Товар категории {new_category}',
+                           f'Это тестовый товар для категории {new_category}',
+                           100,
+                           'https://via.placeholder.com/300x200',
+                           new_category,
+                           10
+                       ))
+
+            db.commit()
+            db.close()
+
+            return jsonify({'success': True, 'message': f'Категория "{new_category}" успешно создана'})
+
+        except Exception as e:
+            print(f"❌ Ошибка создания категории: {e}")
+            db.close()
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     elif request.method == 'DELETE':
-        # Удалить категорию (переместить товары в "без категории")
-        category_name = request.args.get('name', '').strip()
-
-        if not category_name:
-            return jsonify({'success': False, 'error': 'Не указана категория'}), 400
-
+        # Удалить категорию
         try:
+            category_name = request.args.get('name', '').strip()
+
+            if not category_name:
+                return jsonify({'success': False, 'error': 'Не указана категория'}), 400
+
+            print(f"🗑️ Удаление категории: {category_name}")
+
             # Перемещаем товары этой категории в "без категории"
             db.execute(
-                'UPDATE products SET category = ? WHERE category = ?',
+                'UPDATE products SET category = ? WHERE LOWER(category) = LOWER(?)',
                 ('', category_name)
             )
+
             db.commit()
             db.close()
 
             return jsonify({'success': True, 'message': f'Категория "{category_name}" удалена'})
 
         except Exception as e:
+            print(f"❌ Ошибка удаления категории: {e}")
             db.close()
             return jsonify({'success': False, 'error': str(e)}), 500
 

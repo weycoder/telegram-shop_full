@@ -84,48 +84,98 @@ class TelegramShop {
         }
     }
 
-    // ========== TELEGRAM WEB APP ==========
     initTelegramWebApp() {
         try {
-            const webApp = window.Telegram.WebApp;
+            // Проверяем, что Telegram Web App действительно существует
+            if (window.Telegram && Telegram.WebApp) {
+                console.log('✅ Telegram Web App доступен');
 
-            // Расширяем на весь экран
-            webApp.expand();
+                // Расширяем на весь экран
+                if (Telegram.WebApp.expand) Telegram.WebApp.expand();
 
-            // Настраиваем цвета
-            webApp.setHeaderColor('#667eea');
-            webApp.setBackgroundColor('#f5f7fa');
+                // Настраиваем цвета
+                if (Telegram.WebApp.setHeaderColor) Telegram.WebApp.setHeaderColor('#667eea');
+                if (Telegram.WebApp.setBackgroundColor) Telegram.WebApp.setBackgroundColor('#f5f7fa');
 
-            // Включаем подтверждение закрытия
-            webApp.enableClosingConfirmation();
+                // Включаем подтверждение закрытия
+                if (Telegram.WebApp.enableClosingConfirmation) Telegram.WebApp.enableClosingConfirmation();
 
-            // Обработчик кнопки "Назад"
-            webApp.BackButton.onClick(() => {
-                if (this.isCartOpen()) {
-                    this.closeCart();
-                } else if (this.isProductModalOpen()) {
-                    this.closeProductModal();
+                // Проверяем BackButton
+                if (Telegram.WebApp.BackButton) {
+                    // Скрываем кнопку "Назад" по умолчанию
+                    if (Telegram.WebApp.BackButton.hide) Telegram.WebApp.BackButton.hide();
+
+                    // Добавляем обработчик
+                    Telegram.WebApp.BackButton.onClick(() => {
+                        console.log('🔙 Нажата кнопка "Назад"');
+                        if (this.isCartOpen()) {
+                            this.closeCart();
+                        } else if (this.isProductModalOpen()) {
+                            this.closeProductModal();
+                        } else {
+                            if (Telegram.WebApp.close) Telegram.WebApp.close();
+                        }
+                    });
                 } else {
-                    webApp.close();
+                    console.warn('⚠️ Telegram.WebApp.BackButton недоступен');
                 }
-            });
 
-            // Обновляем кнопку "Назад"
-            this.updateBackButton();
-
-            console.log('✅ Telegram Web App инициализирован');
-
+            } else {
+                console.log('ℹ️ Telegram Web App недоступен, работаем в браузере');
+                // Создаем заглушку для отладки в браузере
+                this.createWebAppStub();
+            }
         } catch (error) {
-            console.warn('⚠️ Telegram Web App не доступен:', error);
+            console.warn('⚠️ Ошибка инициализации Telegram Web App:', error);
+            this.createWebAppStub();
+        }
+    }
+
+    createWebAppStub() {
+        // Создаем заглушку для работы в браузере
+        if (!window.Telegram) window.Telegram = {};
+        if (!window.Telegram.WebApp) {
+            window.Telegram.WebApp = {
+                expand: function() { console.log('[Stub] WebApp расширен'); },
+                setHeaderColor: function() { console.log('[Stub] Цвет заголовка изменен'); },
+                setBackgroundColor: function() { console.log('[Stub] Фон изменен'); },
+                enableClosingConfirmation: function() { console.log('[Stub] Подтверждение закрытия включено'); },
+                close: function() {
+                    console.log('[Stub] Закрытие WebApp');
+                    if (confirm('Закрыть приложение?')) {
+                        window.close();
+                    }
+                },
+                BackButton: {
+                    isVisible: false,
+                    show: function() {
+                        console.log('[Stub] Кнопка "Назад" показана');
+                        this.isVisible = true;
+                    },
+                    hide: function() {
+                        console.log('[Stub] Кнопка "Назад" скрыта');
+                        this.isVisible = false;
+                    },
+                    onClick: function(callback) {
+                        console.log('[Stub] Обработчик кнопки "Назад" установлен');
+                        this.callback = callback;
+                    }
+                },
+                colorScheme: 'light'
+            };
         }
     }
 
     updateBackButton() {
-        if (window.Telegram?.WebApp) {
-            if (this.isCartOpen() || this.isProductModalOpen()) {
-                Telegram.WebApp.BackButton.show();
-            } else {
-                Telegram.WebApp.BackButton.hide();
+        if (window.Telegram?.WebApp?.BackButton) {
+            try {
+                if (this.isCartOpen() || this.isProductModalOpen()) {
+                    if (Telegram.WebApp.BackButton.show) Telegram.WebApp.BackButton.show();
+                } else {
+                    if (Telegram.WebApp.BackButton.hide) Telegram.WebApp.BackButton.hide();
+                }
+            } catch (error) {
+                console.warn('⚠️ Ошибка обновления BackButton:', error);
             }
         }
     }
