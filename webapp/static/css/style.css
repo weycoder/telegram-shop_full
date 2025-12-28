@@ -456,6 +456,7 @@ body {
 }
 
 .empty-cart {
+    display: none; /* По умолчанию скрыто */
     text-align: center;
     padding: 60px 20px;
     color: var(--gray-color);
@@ -473,6 +474,7 @@ body {
     margin: 8px 0;
     color: var(--dark-color);
 }
+
 
 .cart-item {
     display: flex;
