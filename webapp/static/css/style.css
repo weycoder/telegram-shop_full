@@ -983,3 +983,200 @@ html {
     background: var(--primary-color);
     color: white;
 }
+
+/* Главная страница (Landing Page) */
+.landing-page {
+    min-height: 100vh;
+    background: var(--primary-gradient);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+}
+
+.landing-container {
+    max-width: 400px;
+    width: 100%;
+    padding: 30px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.landing-logo {
+    margin-bottom: 30px;
+}
+
+.landing-logo i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: white;
+}
+
+.landing-logo h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.landing-description {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 25px;
+    text-align: left;
+}
+
+.landing-description p {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.landing-description i {
+    font-size: 18px;
+    color: #ffde7d;
+}
+
+.landing-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 30px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-number {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffde7d;
+}
+
+.stat-label {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-top: 5px;
+}
+
+.btn-open-shop {
+    width: 100%;
+    padding: 18px;
+    background: white;
+    color: var(--primary-color);
+    border: none;
+    border-radius: 15px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 25px;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.btn-open-shop:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    background: #f8f9fa;
+}
+
+.btn-open-shop:active {
+    transform: translateY(-1px);
+}
+
+.landing-features {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 20px;
+    border-radius: 15px;
+    text-align: left;
+}
+
+.landing-features h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: white;
+    font-size: 18px;
+}
+
+.landing-features ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.landing-features li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.landing-features i {
+    color: #51cf66;
+    font-size: 16px;
+}
+
+/* Анимация появления */
+.landing-container {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Темная тема для landing page */
+.dark-mode .landing-page {
+    background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+}
+
+.dark-mode .landing-container {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .landing-description,
+.dark-mode .landing-stats,
+.dark-mode .landing-features {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.dark-mode .btn-open-shop {
+    background: var(--primary-color);
+    color: white;
+}
+
+.dark-mode .btn-open-shop:hover {
+    background: var(--primary-dark);
+}
