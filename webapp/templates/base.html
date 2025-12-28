@@ -31,11 +31,13 @@
         <div class="header-content">
             <div class="logo-container">
                 <div class="logo-animation">
-                    <i class="fas fa-shopping-bag logo-icon"></i>
-                    <div class="logo-text">
-                        <h1 class="logo-title">Telegram Shop</h1>
-                        <span class="logo-subtitle">Интернет-магазин в Telegram</span>
-                    </div>
+                    <a href="/" style="display: flex; align-items: center; gap: 12px; text-decoration: none;">
+                        <i class="fas fa-shopping-bag logo-icon"></i>
+                        <div class="logo-text">
+                            <h1 class="logo-title">Telegram Shop</h1>
+                            <span class="logo-subtitle">Интернет-магазин в Telegram</span>
+                        </div>
+                    </a>
                 </div>
             </div>
 
@@ -54,7 +56,7 @@
                     <a href="/webapp#cart" class="nav-link cart-preview">
                         <i class="fas fa-shopping-cart"></i>
                         <span class="nav-text">Корзина</span>
-                        {% if session.get('cart_count', 0) > 0 %}
+                        {% if session and session.get('cart_count', 0) > 0 %}
                         <span class="cart-badge">{{ session.get('cart_count', 0) }}</span>
                         {% endif %}
                     </a>
@@ -73,7 +75,8 @@
                 </button>
 
                 <div class="user-menu">
-                    {% if current_user.is_authenticated %}
+                    <!-- Используем безопасную проверку через Jinja2 тест defined -->
+                    {% if current_user is defined and current_user.is_authenticated %}
                     <div class="user-avatar">
                         <i class="fas fa-user"></i>
                     </div>
@@ -224,6 +227,11 @@
             // Обновляем тему в зависимости от Telegram
             if (Telegram.WebApp.colorScheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                const themeToggle = document.getElementById('themeToggle');
+                if (themeToggle) {
+                    themeToggle.querySelector('i').className = 'fas fa-sun';
+                }
             }
         }
     </script>
@@ -246,6 +254,16 @@
             // Инициализация темы
             const themeToggle = document.getElementById('themeToggle');
             if (themeToggle) {
+                // Проверяем, не установлена ли тема уже через Telegram
+                if (!localStorage.getItem('theme') && window.Telegram && Telegram.WebApp) {
+                    // Если в Telegram темная тема, используем ее
+                    if (Telegram.WebApp.colorScheme === 'dark') {
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                        localStorage.setItem('theme', 'dark');
+                        themeToggle.querySelector('i').className = 'fas fa-sun';
+                    }
+                }
+
                 themeToggle.addEventListener('click', () => {
                     const html = document.documentElement;
                     const isDark = html.getAttribute('data-theme') === 'dark';
@@ -257,7 +275,7 @@
                     icon.className = isDark ? 'fas fa-moon' : 'fas fa-sun';
                 });
 
-                // Восстанавливаем тему
+                // Восстанавливаем тему из localStorage
                 const savedTheme = localStorage.getItem('theme') || 'light';
                 document.documentElement.setAttribute('data-theme', savedTheme);
                 const icon = themeToggle.querySelector('i');
