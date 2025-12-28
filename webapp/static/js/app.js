@@ -909,8 +909,7 @@ class TelegramShop {
                     </button>
                 </div>
                 <div class="delivery-actions">
-                    <!-- ИСПРАВЛЕННАЯ КНОПКА -->
-                    <button class="btn btn-outline" id="backToCartBtn">
+                    <button class="btn btn-outline" onclick="shop.returnToCartFromDelivery()">
                         <i class="fas fa-arrow-left"></i> Назад
                     </button>
                 </div>
@@ -943,12 +942,44 @@ class TelegramShop {
         }
     }
 
+    returnToCartFromDelivery() {
+        console.log('🔙 Возврат в корзину из выбора доставки');
+
+        // Закрываем текущий вид
+        this.closeCart();
+
+        // Даем время на анимацию закрытия
+        setTimeout(() => {
+            // Открываем обычную корзину
+            this.toggleCart();
+
+            // Сбрасываем данные доставки
+            this.deliveryData = {
+                type: null,
+                address_id: null,
+                pickup_point: null,
+                address_details: null
+            };
+        }, 300);
+    }
+
     async showAddressSelection() {
         try {
-            // Получаем user_id из Telegram или используем 0 для гостя
+            // Для гостей показываем сразу форму добавления адреса
             const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
 
+            if (userId === 0) {
+                // Гость - показываем сразу форму
+                await this.showAddressForm(0);
+                return;
+            }
+
             const response = await fetch(`/api/user/addresses?user_id=${userId}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
             const addresses = await response.json();
 
             const cartOverlay = document.getElementById('cartOverlay');
@@ -969,11 +1000,6 @@ class TelegramShop {
                                 <p><i class="fas fa-road"></i> ${addr.street}, ${addr.house}</p>
                                 ${addr.apartment ? `<p><i class="fas fa-door-closed"></i> Кв. ${addr.apartment}</p>` : ''}
                                 ${addr.phone ? `<p><i class="fas fa-phone"></i> ${addr.phone}</p>` : ''}
-                            </div>
-                            <div class="address-actions">
-                                <button class="btn-small" onclick="event.stopPropagation(); shop.setDefaultAddress(${addr.id}, ${userId})">
-                                    <i class="fas fa-star"></i> Сделать основным
-                                </button>
                             </div>
                         </div>
                     `;
@@ -998,22 +1024,23 @@ class TelegramShop {
                             </div>
                         `}
                     </div>
+
                     <div class="delivery-actions">
-                        <button class="btn btn-primary" onclick="shop.showAddressForm()">
+                        <button class="btn btn-primary" onclick="shop.showAddressForm(${userId})">
                             <i class="fas fa-plus"></i> Добавить новый адрес
                         </button>
-                        ${addresses.length > 0 ? `
-                            <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
-                                <i class="fas fa-arrow-left"></i> Назад
-                            </button>
-                        ` : ''}
+                        <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
+                            <i class="fas fa-arrow-left"></i> Назад
+                        </button>
                     </div>
                 </div>
             `;
-а
+
         } catch (error) {
-            console.error('Ошибка загрузки адресов:', error);
-            this.showNotification('❌ Ошибка загрузки адресов', 'error');
+            console.error('❌ Ошибка загрузки адресов:', error);
+            // Показываем форму для ввода адреса
+            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+            await this.showAddressForm(userId);
         }
     }
 

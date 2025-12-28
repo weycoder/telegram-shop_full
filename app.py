@@ -167,30 +167,38 @@ def admin_page():
     """Админ панель"""
     return render_template('admin.html')
 
-# ========== API ДЛЯ ДОСТАВКИ ==========
+
 @app.route('/api/user/addresses', methods=['GET', 'POST', 'DELETE'])
 def user_addresses():
     """Управление адресами пользователя"""
     db = get_db()
 
     try:
-        user_id = request.args.get('user_id', type=int)
-        if not user_id:
-            return jsonify({'success': False, 'error': 'Не указан user_id'}), 400
-
+        # Для GET запроса проверяем user_id
         if request.method == 'GET':
-            # Получить все адреса пользователя
+            user_id = request.args.get('user_id', type=int)
+
+            if not user_id:
+                # Если нет user_id, возвращаем пустой список
+                return jsonify([])
+
             addresses = db.execute('''
-                SELECT * FROM user_addresses 
-                WHERE user_id = ? 
-                ORDER BY is_default DESC, created_at DESC
-            ''', (user_id,)).fetchall()
+                                   SELECT *
+                                   FROM user_addresses
+                                   WHERE user_id = ?
+                                   ORDER BY is_default DESC, created_at DESC
+                                   ''', (user_id,)).fetchall()
 
             return jsonify([dict(addr) for addr in addresses])
 
         elif request.method == 'POST':
-            # Добавить новый адрес
+            # Для POST всегда должен быть user_id в JSON
             data = request.json
+
+            if 'user_id' not in data:
+                return jsonify({'success': False, 'error': 'Не указан user_id'}), 400
+
+            user_id = data['user_id']
 
             # Если это первый адрес, делаем его адресом по умолчанию
             count = db.execute(
@@ -202,38 +210,42 @@ def user_addresses():
 
             # Сохраняем адрес
             cursor = db.execute('''
-                INSERT INTO user_addresses 
-                (user_id, city, street, house, apartment, floor, doorcode, recipient_name, phone, is_default)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                user_id,
-                data['city'],
-                data['street'],
-                data['house'],
-                data.get('apartment', ''),
-                data.get('floor', ''),
-                data.get('doorcode', ''),
-                data['recipient_name'],
-                data.get('phone', ''),
-                is_default
-            ))
+                                INSERT INTO user_addresses
+                                (user_id, city, street, house, apartment, floor, doorcode, recipient_name, phone,
+                                 is_default)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    user_id,
+                                    data['city'],
+                                    data['street'],
+                                    data['house'],
+                                    data.get('apartment', ''),
+                                    data.get('floor', ''),
+                                    data.get('doorcode', ''),
+                                    data['recipient_name'],
+                                    data.get('phone', ''),
+                                    is_default
+                                ))
 
             # Если этот адрес стал адресом по умолчанию, сбрасываем default у других адресов
             if is_default:
                 db.execute('''
-                    UPDATE user_addresses 
-                    SET is_default = 0 
-                    WHERE user_id = ? AND id != ?
-                ''', (user_id, cursor.lastrowid))
+                           UPDATE user_addresses
+                           SET is_default = 0
+                           WHERE user_id = ?
+                             AND id != ?
+                           ''', (user_id, cursor.lastrowid))
 
             db.commit()
             return jsonify({'success': True, 'id': cursor.lastrowid})
 
         elif request.method == 'DELETE':
-            # Удалить адрес
+            # Для DELETE тоже нужен user_id
+            user_id = request.args.get('user_id', type=int)
             address_id = request.args.get('address_id', type=int)
-            if not address_id:
-                return jsonify({'success': False, 'error': 'Не указан address_id'}), 400
+
+            if not user_id or not address_id:
+                return jsonify({'success': False, 'error': 'Не указан user_id или address_id'}), 400
 
             db.execute(
                 'DELETE FROM user_addresses WHERE id = ? AND user_id = ?',

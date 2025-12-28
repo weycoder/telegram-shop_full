@@ -1717,14 +1717,15 @@ html {
     right: 15px;
     background: white;
     border-radius: 10px;
-    padding: 8px 12px;
+    padding: 8px 15px; /* Увеличил padding по бокам */
     z-index: 10000;
     opacity: 0;
     transform: translateY(-20px);
     transition: all 0.3s ease;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     border: 2px solid var(--primary-color);
-    max-width: 130px; /* Немного больше для текста "iPhone 15" */
+    max-width: 200px; /* Увеличил ширину! */
+    min-width: 150px; /* Минимальная ширина */
     pointer-events: none;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
@@ -1735,14 +1736,13 @@ html {
     align-items: flex-start;
     gap: 0;
 }
-
 .notification-message {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 8px; /* Увеличил расстояние */
+    font-size: 13px; /* Чуть больше шрифт */
     color: var(--dark-color);
-    font-weight: 700; /* Жирнее */
+    font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1758,9 +1758,8 @@ html {
 
 .notification-message i {
     color: var(--success-color);
-    font-size: 13px;
+    font-size: 14px;
     flex-shrink: 0;
-    margin-right: 2px;
 }
 
 .notification-message span {
@@ -1768,9 +1767,8 @@ html {
     text-overflow: ellipsis;
     white-space: nowrap;
     display: block;
-    width: calc(100% - 18px); /* Минус ширина иконки */
+    flex: 1; /* Занимает всё доступное пространство */
 }
-
 /* УБИРАЕМ кнопку "Перейти в корзину" из уведомления - оно теперь просто информационное */
 .notification-action {
     display: none;
