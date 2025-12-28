@@ -833,11 +833,39 @@ class TelegramShop {
             return;
         }
 
-        // Показываем экран выбора доставки
-        this.showDeliverySelection();
+        // Проверяем наличие товаров (оставляем старую проверку)
+        const unavailableItems = [];
+        for (const item of this.cart) {
+            try {
+                const response = await fetch(`/api/products/${item.id}`);
+                if (response.ok) {
+                    const product = await response.json();
+                    if (product.stock < item.quantity) {
+                        unavailableItems.push({
+                            name: item.name,
+                            available: product.stock,
+                            requested: item.quantity
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Ошибка проверки товара ${item.id}:`, error);
+            }
+        }
+
+        if (unavailableItems.length > 0) {
+            let message = 'Некоторые товары недоступны в запрошенном количестве:\n';
+            unavailableItems.forEach(item => {
+                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
+            });
+            this.showNotification(message, 'error');
+            return;
+        }
+
+        // ЕСЛИ ВСЕ ТОВАРЫ ДОСТУПНЫ - ПОКАЗЫВАЕМ ВЫБОР ДОСТАВКИ
+        await this.showDeliverySelection();
     }
 
-    // ДОБАВИТЬ НОВЫЕ ФУНКЦИИ ПОСЛЕ checkout:
     async showDeliverySelection() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
@@ -846,12 +874,12 @@ class TelegramShop {
             <div class="cart-modal">
                 <div class="cart-header">
                     <h2><i class="fas fa-shipping-fast"></i> Способ получения</h2>
-                    <button class="close-cart" onclick="shop.closeCart()">
+                    <button class="close-cart" id="closeDeliverySelection">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
                 <div class="delivery-options">
-                    <button class="delivery-option" onclick="shop.selectDeliveryType('courier')">
+                    <button class="delivery-option" id="courierOption">
                         <div class="option-icon">
                             <i class="fas fa-truck"></i>
                         </div>
@@ -862,7 +890,7 @@ class TelegramShop {
                         <i class="fas fa-chevron-right"></i>
                     </button>
 
-                    <button class="delivery-option" onclick="shop.selectDeliveryType('pickup')">
+                    <button class="delivery-option" id="pickupOption">
                         <div class="option-icon">
                             <i class="fas fa-store"></i>
                         </div>
@@ -873,8 +901,22 @@ class TelegramShop {
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
+                <div class="delivery-actions">
+                    <button class="btn btn-outline" id="backToCartBtn">
+                        <i class="fas fa-arrow-left"></i> Вернуться в корзину
+                    </button>
+                </div>
             </div>
         `;
+
+        // НАЗНАЧАЕМ ОБРАБОТЧИКИ
+        document.getElementById('courierOption').addEventListener('click', () => this.selectDeliveryType('courier'));
+        document.getElementById('pickupOption').addEventListener('click', () => this.selectDeliveryType('pickup'));
+        document.getElementById('backToCartBtn').addEventListener('click', () => {
+            // Восстанавливаем обычное отображение корзины
+            this.updateCartDisplay();
+        });
+        document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
     }
 
     async selectDeliveryType(type) {

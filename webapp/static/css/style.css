@@ -1475,25 +1475,6 @@ html {
     font-size: 16px;
 }
 
-.notification-action {
-    width: 100%;
-    padding: 10px;
-    background: var(--primary-gradient);
-    color: white;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
 .notification-action:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
@@ -1778,4 +1759,64 @@ html {
 .notification-message i {
     color: #10b981;
     font-size: 18px;
+}
+
+/* Добавь в конец файла: */
+
+.delivery-actions {
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 10px;
+    background: #f8fafc;
+}
+
+.delivery-actions .btn {
+    flex: 1;
+    padding: 12px;
+    font-size: 14px;
+}
+
+.delivery-actions .btn-outline {
+    background: white;
+    border: 1px solid #d1d5db;
+    color: #4b5563;
+}
+
+.delivery-actions .btn-outline:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+/* Улучшенные стили для опций доставки */
+.delivery-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+    outline: none;
+}
+
+.delivery-option:hover {
+    border-color: #667eea;
+    background: #f8fafc;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+}
+
+.delivery-option:active {
+    transform: translateY(0);
+    background: #f0f4ff;
+}
+
+.delivery-options {
+    padding: 20px;
+    min-height: 200px;
 }
