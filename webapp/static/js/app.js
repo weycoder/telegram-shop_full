@@ -619,11 +619,10 @@ class TelegramShop {
         // Обновляем счетчик
         this.updateCartCount();
 
-        // Обновляем отображение корзины (если она открыта)
-        if (document.getElementById('cartOverlay')?.style.display === 'flex') {
-            this.updateCartDisplay();
-        }
+        // Всегда обновляем отображение корзины
+        this.updateCartDisplay();
 
+        // Показываем уведомление
         this.showNotification('🗑️ Товар удален из корзины', 'info');
 
         // Если корзина стала пустой, дополнительное сообщение
@@ -680,12 +679,13 @@ class TelegramShop {
 
         if (confirm('Вы уверены, что хотите очистить корзину?')) {
             this.cart = [];
-            this.saveCart();
+            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
             this.updateCartCount();
             this.updateCartDisplay();
             this.showNotification('🗑️ Корзина очищена', 'info');
         }
     }
+
     saveCart() {
         try {
             localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
@@ -719,25 +719,24 @@ class TelegramShop {
 
         const cartItems = document.getElementById('cartItems');
         const cartTotal = document.getElementById('cartTotal');
-        const emptyCart = document.getElementById('emptyCart');
-    
-        if (!cartItems || !cartTotal || !emptyCart) {
+
+        if (!cartItems || !cartTotal) {
             console.error('❌ Элементы корзины не найдены!');
-            console.log('cartItems:', cartItems);
-            console.log('cartTotal:', cartTotal);
-            console.log('emptyCart:', emptyCart);
             return;
         }
 
         // ЕСЛИ КОРЗИНА ПУСТА
         if (this.cart.length === 0) {
-            console.log('🛒 Корзина пуста - показываем empty-cart');
+            console.log('🛒 Корзина пуста - показываем сообщение');
 
-            // Очищаем список товаров
-            cartItems.innerHTML = '';
-
-            // Показываем блок "Корзина пуста"
-            emptyCart.style.display = 'flex';
+            // Просто показываем сообщение прямо в cartItems
+            cartItems.innerHTML = `
+                <div class="empty-cart">
+                    <i class="fas fa-shopping-cart"></i>
+                    <p>Корзина пуста</p>
+                    <p>Добавьте товары из каталога</p>
+                </div>
+            `;
 
             // Обнуляем сумму
             cartTotal.textContent = '0 ₽';
@@ -746,10 +745,7 @@ class TelegramShop {
         }
 
         // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
-        console.log(`📦 В корзине ${this.cart.length} товаров, обновляем...`);
-
-        // Скрываем блок "Корзина пуста"
-        emptyCart.style.display = 'none';
+        console.log(`📦 В корзине ${this.cart.length} товаров`);
 
         // Генерируем HTML для товаров
         let itemsHTML = '';
@@ -799,6 +795,7 @@ class TelegramShop {
     }
 
 
+
         // Добавьте эту вспомогательную функцию для очистки уведомлений
     clearCartNotifications() {
         const notifications = document.querySelectorAll('.notification');
@@ -812,21 +809,14 @@ class TelegramShop {
 
 
     toggleCart() {
+        // Всегда обновляем отображение перед открытием
+        this.updateCartDisplay();
+
         const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        // Открываем или закрываем
-        const isOpen = cartOverlay.style.display === 'flex';
-
-        if (!isOpen) {
-            // Перед открытием обновляем отображение
-            setTimeout(() => {
-                this.updateCartDisplay();
-            }, 50); // Небольшая задержка для гарантии что DOM готов
+        if (cartOverlay) {
+            cartOverlay.style.display = 'flex';
+            this.updateBackButton();
         }
-
-        cartOverlay.style.display = isOpen ? 'none' : 'flex';
-        this.updateBackButton();
     }
 
     closeCart() {

@@ -465,20 +465,14 @@ body {
 }
 
 .empty-cart {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: none; /* По умолчанию скрыто */
+    display: none; /* По умолчанию скрыт */
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
     padding: 60px 20px;
+    text-align: center;
     color: var(--gray-color);
-    background: #F9FBE7;
-    z-index: 1;
+    width: 100%;
 }
 
 .empty-cart i {
