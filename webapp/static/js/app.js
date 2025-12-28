@@ -416,7 +416,7 @@ class TelegramShop {
                         <div class="product-modal-price">${this.formatPrice(product.price)} ₽</div>
 
                         <div class="product-modal-description">
-                            <h4>Описание:</h4>
+                            <h4><i class="fas fa-info-circle"></i> Описание:</h4>
                             <p>${product.description || 'Описание отсутствует'}</p>
                         </div>
 
@@ -428,6 +428,7 @@ class TelegramShop {
                         ${product.stock > 0 ? `
                             <div class="product-modal-actions">
                                 <div class="quantity-selector">
+                                    <h4><i class="fas fa-sort-amount-up"></i> Количество:</h4>
                                     <button class="qty-btn minus" id="qtyMinus">
                                         <i class="fas fa-minus"></i>
                                     </button>
@@ -442,12 +443,12 @@ class TelegramShop {
                                     </button>
                                 </div>
 
-                                <button class="btn btn-primary btn-block" id="addToCartModal">
+                                <button class="btn btn-primary" id="addToCartModal">
                                     <i class="fas fa-cart-plus"></i> Добавить в корзину
                                 </button>
                             </div>
                         ` : `
-                            <button class="btn btn-secondary btn-block" disabled>
+                            <button class="btn btn-secondary" disabled>
                                 <i class="fas fa-times-circle"></i> Товар закончился
                             </button>
                         `}
@@ -456,7 +457,7 @@ class TelegramShop {
             </div>
         `;
 
-        // Назначаем обработчики для нового модального окна
+        // Назначаем обработчики
         this.bindModalEvents(product);
         this.updateBackButton();
     }

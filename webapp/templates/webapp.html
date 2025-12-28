@@ -3,19 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🛒 Магазин - Telegram Shop</title>
+    <title>🛒 Telegram Shop</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="webapp">
-    <div class="container">
-        <!-- Хедер магазина -->
+    <!-- Основной контейнер в стиле админки -->
+    <div class="shop-container">
+        <!-- Хедер в стиле админки -->
         <header class="shop-header">
-            <div class="shop-logo">
-                <i class="fas fa-shopping-bag"></i>
-                <h1>Telegram Shop</h1>
+            <div class="header-left">
+                <div class="shop-logo">
+                    <i class="fas fa-shopping-bag"></i>
+                    <h1>Telegram Shop</h1>
+                </div>
+                <div class="header-info">
+                    <p><i class="fas fa-store"></i> Онлайн магазин в Telegram</p>
+                </div>
             </div>
-            <div class="shop-actions">
+            <div class="header-right">
                 <button class="cart-btn" id="cartBtn">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-count" id="cartCount">0</span>
@@ -23,49 +29,100 @@
             </div>
         </header>
 
-        <!-- Категории -->
-        <div class="categories-container">
+        <!-- Категории в стиле админки -->
+        <section class="categories-section">
+            <div class="section-header">
+                <h2><i class="fas fa-filter"></i> Категории</h2>
+            </div>
             <div class="categories" id="categories">
                 <button class="category-btn active" data-category="all">
                     <i class="fas fa-th-large"></i> Все товары
                 </button>
                 <!-- Категории загружаются через JS -->
             </div>
-        </div>
+        </section>
 
-        <!-- Сетка товаров -->
-        <div class="products-grid" id="products">
-            <!-- Товары загружаются через JS -->
-            <div class="loading" id="loading">
-                <i class="fas fa-spinner fa-spin"></i> Загрузка товаров...
+        <!-- Товары в стиле админки -->
+        <section class="products-section">
+            <div class="section-header">
+                <h2><i class="fas fa-box"></i> Каталог товаров</h2>
+                <div class="section-info">
+                    <span id="productsCount">0 товаров</span>
+                </div>
             </div>
-        </div>
 
-        <!-- Корзина -->
+            <div class="products-grid" id="products">
+                <!-- Товары загружаются через JS -->
+                <div class="loading" id="loading">
+                    <i class="fas fa-spinner fa-spin"></i> Загрузка товаров...
+                </div>
+            </div>
+        </section>
+
+        <!-- Информационная панель (аналог статистики в админке) -->
+        <section class="info-panel">
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-shopping-bag"></i>
+                </div>
+                <div class="info-content">
+                    <h3>🛒 Быстрые покупки</h3>
+                    <p>Выбирайте товары и добавляйте в корзину в один клик</p>
+                </div>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div class="info-content">
+                    <h3>🔒 Безопасная оплата</h3>
+                    <p>Оплачивайте заказы через Telegram безопасно</p>
+                </div>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-shipping-fast"></i>
+                </div>
+                <div class="info-content">
+                    <h3>🚚 Быстрая доставка</h3>
+                    <p>Отправка заказов в течение 24 часов</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Корзина в стиле админки -->
         <div class="cart-overlay" id="cartOverlay">
             <div class="cart-modal">
-                <div class="cart-header">
+                <div class="modal-header">
                     <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
-                    <button class="close-cart" id="closeCart">&times;</button>
+                    <button class="close-cart" id="closeCart">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
 
-                <div class="cart-items" id="cartItems">
-                    <div class="empty-cart" id="emptyCart">
-                        <i class="fas fa-shopping-cart"></i>
-                        <p>Корзина пуста</p>
-                        <p>Добавьте товары из каталога</p>
+                <div class="modal-body">
+                    <div class="cart-items" id="cartItems">
+                        <div class="empty-cart" id="emptyCart">
+                            <i class="fas fa-shopping-cart"></i>
+                            <h3>Корзина пуста</h3>
+                            <p>Добавьте товары из каталога</p>
+                        </div>
                     </div>
                 </div>
 
-                <div class="cart-footer">
+                <div class="modal-footer">
                     <div class="cart-summary">
-                        <div class="cart-total">
-                            <span>Итого:</span>
-                            <span class="total-price" id="cartTotal">0</span> ₽
+                        <div class="summary-row">
+                            <span>Товаров:</span>
+                            <span id="cartItemsCount">0</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Общая сумма:</span>
+                            <span class="total-price" id="cartTotal">0 ₽</span>
                         </div>
                         <div class="cart-actions">
                             <button class="btn btn-outline" id="clearCart">
-                                Очистить корзину
+                                <i class="fas fa-trash"></i> Очистить корзину
                             </button>
                             <button class="btn btn-primary" id="checkoutBtn">
                                 <i class="fas fa-paper-plane"></i> Оформить заказ
@@ -76,36 +133,14 @@
             </div>
         </div>
 
-        <!-- Модальное окно товара -->
+        <!-- Модальное окно товара в стиле админки -->
         <div class="product-modal-overlay" id="productModal">
             <div class="product-modal">
-                <div class="modal-content" id="productModalContent">
-                <button class="close-product-modal" id="closeProductModal">&times;</button>
-                <div class="product-modal-content">
-                    <img class="product-modal-image" id="modalImage" src="" alt="">
-                    <div class="product-modal-info">
-                        <h3 id="modalTitle"></h3>
-                        <p class="product-modal-description" id="modalDescription"></p>
-
-                        <div class="product-modal-price">
-                            <span id="modalPrice"></span> ₽
-                        </div>
-
-                        <div class="product-modal-stock">
-                            <i class="fas fa-box"></i>
-                            В наличии: <span id="modalStock"></span> шт.
-                        </div>
-
-                        <div class="quantity-selector">
-                            <button class="qty-btn minus" id="qtyMinus">-</button>
-                            <input type="number" id="quantity" value="1" min="1" max="100">
-                            <button class="qty-btn plus" id="qtyPlus">+</button>
-                        </div>
-
-                        <button class="btn btn-primary btn-block" id="addToCartModal">
-                            <i class="fas fa-cart-plus"></i> Добавить в корзину
-                        </button>
-                    </div>
+                <button class="close-product-modal" id="closeProductModal">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="modal-content">
+                    <!-- Контент загружается через JS -->
                 </div>
             </div>
         </div>
@@ -121,22 +156,32 @@
             // Расширяем на весь экран
             Telegram.WebApp.expand();
 
-            // Настраиваем цвета
+            // Настраиваем цвета в стиле админки
             Telegram.WebApp.setHeaderColor('#667eea');
             Telegram.WebApp.setBackgroundColor('#f5f7fa');
 
             // Включаем подтверждение закрытия
             Telegram.WebApp.enableClosingConfirmation();
 
-            // Показываем кнопку "Назад"
+            // Обработка кнопки "Назад"
             Telegram.WebApp.BackButton.show();
             Telegram.WebApp.BackButton.onClick(function() {
-                window.history.back();
+                const cartOverlay = document.getElementById('cartOverlay');
+                const productModal = document.getElementById('productModal');
+
+                if (cartOverlay.style.display === 'flex') {
+                    window.shop.closeCart();
+                } else if (productModal.style.display === 'flex') {
+                    window.shop.closeProductModal();
+                } else {
+                    Telegram.WebApp.close();
+                }
             });
 
-            // Меняем тему в зависимости от Telegram
+            // Устанавливаем тему
             if (Telegram.WebApp.colorScheme === 'dark') {
                 document.body.classList.add('dark-mode');
+                document.body.style.backgroundColor = '#1a1a1a';
             }
 
             console.log('✅ Telegram Web App инициализирован');
@@ -152,14 +197,56 @@
                     setHeaderColor: function() { console.log('Цвет изменен'); },
                     setBackgroundColor: function() { console.log('Фон изменен'); },
                     enableClosingConfirmation: function() { console.log('Подтверждение включено'); },
+                    close: function() {
+                        console.log('Закрытие WebApp');
+                        if (confirm('Закрыть магазин?')) {
+                            window.close();
+                        }
+                    },
                     BackButton: {
                         show: function() { console.log('Кнопка назад показана'); },
-                        onClick: function() { console.log('Клик по кнопке назад'); }
+                        hide: function() { console.log('Кнопка назад скрыта'); },
+                        onClick: function(callback) {
+                            console.log('Обработчик кнопки "Назад" установлен');
+                            this.callback = callback;
+                        }
                     },
-                    colorScheme: 'light'
+                    colorScheme: 'light',
+                    initDataUnsafe: {
+                        user: {
+                            id: 12345,
+                            first_name: 'Тестовый',
+                            last_name: 'Пользователь',
+                            username: 'test_user'
+                        }
+                    }
                 };
             }
         }
+
+        // Дополнительные скрипты для улучшения UX
+        document.addEventListener('DOMContentLoaded', function() {
+            // Анимация появления элементов
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animate-in');
+                    }
+                });
+            }, observerOptions);
+
+            // Наблюдаем за карточками товаров
+            setTimeout(() => {
+                document.querySelectorAll('.product-card').forEach(card => {
+                    observer.observe(card);
+                });
+            }, 1000);
+        });
     </script>
 </body>
 </html>
