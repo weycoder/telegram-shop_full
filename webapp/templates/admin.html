@@ -294,6 +294,66 @@
         let products = [];
         let orders = [];
 
+
+                // Делаем функции глобальными
+        window.loadCategories = loadCategories;
+        window.addCategory = addCategory;
+        window.deleteCategory = deleteCategory;
+        window.showPage = showPage;
+        window.loadProducts = loadProducts;
+        window.showAlert = showAlert;
+        
+        // Обновляем функцию showPage чтобы показывать категории
+        function showPage(pageId) {
+            console.log('📄 Показываем страницу:', pageId);
+
+            // Скрываем все страницы
+            document.querySelectorAll('.page').forEach(page => {
+                page.style.display = 'none';
+                page.classList.remove('active');
+            });
+
+            // Показываем нужную
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.style.display = 'block';
+                targetPage.classList.add('active');
+            }
+
+            // Обновляем навигацию
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.page === pageId) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Обновляем заголовок
+            const titles = {
+                'dashboard': 'Статистика',
+                'products': 'Управление товарами',
+                'orders': 'Заказы',
+                'add-product': 'Добавить товар',
+                'settings': 'Настройки'
+            };
+
+            const titleElement = document.getElementById('pageTitle');
+            if (titleElement && titles[pageId]) {
+                titleElement.textContent = titles[pageId];
+            }
+
+            currentPage = pageId;
+
+            // Загружаем данные если нужно
+            if (pageId === 'dashboard') loadStats();
+            if (pageId === 'products') loadProducts();
+            if (pageId === 'orders') loadOrders();
+            if (pageId === 'add-product') {
+                loadCategories();
+                loadCategoriesForForm();
+            }
+        }
+
         // ========== НАВИГАЦИЯ ==========
         function showPage(pageId) {
             console.log('📄 Показываем страницу:', pageId);

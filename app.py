@@ -564,17 +564,16 @@ def admin_dashboard():
     db = get_db()
 
     try:
-        # Основная статистика
+        # Исправленный запрос статистики
         stats = db.execute('''
             SELECT 
-                COUNT(DISTINCT o.id) as total_orders,
-                COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as total_revenue,
-                COUNT(CASE WHEN o.status = 'pending' THEN 1 END) as pending_orders,
-                COUNT(DISTINCT p.id) as total_products,
-                COUNT(DISTINCT o.user_id) as total_customers,
-                COALESCE(AVG(CASE WHEN o.status = 'completed' THEN o.total_price END), 0) as avg_order_value
-            FROM orders o
-            CROSS JOIN products p
+                (SELECT COUNT(*) FROM orders) as total_orders,
+                COALESCE(SUM(CASE WHEN status = 'completed' THEN total_price ELSE 0 END), 0) as total_revenue,
+                (SELECT COUNT(*) FROM orders WHERE status = 'pending') as pending_orders,
+                (SELECT COUNT(*) FROM products) as total_products,
+                (SELECT COUNT(DISTINCT user_id) FROM orders) as total_customers,
+                COALESCE(AVG(CASE WHEN status = 'completed' THEN total_price END), 0) as avg_order_value
+            FROM orders
         ''').fetchone()
 
         # Последние заказы
@@ -585,18 +584,19 @@ def admin_dashboard():
             LIMIT 10
         ''').fetchall()
 
+        # Берем данные из результата или используем 0 по умолчанию
         result = {
-            'total_orders': stats['total_orders'] or 0,
-            'total_revenue': stats['total_revenue'] or 0,
-            'pending_orders': stats['pending_orders'] or 0,
-            'total_products': stats['total_products'] or 0,
-            'total_customers': stats['total_customers'] or 0,
-            'avg_order_value': stats['avg_order_value'] or 0,
-            'recent_orders': [dict(row) for row in recent_orders]
+            'total_orders': stats['total_orders'] if stats and stats['total_orders'] is not None else 0,
+            'total_revenue': stats['total_revenue'] if stats and stats['total_revenue'] is not None else 0,
+            'pending_orders': stats['pending_orders'] if stats and stats['pending_orders'] is not None else 0,
+            'total_products': stats['total_products'] if stats and stats['total_products'] is not None else 0,
+            'total_customers': stats['total_customers'] if stats and stats['total_customers'] is not None else 0,
+            'avg_order_value': stats['avg_order_value'] if stats and stats['avg_order_value'] is not None else 0,
+            'recent_orders': [dict(row) for row in recent_orders] if recent_orders else []
         }
 
         db.close()
-        print(f"📊 Статистика отправлена: {result}")
+        print(f"📊 Статистика: {result}")
         return jsonify(result)
 
     except Exception as e:
