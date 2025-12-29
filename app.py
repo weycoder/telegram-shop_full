@@ -84,11 +84,6 @@ def init_db():
                            TEXT
                            DEFAULT
                            'pending',
-                           #
-                           pending,
-                           processing,
-                           completed,
-                           cancelled
                            delivery_type
                            TEXT,
                            delivery_address
@@ -99,10 +94,6 @@ def init_db():
                            TEXT
                            DEFAULT
                            'cash',
-                           #
-                           cash,
-                           transfer,
-                           terminal
                            recipient_name
                            TEXT,
                            phone_number
