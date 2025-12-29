@@ -3,6 +3,7 @@ import sqlite3
 import json
 import uuid
 import requests
+import telebot
 import telegram
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -22,8 +23,8 @@ app.config['UPLOAD_FOLDER'] = 'webapp/static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # ========== КОНФИГУРАЦИЯ ДЛЯ TELEGRAM БОТА ==========
-TELEGRAM_BOT_TOKEN = '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50'  # Ваш токен бота
-TELEGRAM_BOT = telegram.Bot(token=TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
+TELEGRAM_BOT_TOKEN = '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50'
+TELEGRAM_BOT = telebot.TeleBot(TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
@@ -541,7 +542,7 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
 
         message += f"\n📋 *Отследить:* /track_{order_id}"
 
-        # Отправляем сообщение
+        # Отправляем сообщение (СИНХРОННО!)
         TELEGRAM_BOT.send_message(
             chat_id=telegram_id,
             text=message,
@@ -549,20 +550,11 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
             disable_web_page_preview=True
         )
 
-        print(f"✅ Telegram уведомление отправлено пользователю {telegram_id} (заказ #{order_id})")
+        print(f"✅ Telegram уведомление отправлено пользователю {telegram_id}")
         return True
 
-    except telegram.error.Unauthorized as e:
-        print(f"❌ Бот заблокирован пользователем {telegram_id}: {e}")
-        return False
-    except telegram.error.BadRequest as e:
-        print(f"❌ Неверный chat_id {telegram_id} или форматирование: {e}")
-        return False
-    except telegram.error.TelegramError as e:
-        print(f"❌ Ошибка Telegram API: {e}")
-        return False
     except Exception as e:
-        print(f"❌ Неизвестная ошибка отправки: {e}")
+        print(f"❌ Ошибка отправки Telegram уведомления: {e}")
         return False
 
 
@@ -1559,7 +1551,6 @@ if __name__ == '__main__':
     print("   Курьер:      http://localhost:5000/courier")
     print("=" * 50)
     print("📱 Система уведомлений:")
-    print(f"   Bot Webhook: {BOT_WEBHOOK_URL}")
     print("   Статусы будут отправляться в Telegram бота")
     print("=" * 50)
     print("🔑 Данные для входа:")
