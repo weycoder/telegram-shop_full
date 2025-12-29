@@ -59,21 +59,60 @@ def init_db():
 
         # Таблица заказов
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                username TEXT,
-                items TEXT NOT NULL,
-                total_price REAL NOT NULL,
-                status TEXT DEFAULT 'pending',
-                delivery_type TEXT,
-                delivery_address TEXT,
-                pickup_point TEXT,
-                recipient_name TEXT,
-                phone_number TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS orders
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           user_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           username
+                           TEXT,
+                           items
+                           TEXT
+                           NOT
+                           NULL,
+                           total_price
+                           REAL
+                           NOT
+                           NULL,
+                           status
+                           TEXT
+                           DEFAULT
+                           'pending',
+                           #
+                           pending,
+                           processing,
+                           completed,
+                           cancelled
+                           delivery_type
+                           TEXT,
+                           delivery_address
+                           TEXT,
+                           pickup_point
+                           TEXT,
+                           payment_method
+                           TEXT
+                           DEFAULT
+                           'cash',
+                           #
+                           cash,
+                           transfer,
+                           terminal
+                           recipient_name
+                           TEXT,
+                           phone_number
+                           TEXT,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
 
         # Таблица для адресов пользователей
         cursor.execute('''
@@ -312,13 +351,14 @@ def get_pickup_points():
 # ========== ОБНОВЛЕННЫЙ API ДЛЯ СОЗДАНИЯ ЗАКАЗА ==========
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
-    """Создать заказ с доставкой"""
+    """Создать заказ с доставкой и оплатой"""
     data = request.json
     db = get_db()
 
     try:
-        # Извлекаем данные о доставке
+        # Извлекаем данные
         delivery_type = data.get('delivery_type')
+        payment_method = data.get('payment_method', 'cash')
 
         # Обрабатываем адрес доставки
         delivery_address = data.get('delivery_address', '{}')
@@ -336,8 +376,9 @@ def api_create_order():
         cursor = db.execute('''
                             INSERT INTO orders
                             (user_id, username, items, total_price, status,
-                             delivery_type, delivery_address, pickup_point, recipient_name, phone_number)
-                            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+                             delivery_type, delivery_address, pickup_point, payment_method,
+                             recipient_name, phone_number)
+                            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
                             ''', (
                                 data.get('user_id', 0),
                                 data.get('username', 'Гость'),
@@ -346,6 +387,7 @@ def api_create_order():
                                 delivery_type,
                                 json.dumps(delivery_address, ensure_ascii=False),
                                 data.get('pickup_point'),
+                                payment_method,
                                 recipient_name,
                                 phone_number
                             ))

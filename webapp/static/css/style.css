@@ -1831,3 +1831,135 @@ html {
 .delivery-actions .btn {
     flex: 1;
 }
+
+/* Стили для выбора оплаты */
+.order-summary {
+    padding: 20px;
+    text-align: center;
+    border-bottom: 2px solid var(--border-color);
+    background: linear-gradient(135deg, #F9FBE7, #E8F5E9);
+}
+
+.order-summary h3 {
+    color: var(--dark-color);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.total-amount {
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--primary-color);
+    background: linear-gradient(45deg, #4CAF50, #FF9800);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+.payment-options {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.payment-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 18px;
+    background: white;
+    border: 2px solid var(--border-color);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: left;
+    outline: none;
+    gap: 15px;
+}
+
+.payment-option:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(76, 175, 80, 0.2);
+    background: #F9FBE7;
+}
+
+.payment-option:active {
+    transform: translateY(-1px);
+}
+
+.payment-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--primary-gradient);
+    color: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.payment-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.payment-info h3 {
+    margin: 0;
+    font-size: 17px;
+    color: var(--dark-color);
+    font-weight: 700;
+}
+
+.payment-info p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--gray-color);
+    line-height: 1.4;
+}
+
+.payment-option i.fa-chevron-right {
+    color: var(--primary-color);
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.payment-actions {
+    padding: 20px;
+    border-top: 2px solid var(--border-color);
+    background: white;
+    display: flex;
+    gap: 10px;
+    position: sticky;
+    bottom: 0;
+}
+
+/* Темная тема */
+.dark-mode .order-summary {
+    background: linear-gradient(135deg, #2D2D2D, #1B5E20);
+}
+
+.dark-mode .payment-option {
+    background: #2D2D2D;
+    border-color: #4CAF50;
+}
+
+.dark-mode .payment-option:hover {
+    background: #3D3D3D;
+}
+
+.dark-mode .payment-info h3 {
+    color: #E8F5E9;
+}
+
+.dark-mode .payment-info p {
+    color: #BDBDBD;
+}

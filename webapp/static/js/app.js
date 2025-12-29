@@ -1387,7 +1387,103 @@ class TelegramShop {
 
     async selectPickupPoint(pointId) {
         this.deliveryData.pickup_point = pointId;
-        await this.confirmOrder();
+        await this.showPaymentSelection();
+    }
+
+    async showPaymentSelection() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-credit-card"></i> Способ оплаты</h2>
+                    <button class="close-cart" id="closePaymentSelection">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="order-summary">
+                    <h3><i class="fas fa-receipt"></i> Сумма к оплате:</h3>
+                    <div class="total-amount">${this.formatPrice(totalAmount)} ₽</div>
+                </div>
+
+                <div class="payment-options">
+                    <button class="payment-option" id="cashOption">
+                        <div class="payment-icon">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
+                        <div class="payment-info">
+                            <h3>Наличные</h3>
+                            <p>Оплата наличными при получении</p>
+                        </div>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+
+                    <button class="payment-option" id="transferOption">
+                        <div class="payment-icon">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <div class="payment-info">
+                            <h3>Перевод курьеру</h3>
+                            <p>Перевод на карту курьеру</p>
+                        </div>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+
+                    <button class="payment-option" id="terminalOption">
+                        <div class="payment-icon">
+                            <i class="fas fa-credit-card"></i>
+                        </div>
+                        <div class="payment-info">
+                            <h3>Терминал</h3>
+                            <p>Оплата картой через терминал</p>
+                        </div>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <div class="payment-actions">
+                    <button class="btn btn-outline" id="backToAddressBtn">
+                        <i class="fas fa-arrow-left"></i> Назад
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Назначаем обработчики
+        document.getElementById('cashOption').addEventListener('click', () => this.selectPaymentMethod('cash'));
+        document.getElementById('transferOption').addEventListener('click', () => this.selectPaymentMethod('transfer'));
+        document.getElementById('terminalOption').addEventListener('click', () => this.selectPaymentMethod('terminal'));
+
+        document.getElementById('backToAddressBtn').addEventListener('click', () => {
+            // Возвращаемся к выбору адреса или точки самовывоза
+            if (this.deliveryData.type === 'courier') {
+                this.showAddressSelection();
+            } else {
+                this.showPickupPoints();
+            }
+        });
+
+        document.getElementById('closePaymentSelection').addEventListener('click', () => this.closeCart());
+    }
+
+    selectPaymentMethod(method) {
+        this.deliveryData.payment_method = method;
+
+        // Показываем уведомление о выборе
+        const methodNames = {
+            'cash': 'Наличные',
+            'transfer': 'Перевод курьеру',
+            'terminal': 'Терминал'
+        };
+
+        this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
+
+        // Переходим к оформлению заказа
+        this.confirmOrder();
     }
 
     async selectAddress(addressId) {
@@ -1395,18 +1491,16 @@ class TelegramShop {
             const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
 
             if (userId === 0) {
-                // Для гостя - сохраняем индекс адреса из localStorage
                 this.deliveryData.address_id = `guest_${addressId}`;
                 this.deliveryData.address_details = localStorage.getItem('guest_addresses')
                     ? JSON.parse(localStorage.getItem('guest_addresses'))[addressId]
                     : null;
             } else {
-                // Для зарегистрированного пользователя
                 this.deliveryData.address_id = addressId;
             }
 
-            this.showNotification('✅ Адрес выбран', 'success');
-            await this.confirmOrder();
+            // ВМЕСТО confirmOrder() -> показываем выбор оплаты
+            await this.showPaymentSelection();
 
         } catch (error) {
             console.error('Ошибка выбора адреса:', error);
@@ -1466,22 +1560,20 @@ class TelegramShop {
                 };
             }
 
-            // Подготавливаем данные о доставке
+            // Подготавливаем данные о доставке и оплате
             let deliveryDetails = {};
 
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
                 if (this.deliveryData.address_id.toString().startsWith('guest_')) {
-                    // Для гостя берем данные из localStorage
                     const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
                     const addressIndex = parseInt(this.deliveryData.address_id.split('_')[1]);
                     deliveryDetails = guestAddresses[addressIndex] || {};
                 } else {
-                    // Для зарегистрированного пользователя
                     deliveryDetails = { address_id: this.deliveryData.address_id };
                 }
             }
 
-            // Подготавливаем данные заказа
+            // Подготавливаем данные заказа С СПОСОБОМ ОПЛАТЫ
             const orderData = {
                 ...userData,
                 items: this.cart.map(item => ({
@@ -1494,12 +1586,13 @@ class TelegramShop {
                 delivery_type: this.deliveryData.type,
                 delivery_address: JSON.stringify(deliveryDetails),
                 pickup_point: this.deliveryData.pickup_point,
+                payment_method: this.deliveryData.payment_method || 'cash', // по умолчанию наличные
                 recipient_name: deliveryDetails.recipient_name || '',
                 phone_number: deliveryDetails.phone || '',
                 created_at: new Date().toISOString()
             };
 
-            console.log('📤 Отправка заказа:', orderData);
+            console.log('📤 Отправка заказа с оплатой:', orderData);
 
             const response = await fetch('/api/create-order', {
                 method: 'POST',
@@ -1513,7 +1606,7 @@ class TelegramShop {
             console.log('📥 Ответ сервера:', result);
 
             if (result.success) {
-                // Показываем подтверждение с правильной суммой
+                // Показываем подтверждение с информацией об оплате
                 await this.showOrderConfirmation(result.order_id);
 
                 // Очищаем корзину ПОСЛЕ показа подтверждения
@@ -1528,7 +1621,8 @@ class TelegramShop {
         } catch (error) {
             console.error('❌ Ошибка оформления заказа:', error);
             this.showNotification(`❌ Ошибка: ${error.message}`, 'error');
-            this.showDeliverySelection();
+            // Возвращаем к выбору оплаты
+            this.showPaymentSelection();
         }
     }
 
@@ -1536,12 +1630,20 @@ class TelegramShop {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
-        // Сохраняем сумму ДО очистки корзины
         const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
         const deliveryText = this.deliveryData.type === 'courier'
             ? 'Доставка курьером'
             : 'Самовывоз';
+
+        // Названия способов оплаты
+        const paymentMethods = {
+            'cash': 'Наличные',
+            'transfer': 'Перевод курьеру',
+            'terminal': 'Терминал'
+        };
+
+        const paymentText = paymentMethods[this.deliveryData.payment_method] || 'Наличные';
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
@@ -1553,11 +1655,13 @@ class TelegramShop {
                     <div class="order-details">
                         <p><strong>Номер заказа:</strong> #${orderId}</p>
                         <p><strong>Способ получения:</strong> ${deliveryText}</p>
+                        <p><strong>Способ оплаты:</strong> ${paymentText}</p>
                         <p><strong>Сумма:</strong> ${this.formatPrice(totalAmount)} ₽</p>
                         <p><strong>Статус:</strong> Ожидает обработки</p>
                     </div>
                     <div class="confirmation-message">
                         <p>Мы свяжемся с вами для уточнения деталей</p>
+                        <p><i>Заказ передан на обработку</i></p>
                     </div>
                     <button class="btn btn-primary" id="closeCartAndReturn">
                         <i class="fas fa-home"></i> Вернуться в магазин
@@ -1566,17 +1670,12 @@ class TelegramShop {
             </div>
         `;
 
-        // НАЗНАЧАЕМ ОБРАБОТЧИК
+        // Обработчик кнопки
         document.getElementById('closeCartAndReturn').addEventListener('click', () => {
-            // Очищаем корзину
             this.cart = [];
             this.saveCart();
             this.updateCartCount();
-
-            // Закрываем корзину
             this.closeCart();
-
-            // Сбрасываем интерфейс корзины для следующего раза
             setTimeout(() => {
                 this.resetCartInterface();
             }, 300);
