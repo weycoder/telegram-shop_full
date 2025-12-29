@@ -1321,7 +1321,12 @@ class TelegramShop {
             if (result.success) {
                 this.deliveryData.address_id = result.id;
                 this.showNotification('✅ Адрес сохранен', 'success');
-                await this.confirmOrder();
+
+                // ВМЕСТО confirmOrder() -> возвращаем к выбору адреса
+                setTimeout(() => {
+                    this.showAddressSelection();
+                }, 1000);
+
             } else {
                 throw new Error(result.error || 'Ошибка сохранения');
             }
@@ -1648,20 +1653,20 @@ class TelegramShop {
         cartOverlay.innerHTML = `
             <div class="cart-modal">
                 <div class="order-confirmation">
-                    <div class="confirmation-icon">
-                        <i class="fas fa-check-circle"></i>
+                    <div class="confirmation-icon processing">
+                        <i class="fas fa-clock"></i>
                     </div>
-                    <h2>Заказ оформлен!</h2>
+                    <h2>Заказ принят!</h2>
                     <div class="order-details">
                         <p><strong>Номер заказа:</strong> #${orderId}</p>
                         <p><strong>Способ получения:</strong> ${deliveryText}</p>
                         <p><strong>Способ оплаты:</strong> ${paymentText}</p>
                         <p><strong>Сумма:</strong> ${this.formatPrice(totalAmount)} ₽</p>
-                        <p><strong>Статус:</strong> Ожидает обработки</p>
+                        <p><strong>Статус:</strong> <span class="status-processing">Ожидает обработки</span></p>
                     </div>
-                    <div class="confirmation-message">
-                        <p>Мы свяжемся с вами для уточнения деталей</p>
-                        <p><i>Заказ передан на обработку</i></p>
+                    <div class="confirmation-message processing">
+                        <p><i class="fas fa-info-circle"></i> Заказ передан на обработку</p>
+                        <p>Наш менеджер свяжется с вами в ближайшее время для подтверждения заказа</p>
                     </div>
                     <button class="btn btn-primary" id="closeCartAndReturn">
                         <i class="fas fa-home"></i> Вернуться в магазин

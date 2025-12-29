@@ -339,7 +339,7 @@ def get_pickup_points():
     finally:
         db.close()
 
-# ========== ОБНОВЛЕННЫЙ API ДЛЯ СОЗДАНИЯ ЗАКАЗА ==========
+
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
     """Создать заказ с доставкой и оплатой"""
@@ -363,18 +363,22 @@ def api_create_order():
         recipient_name = delivery_address.get('recipient_name', data.get('recipient_name', ''))
         phone_number = delivery_address.get('phone', data.get('phone_number', ''))
 
+        # ВАЖНО: статус всегда 'pending' (ожидает обработки)
+        status = 'pending'
+
         # Сохраняем заказ
         cursor = db.execute('''
                             INSERT INTO orders
                             (user_id, username, items, total_price, status,
                              delivery_type, delivery_address, pickup_point, payment_method,
                              recipient_name, phone_number)
-                            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 data.get('user_id', 0),
                                 data.get('username', 'Гость'),
                                 json.dumps(data['items'], ensure_ascii=False),
                                 data['total'],
+                                status,  # Всегда 'pending' при создании
                                 delivery_type,
                                 json.dumps(delivery_address, ensure_ascii=False),
                                 data.get('pickup_point'),
@@ -398,6 +402,48 @@ def api_create_order():
     except Exception as e:
         db.close()
         print(f"❌ Ошибка создания заказа: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/orders/<int:order_id>/update-status', methods=['POST'])
+def update_order_status(order_id):
+    """Обновить статус заказа (для админа/менеджера)"""
+    db = get_db()
+
+    try:
+        data = request.json
+        new_status = data.get('status')
+        manager_notes = data.get('notes', '')
+
+        # Разрешенные статусы
+        allowed_statuses = ['pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled']
+
+        if new_status not in allowed_statuses:
+            return jsonify({'success': False, 'error': 'Неверный статус'}), 400
+
+        # Обновляем статус
+        db.execute('''
+                   UPDATE orders
+                   SET status     = ?,
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?
+                   ''', (new_status, order_id))
+
+        # Можно также сохранять историю статусов в отдельной таблице
+        db.execute('''
+                   INSERT INTO order_status_history
+                       (order_id, status, notes, changed_at)
+                   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                   ''', (order_id, new_status, manager_notes))
+
+        db.commit()
+        db.close()
+
+        return jsonify({'success': True, 'message': f'Статус обновлен на: {new_status}'})
+
+    except Exception as e:
+        db.close()
+        print(f"❌ Ошибка обновления статуса: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== API ДЛЯ АДМИНИСТРИРОВАНИЯ ТОЧЕК САМОВЫВОЗА ==========

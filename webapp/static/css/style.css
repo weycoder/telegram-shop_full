@@ -1963,3 +1963,44 @@ html {
 .dark-mode .payment-info p {
     color: #BDBDBD;
 }
+
+/* Стили для статуса обработки */
+.confirmation-icon.processing {
+    background: var(--warning-color);
+    color: white;
+}
+
+.status-processing {
+    color: var(--warning-color);
+    font-weight: 700;
+    background: rgba(255, 179, 0, 0.1);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 2px solid rgba(255, 179, 0, 0.3);
+}
+
+.confirmation-message.processing {
+    background: rgba(255, 179, 0, 0.05);
+    border: 2px solid rgba(255, 179, 0, 0.1);
+    color: var(--warning-color);
+}
+
+.confirmation-message.processing i {
+    color: var(--warning-color);
+}
+
+/* Темная тема */
+.dark-mode .confirmation-icon.processing {
+    background: #FFB300;
+}
+
+.dark-mode .status-processing {
+    color: #FFB300;
+    background: rgba(255, 179, 0, 0.15);
+    border-color: rgba(255, 179, 0, 0.4);
+}
+
+.dark-mode .confirmation-message.processing {
+    background: rgba(255, 179, 0, 0.1);
+    border-color: rgba(255, 179, 0, 0.2);
+}
