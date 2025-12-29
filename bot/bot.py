@@ -568,7 +568,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"📋 Получение заказов для пользователя {user.id} ({user.username})")
 
         # Подключаемся к базе данных
-        conn = sqlite3.connect(SHOP_DB_PATH)
+        conn = sqlite3.connect("shop.db")
         conn.row_factory = sqlite3.Row
 
         try:
@@ -581,7 +581,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not user_record:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_DOMAIN}/"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
 
                 if is_callback:
                     await update.callback_query.answer()
@@ -619,7 +619,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not orders:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_DOMAIN}/"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
 
                 if is_callback:
                     await update.callback_query.answer()
@@ -653,7 +653,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Простая клавиатура
             keyboard = [
-                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_DOMAIN}/"))],
+                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))],
                 [InlineKeyboardButton("🔄 Обновить", callback_data="refresh_orders")]
             ]
 

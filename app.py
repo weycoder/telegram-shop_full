@@ -576,7 +576,7 @@ def send_order_notification(order_id, status, courier_id=None):
         # Формируем данные для отправки в бот
         notification_data = {
             'secret_token': BOT_SECRET_TOKEN,
-            'telegram_id': telegram_id,  # ИСПРАВЛЕНО
+            'telegram_id': telegram_id, 
             'order_id': order_id,
             'status': status,
             'title': status_info['title'],
