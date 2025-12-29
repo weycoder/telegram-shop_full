@@ -492,22 +492,60 @@ def send_order_notification(order_id, status, courier_id=None):
     try:
         db = get_db()
 
-        # Получаем информацию о заказе
+        # ПЕРВЫЙ СПОСОБ: Ищем через telegram_users (ваша текущая таблица)
         order = db.execute('''
-                           SELECT o.*, u.telegram_id
+                           SELECT o.*, tu.telegram_id
                            FROM orders o
-                                    LEFT JOIN telegram_users u ON o.user_id = u.id
+                                    LEFT JOIN telegram_users tu ON o.user_id = tu.telegram_id # Ищем по telegram_id
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
 
-        if not order:
-            print(f"⚠️ Заказ #{order_id} не найден")
-            return False
+        # ЕСЛИ не нашли, пробуем через users (таблица из bot.py)
+        if not order or not order['telegram_id']:
+            print(f"⚠️ Пробуем найти пользователя через таблицу users...")
 
-        # Преобразуем Row в dict
-        order_dict = dict(order)
-        user_id = order_dict['user_id']
-        telegram_id = order_dict.get('telegram_id')
+            # Получаем order еще раз с user_id
+            order = db.execute('''
+                               SELECT *
+                               FROM orders
+                               WHERE id = ?
+                               ''', (order_id,)).fetchone()
+
+            if order:
+                order_dict = dict(order)
+                user_id = order_dict['user_id']
+
+                # Ищем в таблице users (из bot.py)
+                telegram_user = db.execute('''
+                                           SELECT telegram_id
+                                           FROM users
+                                           WHERE id = ?
+                                           ''', (user_id,)).fetchone()
+
+                if telegram_user:
+                    telegram_id = dict(telegram_user)['telegram_id']
+                else:
+                    print(f"⚠️ Пользователь #{user_id} не найден в таблице users")
+
+                    # Пробуем найти напрямую по telegram_id (если user_id это telegram_id)
+                    telegram_user = db.execute('''
+                                               SELECT telegram_id
+                                               FROM telegram_users
+                                               WHERE telegram_id = ?
+                                               ''', (user_id,)).fetchone()
+
+                    if telegram_user:
+                        telegram_id = dict(telegram_user)['telegram_id']
+                    else:
+                        print(f"⚠️ Не найден telegram_id для заказа #{order_id}")
+                        return False
+        else:
+            order_dict = dict(order)
+            telegram_id = order_dict.get('telegram_id')
+
+        if not telegram_id:
+            print(f"⚠️ У пользователя заказа #{order_id} нет telegram_id для уведомлений")
+            return False
 
         # Получаем информацию о курьере если есть
         courier_info = {}
@@ -539,10 +577,6 @@ def send_order_notification(order_id, status, courier_id=None):
                 'title': '👤 Курьер назначен!',
                 'message': f'Заказ #{order_id} принят курьером и скоро будет доставлен.'
             },
-            'picking_up': {
-                'title': '🏪 Курьер едет в магазин',
-                'message': f'Заказ #{order_id}: курьер направляется за вашим товаром.'
-            },
             'picked_up': {
                 'title': '📦 Товар у курьера!',
                 'message': f'Заказ #{order_id} собран и готов к доставке.'
@@ -550,10 +584,6 @@ def send_order_notification(order_id, status, courier_id=None):
             'on_the_way': {
                 'title': '🚗 Курьер едет к вам!',
                 'message': f'Заказ #{order_id} уже в пути. Прибудет в ближайшее время!'
-            },
-            'arrived': {
-                'title': '📍 Курьер прибыл!',
-                'message': f'Заказ #{order_id} уже у вас. Встречайте курьера!'
             },
             'delivered': {
                 'title': '🎉 Заказ доставлен!',
@@ -566,9 +596,7 @@ def send_order_notification(order_id, status, courier_id=None):
             'message': f'Новый статус: {status}'
         })
 
-        if not telegram_id:
-            print(f"⚠️ У пользователя заказа #{order_id} нет telegram_id для уведомлений")
-            return False
+        print(f"📨 Отправка уведомления: заказ #{order_id}, telegram_id: {telegram_id}, статус: {status}")
 
         # Формируем данные для отправки в бот
         notification_data = {
@@ -578,11 +606,6 @@ def send_order_notification(order_id, status, courier_id=None):
             'status': status,
             'title': status_info['title'],
             'message': status_info['message'],
-            'order_info': {
-                'total_price': order_dict['total_price'],
-                'recipient_name': order_dict['recipient_name'],
-                'payment_method': order_dict['payment_method']
-            },
             'courier_info': courier_info,
             'timestamp': datetime.now().isoformat()
         }
@@ -609,11 +632,12 @@ def send_order_notification(order_id, status, courier_id=None):
 
     except Exception as e:
         print(f"❌ Критическая ошибка отправки уведомления: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         if db:
             db.close()
-
 
 def assign_order_to_courier(order_id, delivery_type):
     """Автоматически назначить заказ курьеру"""
