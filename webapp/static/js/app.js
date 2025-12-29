@@ -43,47 +43,66 @@ class TelegramShop {
         console.log('✅ Магазин инициализирован');
     }
 
-    bindEvents() {
-        console.log('🔗 Назначаем обработчики событий...');
+        bindEvents() {
+            console.log('🔗 Назначаем обработчики событий...');
 
-        // Корзина
-        this.bindEvent('cartBtn', 'click', () => this.toggleCart());
-        this.bindEvent('closeCart', 'click', () => this.closeCart());
-        this.bindEvent('clearCart', 'click', () => this.clearCart());
-        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+            // Корзина
+            this.bindEvent('cartBtn', 'click', () => this.toggleCart());
+            this.bindEvent('closeCart', 'click', () => this.closeCart());
+            this.bindEvent('clearCart', 'click', () => this.clearCart());
+            this.bindEvent('checkoutBtn', 'click', () => this.checkout());
 
+            // Модальное окно товара
+            this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
 
-        // Модальное окно товара
-        this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
+            // Закрытие по клику на оверлей
+            document.addEventListener('click', (e) => {
+                if (e.target.classList.contains('cart-overlay')) this.closeCart();
+                if (e.target.classList.contains('product-modal-overlay')) this.closeProductModal();
+            });
 
-        // Закрытие по клику на оверлей
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('cart-overlay')) this.closeCart();
-            if (e.target.classList.contains('product-modal-overlay')) this.closeProductModal();
-        });
-
-        // Escape для закрытия
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeCart();
-                this.closeProductModal();
-            }
-        });
-
-        // Категории (делегирование)
-        const categoriesContainer = document.getElementById('categories');
-        if (categoriesContainer) {
-            categoriesContainer.addEventListener('click', (e) => {
-                const categoryBtn = e.target.closest('.category-btn');
-                if (categoryBtn) {
-                    e.preventDefault();
-                    this.filterByCategory(categoryBtn);
+            // Escape для закрытия
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.closeCart();
+                    this.closeProductModal();
                 }
             });
-        }
 
-        console.log('✅ Все обработчики назначены');
-    }
+            // Категории (делегирование)
+            const categoriesContainer = document.getElementById('categories');
+            if (categoriesContainer) {
+                categoriesContainer.addEventListener('click', (e) => {
+                    const categoryBtn = e.target.closest('.category-btn');
+                    if (categoryBtn) {
+                        e.preventDefault();
+                        this.filterByCategory(categoryBtn);
+                    }
+                });
+            }
+
+            // ДЕЛЕГИРОВАНИЕ ДЛЯ КНОПОК "ПОДРОБНЕЕ" - ДОБАВЬТЕ ЭТОТ КОД
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('.btn-block');
+                if (btn && btn.textContent.includes('Подробнее')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Получаем productId из атрибута onclick
+                    const onclickAttr = btn.getAttribute('onclick');
+                    if (onclickAttr && onclickAttr.includes('shop.viewProduct')) {
+                        const match = onclickAttr.match(/shop\.viewProduct\((\d+)\)/);
+                        if (match && match[1]) {
+                            const productId = parseInt(match[1]);
+                            console.log('🖱️ Нажата кнопка "Подробнее" для товара ID:', productId);
+                            this.viewProduct(productId);
+                        }
+                    }
+                }
+            });
+
+            console.log('✅ Все обработчики назначены');
+        }
 
     bindEvent(id, event, handler) {
         const element = document.getElementById(id);
@@ -351,39 +370,45 @@ class TelegramShop {
         this.loadProducts(category);
     }
 
-    async viewProduct(productId) {
-        try {
-            // Добавьте console.log для отладки
-            console.log('🔄 Загрузка товара ID:', productId);
+        async viewProduct(productId) {
+            try {
+                console.log(`👁️ Загрузка товара #${productId}...`);
 
-            const response = await fetch(`/api/products/${productId}`);
+                // Показываем загрузку в модальном окне
+                this.openProductModalLoading();
 
-            if (!response.ok) {
-                // Узнаем что именно возвращает сервер
-                const errorText = await response.text();
-                console.error('❌ Сервер вернул:', response.status, errorText);
+                const response = await fetch(`/api/products/${productId}`);
 
-                // Если 404 - проверяем эндпоинт
-                if (response.status === 404) {
-                    console.log('🛠️ Проверяем доступность API:');
-                    await this.testAllEndpoints();
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Сервер вернул:', response.status, errorText);
+
+                    if (response.status === 404) {
+                        console.log('🛠️ Проверяем доступность API...');
+                    }
+
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
-                throw new Error(`Не удалось загрузить товар: ${response.status}`);
+                const product = await response.json();
+
+                if (product.error) {
+                    throw new Error(product.error);
+                }
+
+                console.log('✅ Товар загружен:', product);
+                this.currentProduct = product;
+
+                // ВЫЗЫВАЕМ метод рендеринга модального окна
+                this.renderProductModal(product);
+
+            } catch (error) {
+                console.error('❌ Ошибка загрузки товара:', error);
+                this.showNotification('❌ Не удалось загрузить товар', 'error');
+                this.closeProductModal();
             }
-
-            const product = await response.json();
-            console.log('✅ Товар получен:', product);
-
-            // Дальше ваш код показа товара...
-
-        } catch (error) {
-            console.error('🚨 Ошибка:', error);
-            alert('Товар временно недоступен');
         }
-    }
 
-    // Добавьте эту функцию для теста всех эндпоинтов
     async testAllEndpoints() {
         const endpoints = [
             '/api/products',
@@ -424,72 +449,79 @@ class TelegramShop {
         modal.style.display = 'flex';
     }
 
-    renderProductModal(product) {
-        const modal = document.getElementById('productModal');
-        if (!modal) return;
+        renderProductModal(product) {
+            console.log('🎨 Рендерим модальное окно товара:', product.name);
 
-        modal.innerHTML = `
-            <div class="product-modal">
-                <button class="close-product-modal" id="closeProductModal">
-                    <i class="fas fa-times"></i>
-                </button>
-                <div class="product-modal-content">
-                    <div class="product-modal-image-container">
-                        <img src="${product.image_url || 'https://via.placeholder.com/400x300'}"
-                             alt="${product.name}"
-                             class="product-modal-image"
-                             onerror="this.src='https://via.placeholder.com/400x300'">
-                    </div>
-                    <div class="product-modal-info">
-                        <h3 class="product-modal-title">${product.name}</h3>
-                        <div class="product-modal-price">${this.formatPrice(product.price)} ₽</div>
+            const modal = document.getElementById('productModal');
+            if (!modal) {
+                console.error('❌ Модальное окно не найдено');
+                return;
+            }
 
-                        <div class="product-modal-description">
-                            <h4><i class="fas fa-info-circle"></i> Описание:</h4>
-                            <p>${product.description || 'Описание отсутствует'}</p>
+            modal.innerHTML = `
+                <div class="product-modal">
+                    <button class="close-product-modal" id="closeProductModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="product-modal-content">
+                        <div class="product-modal-image-container">
+                            <img src="${product.image_url || 'https://via.placeholder.com/400x300'}"
+                                 alt="${product.name}"
+                                 class="product-modal-image"
+                                 onerror="this.src='https://via.placeholder.com/400x300'">
                         </div>
+                        <div class="product-modal-info">
+                            <h3 class="product-modal-title">${product.name}</h3>
+                            <div class="product-modal-price">${this.formatPrice(product.price)} ₽</div>
 
-                        <div class="product-modal-stock ${product.stock > 0 ? 'in-stock' : 'out-of-stock'}">
-                            <i class="fas ${product.stock > 0 ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                            ${product.stock > 0 ? `В наличии: ${product.stock} шт.` : 'Нет в наличии'}
-                        </div>
+                            <div class="product-modal-description">
+                                <h4><i class="fas fa-info-circle"></i> Описание:</h4>
+                                <p>${product.description || 'Описание отсутствует'}</p>
+                            </div>
 
-                        ${product.stock > 0 ? `
-                            <div class="product-modal-actions">
-                                <div class="quantity-selector">
-                                    <h4><i class="fas fa-sort-amount-up"></i> Количество:</h4>
-                                    <button class="qty-btn minus" id="qtyMinus">
-                                        <i class="fas fa-minus"></i>
-                                    </button>
-                                    <input type="number"
-                                           id="quantity"
-                                           value="1"
-                                           min="1"
-                                           max="${product.stock}"
-                                           onchange="shop.validateQuantity(${product.stock})">
-                                    <button class="qty-btn plus" id="qtyPlus">
-                                        <i class="fas fa-plus"></i>
+                            <div class="product-modal-stock ${product.stock > 0 ? 'in-stock' : 'out-of-stock'}">
+                                <i class="fas ${product.stock > 0 ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                                ${product.stock > 0 ? `В наличии: ${product.stock} шт.` : 'Нет в наличии'}
+                            </div>
+
+                            ${product.stock > 0 ? `
+                                <div class="product-modal-actions">
+                                    <div class="quantity-selector">
+                                        <h4><i class="fas fa-sort-amount-up"></i> Количество:</h4>
+                                        <button class="qty-btn minus" id="qtyMinus">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                        <input type="number"
+                                               id="quantity"
+                                               value="1"
+                                               min="1"
+                                               max="${product.stock}"
+                                               onchange="shop.validateQuantity(${product.stock})">
+                                        <button class="qty-btn plus" id="qtyPlus">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+
+                                    <button class="btn btn-primary" id="addToCartModal">
+                                        <i class="fas fa-cart-plus"></i> Добавить в корзину
                                     </button>
                                 </div>
-
-                                <button class="btn btn-primary" id="addToCartModal">
-                                    <i class="fas fa-cart-plus"></i> Добавить в корзину
+                            ` : `
+                                <button class="btn btn-secondary" disabled>
+                                    <i class="fas fa-times-circle"></i> Товар закончился
                                 </button>
-                            </div>
-                        ` : `
-                            <button class="btn btn-secondary" disabled>
-                                <i class="fas fa-times-circle"></i> Товар закончился
-                            </button>
-                        `}
+                            `}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
 
-        // Назначаем обработчики
-        this.bindModalEvents(product);
-        this.updateBackButton();
-    }
+            modal.style.display = 'flex';
+
+            // Назначаем обработчики событий
+            this.bindModalEvents(product);
+            this.updateBackButton();
+        }
 
     bindModalEvents(product) {
         // Закрытие модального окна
@@ -1823,10 +1855,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.appendChild(errorDiv);
     }
 });
-
-// Экспортируем класс для использования в других файлах
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = TelegramShop;
-}
 
 window.TelegramShop = TelegramShop;
