@@ -491,67 +491,129 @@ init_db()
 
 
 def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=None, courier_phone=None):
-    """Синхронная отправка уведомления через Telegram API"""
+    """Отправка уведомления через HTTP запрос к Telegram API"""
     try:
-        if not TELEGRAM_BOT:
-            print("⚠️ Telegram бот не настроен")
-            return False
+        BOT_TOKEN = '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50'
 
-        # Проверяем, что telegram_id валидный
         if not telegram_id or telegram_id == 0:
             print(f"⚠️ Неверный telegram_id: {telegram_id}")
             return False
 
+        # Функция для экранирования спецсимволов MarkdownV2
+        def escape_markdown(text):
+            if not text:
+                return ""
+            # Список специальных символов для MarkdownV2
+            escape_chars = r'_*[]()~`>#+-=|{}.!'
+            for char in escape_chars:
+                text = text.replace(char, f'\\{char}')
+            return text
+
         # Форматируем сообщение
         status_messages = {
             'created': {
-                'title': '✅ *Заказ принят!*',
+                'title': '✅ Заказ принят!',
                 'message': f'Заказ #{order_id} успешно создан и передан на обработку.'
             },
             'assigned': {
-                'title': '👤 *Курьер назначен!*',
+                'title': '👤 Курьер назначен!',
                 'message': f'Заказ #{order_id} принят курьером и скоро будет доставлен.'
             },
             'picked_up': {
-                'title': '📦 *Товар у курьера!*',
+                'title': '📦 Товар у курьера!',
                 'message': f'Заказ #{order_id} собран и готов к доставке.'
             },
             'on_the_way': {
-                'title': '🚗 *Курьер едет к вам!*',
-                'message': f'Заказ #{order_id} уже в пути. Прибудет в ближайшее время!'
+                'title': '🚗 Курьер едет к вам!',
+                'message': f'Заказ #{order_id} уже в пути\\. Прибудет в ближайшее время!'
             },
             'delivered': {
-                'title': '🎉 *Заказ доставлен!*',
-                'message': f'Заказ #{order_id} успешно передан. Спасибо за покупку!'
+                'title': '🎉 Заказ доставлен!',
+                'message': f'Заказ #{order_id} успешно передан\\. Спасибо за покупку!'
             }
         }
 
         status_info = status_messages.get(status, {
-            'title': f'📦 *Статус заказа #{order_id} изменен*',
+            'title': f'📦 Статус заказа #{order_id} изменен',
             'message': f'Новый статус: {status}'
         })
 
-        # Собираем сообщение
-        message = f"{status_info['title']}\n\n{status_info['message']}\n\n"
+        # Экранируем текст
+        title_escaped = escape_markdown(status_info['title'])
+        message_escaped = escape_markdown(status_info['message'])
+        courier_name_escaped = escape_markdown(courier_name) if courier_name else ""
+        courier_phone_escaped = escape_markdown(courier_phone) if courier_phone else ""
+        order_id_escaped = escape_markdown(str(order_id))
 
-        if courier_name:
-            message += f"👤 *Курьер:* {courier_name}\n"
+        # Собираем сообщение с MarkdownV2 форматированием
+        message = f"*{title_escaped}*\n\n{message_escaped}\n\n"
 
-        if courier_phone:
-            message += f"📱 *Телефон:* `{courier_phone}`\n"
+        if courier_name_escaped:
+            message += f"👤 *Курьер:* {courier_name_escaped}\n"
 
-        message += f"\n📋 *Отследить:* /track_{order_id}"
+        if courier_phone_escaped:
+            message += f"📱 *Телефон:* `{courier_phone_escaped}`\n"
 
-        # Отправляем сообщение (СИНХРОННО!)
-        TELEGRAM_BOT.send_message(
-            chat_id=telegram_id,
-            text=message,
-            parse_mode='Markdown',
-            disable_web_page_preview=True
-        )
+        message += f"\n📋 *Отследить:* /track\\_{order_id_escaped}"
 
-        print(f"✅ Telegram уведомление отправлено пользователю {telegram_id}")
-        return True
+        # Отправляем HTTP запрос
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+        data = {
+            'chat_id': telegram_id,
+            'text': message,
+            'parse_mode': 'MarkdownV2',
+            'disable_web_page_preview': True
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"✅ Telegram уведомление отправлено пользователю {telegram_id}")
+            return True
+        else:
+            print(f"❌ Ошибка Telegram API: {response.status_code}")
+            print(f"❌ Ответ: {response.text}")
+
+            # Пробуем отправить без форматирования
+            try:
+                # Простое сообщение без Markdown
+                simple_message = f"Заказ #{order_id}\n\n"
+                if status == 'created':
+                    simple_message += "✅ Заказ принят!\n"
+                elif status == 'assigned':
+                    simple_message += "👤 Курьер назначен!\n"
+                elif status == 'picked_up':
+                    simple_message += "📦 Товар у курьера!\n"
+                elif status == 'on_the_way':
+                    simple_message += "🚗 Курьер едет к вам!\n"
+                elif status == 'delivered':
+                    simple_message += "🎉 Заказ доставлен!\n"
+
+                if courier_name:
+                    simple_message += f"\n👤 Курьер: {courier_name}\n"
+
+                if courier_phone:
+                    simple_message += f"📱 Телефон: {courier_phone}\n"
+
+                simple_message += f"\n📋 Отследить: /track_{order_id}"
+
+                data_simple = {
+                    'chat_id': telegram_id,
+                    'text': simple_message,
+                    'disable_web_page_preview': True
+                }
+
+                response_simple = requests.post(url, json=data_simple, timeout=10)
+                if response_simple.status_code == 200:
+                    print(f"✅ Простое уведомление отправлено пользователю {telegram_id}")
+                    return True
+                else:
+                    print(f"❌ Ошибка простого сообщения: {response_simple.status_code}")
+                    return False
+
+            except Exception as e2:
+                print(f"❌ Ошибка отправки простого сообщения: {e2}")
+                return False
 
     except Exception as e:
         print(f"❌ Ошибка отправки Telegram уведомления: {e}")
