@@ -2,6 +2,7 @@ import os
 import sqlite3
 import json
 import uuid
+import requests  # Добавим для HTTP запросов к боту
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 import base64
@@ -18,6 +19,10 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['DATABASE'] = 'shop.db'
 app.config['UPLOAD_FOLDER'] = 'webapp/static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+# Конфигурация для бота (добавьте в переменные окружения)
+BOT_WEBHOOK_URL = os.environ.get('BOT_WEBHOOK_URL', 'http://localhost:8080/notify')
+BOT_SECRET_TOKEN = os.environ.get('BOT_SECRET_TOKEN', 'your-secret-token-here')
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
@@ -44,7 +49,7 @@ def init_db():
         db = get_db()
         cursor = db.cursor()
 
-        # Таблица курьеров
+        # Существующие таблицы (НЕ ТРОГАЕМ)
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS couriers
                        (
@@ -83,7 +88,6 @@ def init_db():
                        )
                        ''')
 
-        # Таблица назначений заказов
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS order_assignments
                        (
@@ -136,7 +140,41 @@ def init_db():
                            )
                        ''')
 
-        # Таблица товаров
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS pending_notifications
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           telegram_id
+                           BIGINT
+                           NOT
+                           NULL,
+                           order_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           status
+                           TEXT
+                           NOT
+                           NULL,
+                           courier_name
+                           TEXT,
+                           courier_phone
+                           TEXT,
+                           sent
+                           INTEGER
+                           DEFAULT
+                           0,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
+
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS products
                        (
@@ -170,7 +208,6 @@ def init_db():
                        )
                        ''')
 
-        # Таблица заказов
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS orders
                        (
@@ -218,7 +255,6 @@ def init_db():
                        )
                        ''')
 
-        # Таблица адресов пользователей
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS user_addresses
                        (
@@ -266,7 +302,31 @@ def init_db():
                        )
                        ''')
 
-        # Таблица точек самовывоза
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS user_push_tokens
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           user_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           device_type
+                           TEXT,
+                           token
+                           TEXT
+                           NOT
+                           NULL,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
+
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS pickup_points
                        (
@@ -295,6 +355,75 @@ def init_db():
                            INTEGER
                            DEFAULT
                            1
+                       )
+                       ''')
+
+        # ========== НОВЫЕ ТАБЛИЦЫ ДЛЯ УВЕДОМЛЕНИЙ ==========
+
+        # Таблица пользователей Telegram (если еще не создана)
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS telegram_users
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           telegram_id
+                           BIGINT
+                           UNIQUE
+                           NOT
+                           NULL,
+                           username
+                           TEXT,
+                           first_name
+                           TEXT,
+                           last_name
+                           TEXT,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           last_seen
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
+
+        # Таблица для логов уведомлений
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS notification_logs
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           order_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           telegram_id
+                           BIGINT
+                           NOT
+                           NULL,
+                           status
+                           TEXT
+                           NOT
+                           NULL,
+                           message
+                           TEXT,
+                           sent_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           success
+                           INTEGER
+                           DEFAULT
+                           0,
+                           error_message
+                           TEXT
                        )
                        ''')
 
@@ -356,6 +485,188 @@ def init_db():
 
 
 init_db()
+
+
+# ========== НОВЫЕ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ ==========
+
+def send_order_notification(order_id, status, courier_id=None):
+    """Отправка уведомлений покупателю через Telegram бота"""
+    try:
+        db = get_db()
+
+        # Получаем информацию о заказе
+        order = db.execute('''
+                           SELECT o.*, u.telegram_id
+                           FROM orders o
+                                    LEFT JOIN telegram_users u ON o.user_id = u.telegram_id
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
+        if not order:
+            print(f"⚠️ Заказ #{order_id} не найден")
+            return False
+
+        user_id = order['user_id']
+        order_data = dict(order)
+
+        # Получаем информацию о курьере если есть
+        courier_info = {}
+        if courier_id:
+            courier = db.execute('''
+                                 SELECT full_name, phone
+                                 FROM couriers
+                                 WHERE id = ?
+                                 ''', (courier_id,)).fetchone()
+            if courier:
+                courier_info = {
+                    'name': courier['full_name'],
+                    'phone': courier['phone']
+                }
+
+        # Сообщения для разных статусов
+        messages = {
+            'created': {
+                'title': '✅ Заказ принят!',
+                'message': f'Заказ #{order_id} успешно создан и передан на обработку.'
+            },
+            'assigned': {
+                'title': '👤 Курьер назначен!',
+                'message': f'Заказ #{order_id} принят курьером и скоро будет доставлен.'
+            },
+            'picking_up': {
+                'title': '🏪 Курьер едет в магазин',
+                'message': f'Заказ #{order_id}: курьер направляется за вашим товаром.'
+            },
+            'picked_up': {
+                'title': '📦 Товар у курьера!',
+                'message': f'Заказ #{order_id} собран и готов к доставке.'
+            },
+            'on_the_way': {
+                'title': '🚗 Курьер едет к вам!',
+                'message': f'Заказ #{order_id} уже в пути. Прибудет в ближайшее время!'
+            },
+            'arrived': {
+                'title': '📍 Курьер прибыл!',
+                'message': f'Заказ #{order_id} уже у вас. Встречайте курьера!'
+            },
+            'delivered': {
+                'title': '🎉 Заказ доставлен!',
+                'message': f'Заказ #{order_id} успешно передан. Спасибо за покупку!'
+            }
+        }
+
+        status_info = messages.get(status, {
+            'title': f'📦 Статус заказа #{order_id} изменен',
+            'message': f'Новый статус: {status}'
+        })
+
+        # Формируем данные для отправки в бот
+        notification_data = {
+            'secret_token': BOT_SECRET_TOKEN,
+            'telegram_id': order.get('telegram_id'),
+            'order_id': order_id,
+            'status': status,
+            'title': status_info['title'],
+            'message': status_info['message'],
+            'order_info': {
+                'total_price': order['total_price'],
+                'recipient_name': order['recipient_name'],
+                'payment_method': order['payment_method']
+            },
+            'courier_info': courier_info,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        # Отправляем HTTP запрос к боту
+        try:
+            response = requests.post(
+                BOT_WEBHOOK_URL,
+                json=notification_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                print(f"✅ Уведомление для заказа #{order_id} отправлено в бот (статус: {status})")
+
+                # Логируем успешную отправку
+                db.execute('''
+                           INSERT INTO notification_logs (order_id, telegram_id, status, message, sent_at, success)
+                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
+                           ''', (order_id, order.get('telegram_id'), status, status_info['message']))
+
+                db.commit()
+                return True
+            else:
+                print(f"❌ Ошибка отправки уведомления: HTTP {response.status_code}")
+
+                # Логируем ошибку
+                db.execute('''
+                           INSERT INTO notification_logs (order_id, telegram_id, status, message, sent_at, success,
+                                                          error_message)
+                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, ?)
+                           ''', (order_id, order.get('telegram_id'), status, status_info['message'],
+                                 f"HTTP {response.status_code}"))
+
+                db.commit()
+                return False
+
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Ошибка соединения с ботом: {e}")
+
+            # Логируем ошибку соединения
+            db.execute('''
+                       INSERT INTO notification_logs (order_id, telegram_id, status, message, sent_at, success,
+                                                      error_message)
+                       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, ?)
+                       ''', (order_id, order.get('telegram_id'), status, status_info['message'], str(e)))
+
+            db.commit()
+            return False
+
+    except Exception as e:
+        print(f"❌ Критическая ошибка отправки уведомления: {e}")
+        return False
+    finally:
+        if 'db' in locals():
+            db.close()
+
+
+def assign_order_to_courier(order_id, delivery_type):
+    """Автоматически назначить заказ курьеру"""
+    db = get_db()
+    try:
+        # Получаем случайного активного курьера
+        couriers = db.execute(
+            'SELECT id, full_name FROM couriers WHERE is_active = 1 ORDER BY RANDOM() LIMIT 1'
+        ).fetchall()
+
+        if not couriers:
+            print(f"⚠️ Нет активных курьеров для заказа #{order_id}")
+            return None
+
+        courier_id = couriers[0]['id']
+        courier_name = couriers[0]['full_name']
+
+        # Создаем назначение
+        db.execute('''
+                   INSERT INTO order_assignments (order_id, courier_id, status)
+                   VALUES (?, ?, 'assigned')
+                   ''', (order_id, courier_id))
+
+        db.commit()
+        print(f"✅ Заказ #{order_id} назначен курьеру #{courier_id} ({courier_name})")
+
+        # Отправляем уведомление о назначении курьера
+        send_order_notification(order_id, 'assigned', courier_id)
+
+        return courier_id
+
+    except Exception as e:
+        print(f"❌ Ошибка назначения курьера: {e}")
+        return None
+    finally:
+        db.close()
 
 
 # ========== ГЛАВНЫЕ СТРАНИЦЫ ==========
@@ -469,10 +780,19 @@ def api_create_order():
 
         db.commit()
         order_id = cursor.lastrowid
+
+        # НАЗНАЧАЕМ КУРЬЕРА АВТОМАТИЧЕСКИ
+        if data.get('delivery_type') == 'courier':
+            courier_id = assign_order_to_courier(order_id, 'courier')
+        else:
+            # Для самовывоза тоже отправляем уведомление о создании заказа
+            send_order_notification(order_id, 'created')
+
         db.close()
 
         print(f"✅ Создан заказ #{order_id}")
         return jsonify({'success': True, 'order_id': order_id})
+
     except Exception as e:
         db.close()
         print(f"❌ Ошибка создания заказа: {e}")
@@ -580,6 +900,10 @@ def update_delivery_status():
             db.close()
             return jsonify({'success': False, 'error': 'Назначение не найдено'}), 404
 
+        # Получаем информацию о курьере для уведомления
+        courier = db.execute('SELECT full_name FROM couriers WHERE id = ?', (courier_id,)).fetchone()
+        courier_name = courier['full_name'] if courier else None
+
         photo_url = None
         if photo_data and status == 'delivered':
             try:
@@ -613,6 +937,9 @@ def update_delivery_status():
 
         db.commit()
         db.close()
+
+        # Отправляем уведомление о изменении статуса
+        send_order_notification(order_id, status, courier_id)
 
         return jsonify({'success': True, 'photo_url': photo_url})
     except Exception as e:
@@ -930,6 +1257,122 @@ def user_addresses():
         db.close()
 
 
+# ========== НОВЫЕ ENDPOINTS ДЛЯ БОТА ==========
+
+@app.route('/api/bot/register-user', methods=['POST'])
+def bot_register_user():
+    """Регистрация пользователя Telegram для уведомлений"""
+    try:
+        data = request.json
+        telegram_id = data.get('telegram_id')
+        username = data.get('username')
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+
+        if not telegram_id:
+            return jsonify({'success': False, 'error': 'Отсутствует telegram_id'}), 400
+
+        db = get_db()
+
+        # Проверяем существует ли пользователь
+        existing = db.execute('SELECT id FROM telegram_users WHERE telegram_id = ?', (telegram_id,)).fetchone()
+
+        if existing:
+            # Обновляем информацию
+            db.execute('''
+                       UPDATE telegram_users
+                       SET username   = ?,
+                           first_name = ?,
+                           last_name  = ?,
+                           last_seen  = CURRENT_TIMESTAMP
+                       WHERE telegram_id = ?
+                       ''', (username, first_name, last_name, telegram_id))
+        else:
+            # Создаем нового пользователя
+            db.execute('''
+                       INSERT INTO telegram_users (telegram_id, username, first_name, last_name)
+                       VALUES (?, ?, ?, ?)
+                       ''', (telegram_id, username, first_name, last_name))
+
+        db.commit()
+        db.close()
+
+        print(f"✅ Зарегистрирован пользователь Telegram: {first_name} (ID: {telegram_id})")
+        return jsonify({'success': True, 'message': 'Пользователь зарегистрирован'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bot/get-orders/<int:telegram_id>')
+def bot_get_user_orders(telegram_id):
+    """Получить заказы пользователя для бота"""
+    try:
+        db = get_db()
+
+        orders = db.execute('''
+                            SELECT o.id,
+                                   o.total_price,
+                                   o.status,
+                                   o.created_at,
+                                   a.status    as delivery_status,
+                                   c.full_name as courier_name
+                            FROM orders o
+                                     LEFT JOIN order_assignments a ON o.id = a.order_id
+                                     LEFT JOIN couriers c ON a.courier_id = c.id
+                            WHERE o.user_id = ?
+                            ORDER BY o.created_at DESC LIMIT 10
+                            ''', (telegram_id,)).fetchall()
+
+        result = [dict(order) for order in orders]
+
+        db.close()
+        return jsonify({'success': True, 'orders': result})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bot/order-status/<int:order_id>')
+def bot_get_order_status(order_id):
+    """Получить статус конкретного заказа для бота"""
+    try:
+        db = get_db()
+
+        order = db.execute('''
+                           SELECT o.*,
+                                  a.status    as delivery_status,
+                                  a.delivered_at,
+                                  c.full_name as courier_name,
+                                  c.phone     as courier_phone
+                           FROM orders o
+                                    LEFT JOIN order_assignments a ON o.id = a.order_id
+                                    LEFT JOIN couriers c ON a.courier_id = c.id
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
+
+        order_dict = dict(order)
+        try:
+            order_dict['items_list'] = json.loads(order_dict['items'])
+        except:
+            order_dict['items_list'] = []
+
+        if order_dict.get('delivery_address'):
+            try:
+                order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
+            except:
+                order_dict['delivery_address_obj'] = {}
+
+        db.close()
+        return jsonify({'success': True, 'order': order_dict})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ========== УТИЛИТЫ ==========
 @app.route('/api/test')
 def test():
@@ -976,6 +1419,10 @@ if __name__ == '__main__':
     print("   Магазин:     http://localhost:5000/")
     print("   Админка:     http://localhost:5000/admin")
     print("   Курьер:      http://localhost:5000/courier")
+    print("=" * 50)
+    print("📱 Система уведомлений:")
+    print(f"   Bot Webhook: {BOT_WEBHOOK_URL}")
+    print("   Статусы будут отправляться в Telegram бота")
     print("=" * 50)
     print("🔑 Данные для входа:")
     print("   Курьеры: courier1 / 123456")

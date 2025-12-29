@@ -511,6 +511,41 @@ class CourierApp {
         document.getElementById('todayDelivered').textContent = todayDelivered;
         document.getElementById('totalDelivered').textContent = data.completed_orders?.length || 0;
     }
+    async function updateOrderStatusWithNotification(orderId, status) {
+        try {
+            const response = await fetch('/api/courier/update-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    courier_id: this.currentCourier.id,
+                    status: status,
+                    send_notification: true  // Флаг для отправки уведомления
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Показываем уведомление курьеру
+                this.showNotification(`✅ Статус обновлен: ${getStatusText(status)}`, 'success');
+
+                // Обновляем список заказов
+                await this.loadOrders();
+
+                return true;
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Ошибка обновления статуса:', error);
+            this.showNotification(`❌ ${error.message}`, 'error');
+            return false;
+        }
+    }
+
 
     // Загрузка профиля
     async loadProfile() {
