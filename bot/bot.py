@@ -535,21 +535,22 @@ async def track_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать все заказы пользователя"""
     try:
-        # Определяем тип обновления
+        # Определяем тип обновления и получаем пользователя
         if update.message:
             user = update.effective_user
             chat_id = update.effective_chat.id
             message_id = update.message.message_id
             is_callback = False
+            query = None
         elif update.callback_query:
             query = update.callback_query
-            user = query.from_user
+            user = query.from_user  # Используем from_user для CallbackQuery
             chat_id = query.message.chat_id if query.message else user.id
             message_id = query.message.message_id if query.message else None
             is_callback = True
 
-            # ОТВЕТ НА CALLBACK - ФИКС ПРОБЛЕМЫ
-            await query.answer()  # Правильно - английская 'c' в 'callback'
+            # Отвечаем на callback запрос
+            await query.answer()
         else:
             logger.error("❌ Неизвестный тип обновления")
             return
@@ -574,7 +575,8 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not user_record:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин",
+                                          web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))]]
 
                 if is_callback:
                     # Уже ответили выше, теперь редактируем сообщение
@@ -612,7 +614,8 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not orders:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин",
+                                          web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))]]
 
                 if is_callback:
                     await query.edit_message_text(
@@ -629,7 +632,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                 return
 
-            # Формируем список заказов (ПРОСТОЙ ТЕКСТ без сложного форматирования)
+            # Формируем список заказов
             orders_text = "📋 *Ваши заказы:*\n\n"
 
             for order in orders:
@@ -638,14 +641,15 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Используем простой текст
                 orders_text += f"📦 Заказ #{order['id']}\n"
                 orders_text += f"💵 Сумма: {order['total_price']} ₽\n"
-                orders_text += f"📊 Статус: {order['status']}\n"
+                orders_text += f"📊 Статус: {get_order_status_text(order['status'])}\n"
                 orders_text += f"👤 Получатель: {order['recipient_name']}\n"
                 orders_text += f"📅 Дата: {order['created_at'][:10]}\n"
                 orders_text += f"🚚 Тип: {'Курьер' if order.get('delivery_type') == 'courier' else 'Самовывоз'}\n\n"
 
-            # Простая клавиатура
+            # Клавиатура
             keyboard = [
-                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"))],
+                [InlineKeyboardButton("🛒 Открыть магазин",
+                                      web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))],
                 [InlineKeyboardButton("🔄 Обновить", callback_data="refresh_orders")]
             ]
 
