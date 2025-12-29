@@ -21,8 +21,8 @@ app.config['UPLOAD_FOLDER'] = 'webapp/static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # Конфигурация для бота (добавьте в переменные окружения)
-BOT_WEBHOOK_URL = os.environ.get('BOT_WEBHOOK_URL', 'http://localhost:8080/notify')
-BOT_SECRET_TOKEN = os.environ.get('BOT_SECRET_TOKEN', 'your-secret-token-here')
+BOT_WEBHOOK_URL = os.environ.get('BOT_WEBHOOK_URL', 'https://telegram-shop-bot.onrender.com/notify')
+BOT_SECRET_TOKEN = os.environ.get('BOT_SECRET_TOKEN', '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50')
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
