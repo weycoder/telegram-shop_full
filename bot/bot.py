@@ -3,6 +3,8 @@ import logging
 import sqlite3
 import asyncio
 from datetime import datetime
+
+import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 from dotenv import load_dotenv
@@ -138,6 +140,152 @@ def save_user_for_notifications(telegram_id, username, first_name, last_name):
 
 
 # ========== СИСТЕМА УВЕДОМЛЕНИЙ О СТАТУСАХ ==========
+
+def escape_markdown_v2(text: str) -> str:
+    """Экранировать спецсимволы для MarkdownV2"""
+    if not text:
+        return ""
+
+    # Спецсимволы в Telegram MarkdownV2
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    for char in escape_chars:
+        text = text.replace(char, f'\\{char}')
+
+    return text
+
+
+async def process_notification_queue():
+    """Обработчик очереди уведомлений"""
+    while True:
+        try:
+            if not notification_queue.empty():
+                notification_data = notification_queue.get()
+
+                telegram_id = notification_data['telegram_id']
+                order_id = notification_data['order_id']
+                status = notification_data['status']
+                courier_name = notification_data.get('courier_name')
+                courier_phone = notification_data.get('courier_phone')
+
+                # Формируем сообщение
+                message = await format_notification_message(
+                    order_id, status, courier_name, courier_phone
+                )
+
+                # Отправляем сообщение
+                await bot_app.bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode='MarkdownV2',
+                    disable_web_page_preview=True
+                )
+
+                logger.info(f"✅ Уведомление для заказа #{order_id} отправлено")
+
+                # Помечаем как отправленное
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('''
+                               UPDATE order_notifications
+                               SET sent_at = CURRENT_TIMESTAMP,
+                                   success = 1
+                               WHERE order_id = ?
+                                 AND status = ?
+                               ''', (order_id, status))
+                conn.commit()
+                conn.close()
+
+                notification_queue.task_done()
+
+            await asyncio.sleep(1)  # Пауза между проверками
+
+        except telegram.error.BadRequest as e:
+            logger.error(f"❌ Ошибка отправки уведомления: {e}")
+
+            # Отправляем простой текст без Markdown
+            try:
+                simple_message = format_simple_notification(
+                    notification_data['order_id'],
+                    notification_data['status'],
+                    courier_name,
+                    courier_phone
+                )
+
+                await bot_app.bot.send_message(
+                    chat_id=telegram_id,
+                    text=simple_message
+                )
+
+                logger.info(f"✅ Уведомление отправлено простым текстом")
+
+            except Exception as e2:
+                logger.error(f"❌ Вторая попытка тоже не удалась: {e2}")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка обработки уведомления: {e}")
+            await asyncio.sleep(5)
+
+
+async def format_notification_message(order_id, status, courier_name=None, courier_phone=None):
+    """Форматировать сообщение уведомления"""
+    # Экранируем текст
+    order_text = escape_markdown_v2(f"Заказ #{order_id}")
+    courier_name_escaped = escape_markdown_v2(courier_name) if courier_name else ""
+    courier_phone_escaped = escape_markdown_v2(courier_phone) if courier_phone else ""
+
+    # Начинаем сообщение
+    message = f"📦 \\*{order_text}\\*\n\n"
+
+    # Добавляем статус с экранированием
+    status_messages = {
+        'created': "✅ \\*Заказ принят\\!\\*\nЗаказ успешно создан и передан на обработку\\.\n",
+        'assigned': "👤 \\*Курьер назначен\\!\\*\nЗаказ принят курьером и скоро будет доставлен\\.\n",
+        'picked_up': "🏪 \\*Курьер забрал заказ\\!\\*\nТовар у курьера, скоро будет доставлен\\.\n",
+        'on_the_way': "🚗 \\*Курьер в пути\\!\\*\nЗаказ уже едет к вам\\! Прибудет в ближайшее время\\.\n",
+        'arrived': "📍 \\*Курьер прибыл\\!\\*\nЗаказ уже у вас\\. Встречайте курьера\\!\n",
+        'delivered': "✅ \\*Заказ доставлен\\!\\*\nЗаказ успешно передан\\. Спасибо за покупку\\!\n"
+    }
+
+    message += status_messages.get(status, f"📊 \\*Статус изменен\\:* {escape_markdown_v2(status)}\n")
+
+    # Добавляем информацию о курьере
+    if courier_name_escaped:
+        message += f"\n👤 \\*Курьер\\:* {courier_name_escaped}\n"
+
+    if courier_phone_escaped:
+        message += f"\n📱 \\*Телефон курьера\\:* `{courier_phone_escaped}`\n"
+
+    # Добавляем кнопку отслеживания
+    message += f"\n📋 \\*Отследить заказ\\:* /track\\_{order_id}"
+
+    return message
+
+
+def format_simple_notification(order_id, status, courier_name=None, courier_phone=None):
+    """Форматировать простое сообщение без Markdown"""
+    message = f"📦 Заказ #{order_id}\n\n"
+
+    status_messages = {
+        'created': "✅ Заказ принят!\nЗаказ успешно создан и передан на обработку.\n",
+        'assigned': "👤 Курьер назначен!\nЗаказ принят курьером и скоро будет доставлен.\n",
+        'picked_up': "🏪 Курьер забрал заказ!\nТовар у курьера, скоро будет доставлен.\n",
+        'on_the_way': "🚗 Курьер в пути!\nЗаказ уже едет к вам! Прибудет в ближайшее время.\n",
+        'arrived': "📍 Курьер прибыл!\nЗаказ уже у вас. Встречайте курьера!\n",
+        'delivered': "✅ Заказ доставлен!\nЗаказ успешно передан. Спасибо за покупку!\n"
+    }
+
+    message += status_messages.get(status, f"📊 Статус изменен: {status}\n")
+
+    if courier_name:
+        message += f"\n👤 Курьер: {courier_name}\n"
+
+    if courier_phone:
+        message += f"\n📱 Телефон курьера: {courier_phone}\n"
+
+    message += f"\n📋 Отследить заказ: /track_{order_id}"
+
+    return message
+
 
 def send_order_status_notification(order_id, status, courier_name=None, courier_phone=None):
     """Добавить уведомление о статусе в очередь"""
@@ -396,95 +544,182 @@ async def track_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать все заказы пользователя"""
-    # Получаем пользователя разными способами
-    if hasattr(update, 'callback_query'):
-        user = update.callback_query.from_user
-        message = update.callback_query
-        is_callback = True
-    else:
-        user = update.effective_user
-        message = update.message
-        is_callback = False
-
-    conn = get_db_connection()
     try:
-        cursor = conn.cursor()
-
-        # Сначала находим user_id по telegram_id
-        cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (user.id,))
-        user_record = cursor.fetchone()
-
-        if not user_record:
-            response = "📭 *У вас пока нет заказов.*\n\n" \
-                       "Нажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
-
-            if is_callback:
-                await message.edit_message_text(response, parse_mode='Markdown')
-            else:
-                await message.reply_text(response, parse_mode='Markdown')
-            return
-
-        user_id = user_record['id']
-
-        cursor.execute('''
-                       SELECT o.id, o.total_price, o.status, o.created_at
-                       FROM orders o
-                       WHERE o.user_id = ?
-                       ORDER BY o.created_at DESC
-                       ''', (user_id,))
-
-        orders = cursor.fetchall()
-
-        if not orders:
-            response = "📭 *У вас пока нет заказов.*\n\n" \
-                       "Нажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
-
-            if is_callback:
-                await message.edit_message_text(response, parse_mode='Markdown')
-            else:
-                await message.reply_text(response, parse_mode='Markdown')
-            return
-
-        # Отправляем первый заказ отдельно
-        first_order = orders[0]
-        message_text = format_order_message(first_order)
-        keyboard = [[
-            InlineKeyboardButton(
-                f"📦 Отследить заказ #{first_order['id']}",
-                callback_data=f"track_{first_order['id']}"
-            )
-        ]]
-
-        if len(orders) > 1:
-            keyboard.append([
-                InlineKeyboardButton(
-                    "📋 Показать все заказы",
-                    callback_data=f"all_orders_{user_id}"
-                )
-            ])
-
-        if is_callback:
-            await message.edit_message_text(
-                message_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
+        # Определяем источник вызова
+        if update.callback_query:
+            query = update.callback_query
+            user = query.from_user
+            chat_id = query.message.chat_id if query.message else user.id
+            message_id = query.message.message_id if query.message else None
         else:
-            await message.reply_text(
-                message_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
+            query = None
+            user = update.effective_user
+            chat_id = update.effective_chat.id if update.effective_chat else user.id
+            message_id = None
+
+        if not user:
+            logger.error("❌ Не удалось определить пользователя")
+            return
+
+        logger.info(f"📋 Получение заказов для пользователя {user.id} ({user.username})")
+
+        # Подключаемся к базе данных
+        conn = sqlite3.connect("shop.db")
+        conn.row_factory = sqlite3.Row
+
+        try:
+            cursor = conn.cursor()
+
+            # Получаем user_id из таблицы users
+            cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (user.id,))
+            user_record = cursor.fetchone()
+
+            if not user_record:
+                response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
+
+                keyboard = [
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
+
+                if query:
+                    try:
+                        await query.answer()
+                        await query.edit_message_text(
+                            response,
+                            parse_mode='Markdown',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                    except:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=response,
+                            parse_mode='Markdown',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                else:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=response,
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                return
+
+            user_id = user_record['id']
+
+            # Получаем заказы пользователя
+            cursor.execute('''
+                           SELECT o.id,
+                                  o.total_price,
+                                  o.status,
+                                  o.created_at,
+                                  o.delivery_type,
+                                  o.recipient_name
+                           FROM orders o
+                           WHERE o.user_id = ?
+                           ORDER BY o.created_at DESC LIMIT 10
+                           ''', (user_id,))
+
+            orders = cursor.fetchall()
+
+            if not orders:
+                response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
+
+                keyboard = [
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
+
+                if query:
+                    try:
+                        await query.answer()
+                        await query.edit_message_text(
+                            response,
+                            parse_mode='Markdown',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                    except:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=response,
+                            parse_mode='Markdown',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                else:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=response,
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                return
+
+            # Формируем список заказов
+            orders_text = "📋 *Ваши заказы:*\n\n"
+
+            for order in orders:
+                order_dict = dict(order)
+
+                # Простой текст без сложного форматирования
+                orders_text += f"📦 *Заказ #{order_dict['id']}*\n"
+                orders_text += f"💵 Сумма: {order_dict['total_price']} ₽\n"
+                orders_text += f"📊 Статус: {get_order_status_text(order_dict['status'])}\n"
+                orders_text += f"👤 Получатель: {order_dict['recipient_name']}\n"
+                orders_text += f"📅 Дата: {order_dict['created_at'][:10]}\n"
+                orders_text += f"🚚 Доставка: {'Курьер' if order_dict.get('delivery_type') == 'courier' else 'Самовывоз'}\n\n"
+                orders_text += "────────────\n"
+
+            # Создаем простую клавиатуру
+            keyboard = [
+                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))],
+                [InlineKeyboardButton("🔄 Обновить", callback_data="refresh_orders")]
+            ]
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            # Отправляем/редактируем сообщение
+            if query:
+                try:
+                    await query.answer()
+                    await query.edit_message_text(
+                        orders_text,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown',
+                        disable_web_page_preview=True
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка редактирования: {e}")
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=orders_text,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown',
+                        disable_web_page_preview=True
+                    )
+            else:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=orders_text,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown',
+                    disable_web_page_preview=True
+                )
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка получения заказов: {e}")
+            error_msg = "❌ Произошла ошибка при загрузке заказов. Попробуйте позже."
+
+            if query:
+                try:
+                    await query.answer()
+                    await query.edit_message_text(error_msg, parse_mode='Markdown')
+                except:
+                    await context.bot.send_message(chat_id=chat_id, text=error_msg)
+            else:
+                await context.bot.send_message(chat_id=chat_id, text=error_msg)
+
+        finally:
+            conn.close()
 
     except Exception as e:
-        logger.error(f"Ошибка получения заказов: {e}")
-        error_msg = "❌ Произошла ошибка при загрузке заказов."
-        if is_callback:
-            await message.edit_message_text(error_msg, parse_mode='Markdown')
-        else:
-            await message.reply_text(error_msg, parse_mode='Markdown')
-    finally:
-        conn.close()
+        logger.error(f"❌ Критическая ошибка в myorders_command: {e}")
 
 
 def format_order_message(order):
@@ -497,6 +732,7 @@ def format_order_message(order):
 📊 Статус: {get_order_status_text(order['status'])}
 📅 Дата: {order['created_at'][:10]}
 """
+
 
 
 async def show_order_status(update, user_id, order_id):
@@ -790,5 +1026,6 @@ def main():
 
 
 if __name__ == '__main__':
+    asyncio.create_task(process_notification_queue())
     init_database()  # Добавьте эту строку
     main()
