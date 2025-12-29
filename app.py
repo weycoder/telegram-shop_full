@@ -174,12 +174,11 @@ def user_addresses():
     db = get_db()
 
     try:
-        # Для GET запроса проверяем user_id
         if request.method == 'GET':
             user_id = request.args.get('user_id', type=int)
 
-            if not user_id:
-                # Если нет user_id, возвращаем пустой список
+            if not user_id or user_id == 0:
+                # Для гостей или без user_id возвращаем пустой список
                 return jsonify([])
 
             addresses = db.execute('''
@@ -192,13 +191,26 @@ def user_addresses():
             return jsonify([dict(addr) for addr in addresses])
 
         elif request.method == 'POST':
-            # Для POST всегда должен быть user_id в JSON
             data = request.json
 
-            if 'user_id' not in data:
-                return jsonify({'success': False, 'error': 'Не указан user_id'}), 400
+            # Для гостей (user_id = 0) не сохраняем в БД
+            user_id = data.get('user_id', 0)
 
-            user_id = data['user_id']
+            if user_id == 0:
+                return jsonify({
+                    'success': True,
+                    'id': 0,
+                    'message': 'Адрес сохранен локально для гостя'
+                })
+
+            # Проверяем обязательные поля
+            required_fields = ['city', 'street', 'house', 'recipient_name']
+            for field in required_fields:
+                if not data.get(field):
+                    return jsonify({
+                        'success': False,
+                        'error': f'Отсутствует обязательное поле: {field}'
+                    }), 400
 
             # Если это первый адрес, делаем его адресом по умолчанию
             count = db.execute(
@@ -208,7 +220,7 @@ def user_addresses():
 
             is_default = 1 if count == 0 else data.get('is_default', 0)
 
-            # Сохраняем адрес
+            # Сохраняем адрес в БД
             cursor = db.execute('''
                                 INSERT INTO user_addresses
                                 (user_id, city, street, house, apartment, floor, doorcode, recipient_name, phone,
@@ -238,21 +250,6 @@ def user_addresses():
 
             db.commit()
             return jsonify({'success': True, 'id': cursor.lastrowid})
-
-        elif request.method == 'DELETE':
-            # Для DELETE тоже нужен user_id
-            user_id = request.args.get('user_id', type=int)
-            address_id = request.args.get('address_id', type=int)
-
-            if not user_id or not address_id:
-                return jsonify({'success': False, 'error': 'Не указан user_id или address_id'}), 400
-
-            db.execute(
-                'DELETE FROM user_addresses WHERE id = ? AND user_id = ?',
-                (address_id, user_id)
-            )
-            db.commit()
-            return jsonify({'success': True})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -322,28 +319,36 @@ def api_create_order():
     try:
         # Извлекаем данные о доставке
         delivery_type = data.get('delivery_type')
-        delivery_address = data.get('delivery_address')
-        pickup_point = data.get('pickup_point')
-        recipient_name = data.get('recipient_name')
-        phone_number = data.get('phone_number')
 
-        # Сохраняем заказ с информацией о доставке
+        # Обрабатываем адрес доставки
+        delivery_address = data.get('delivery_address', '{}')
+        if isinstance(delivery_address, str):
+            try:
+                delivery_address = json.loads(delivery_address)
+            except:
+                delivery_address = {}
+
+        # Извлекаем данные для сохранения
+        recipient_name = delivery_address.get('recipient_name', data.get('recipient_name', ''))
+        phone_number = delivery_address.get('phone', data.get('phone_number', ''))
+
+        # Сохраняем заказ
         cursor = db.execute('''
-            INSERT INTO orders 
-            (user_id, username, items, total_price, status, 
-             delivery_type, delivery_address, pickup_point, recipient_name, phone_number)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-        ''', (
-            data.get('user_id', 0),
-            data.get('username', 'Гость'),
-            json.dumps(data['items'], ensure_ascii=False),
-            data['total'],
-            delivery_type,
-            delivery_address,
-            pickup_point,
-            recipient_name,
-            phone_number
-        ))
+                            INSERT INTO orders
+                            (user_id, username, items, total_price, status,
+                             delivery_type, delivery_address, pickup_point, recipient_name, phone_number)
+                            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+                            ''', (
+                                data.get('user_id', 0),
+                                data.get('username', 'Гость'),
+                                json.dumps(data['items'], ensure_ascii=False),
+                                data['total'],
+                                delivery_type,
+                                json.dumps(delivery_address, ensure_ascii=False),
+                                data.get('pickup_point'),
+                                recipient_name,
+                                phone_number
+                            ))
 
         # Обновляем остатки товаров
         for item in data['items']:
@@ -359,6 +364,7 @@ def api_create_order():
         return jsonify({'success': True, 'order_id': order_id})
     except Exception as e:
         db.close()
+        print(f"❌ Ошибка создания заказа: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== API ДЛЯ АДМИНИСТРИРОВАНИЯ ТОЧЕК САМОВЫВОЗА ==========
