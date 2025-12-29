@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚚 Курьерская панель</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/courier.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="courier-body">
+    <!-- Экран авторизации -->
+    <div class="login-container" id="loginContainer">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <h1>Курьерская служба</h1>
+                <p>Войдите в систему для работы</p>
+            </div>
+            
+            <form class="login-form" id="loginForm">
+                <div class="form-group">
+                    <label for="username">
+                        <i class="fas fa-user"></i> Логин
+                    </label>
+                    <input type="text" id="username" name="username" 
+                           placeholder="Ваш логин" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i> Пароль
+                    </label>
+                    <input type="password" id="password" name="password" 
+                           placeholder="Ваш пароль" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+            </form>
+            
+            <div class="login-footer">
+                <p><strong>Тестовый доступ:</strong></p>
+                <p>Логин: <code>courier1</code> | Пароль: <code>123456</code></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Основной интерфейс курьера -->
+    <div class="courier-container" id="courierContainer" style="display: none;">
+        <!-- Шапка -->
+        <header class="courier-header">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            
+            <div class="header-title">
+                <h1 id="pageTitle">Активные заказы</h1>
+                <p id="courierGreeting">Добро пожаловать!</p>
+            </div>
+            
+            <div class="header-actions">
+                <button class="btn-notification" id="notificationBtn" title="Уведомления">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge" id="notificationCount">0</span>
+                </button>
+                <button class="btn-profile" id="profileBtn" title="Профиль">
+                    <i class="fas fa-user-circle"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Боковое меню -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-profile">
+                <div class="profile-avatar">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="profile-info">
+                    <h3 id="courierName">Курьер</h3>
+                    <p id="courierPhone">+7 (999) 123-45-67</p>
+                </div>
+            </div>
+            
+            <ul class="sidebar-menu">
+                <li>
+                    <a href="#" class="menu-item active" data-section="active">
+                        <i class="fas fa-clipboard-list"></i>
+                        <span>Активные заказы</span>
+                        <span class="menu-badge" id="activeBadge">0</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="menu-item" data-section="today">
+                        <i class="fas fa-calendar-day"></i>
+                        <span>На сегодня</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="menu-item" data-section="history">
+                        <i class="fas fa-history"></i>
+                        <span>История</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="menu-item" data-section="profile">
+                        <i class="fas fa-cog"></i>
+                        <span>Настройки</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="menu-item" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Выйти</span>
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="sidebar-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="todayDelivered">0</div>
+                    <div class="stat-label">Сегодня</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalDelivered">0</div>
+                    <div class="stat-label">Всего</div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Основной контент -->
+        <main class="main-content" id="mainContent">
+            <!-- Активные заказы -->
+            <section class="content-section active" id="activeSection">
+                <div class="section-header">
+                    <h2><i class="fas fa-clipboard-list"></i> Активные заказы</h2>
+                    <button class="btn-refresh" id="refreshActive">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                
+                <div class="orders-grid" id="activeOrdersGrid">
+                    <div class="loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Загрузка заказов...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Заказы на сегодня -->
+            <section class="content-section" id="todaySection">
+                <div class="section-header">
+                    <h2><i class="fas fa-calendar-day"></i> Заказы на сегодня</h2>
+                </div>
+                <div class="orders-grid" id="todayOrdersGrid"></div>
+            </section>
+
+            <!-- История -->
+            <section class="content-section" id="historySection">
+                <div class="section-header">
+                    <h2><i class="fas fa-history"></i> История доставок</h2>
+                </div>
+                <div class="orders-grid" id="historyOrdersGrid"></div>
+            </section>
+
+            <!-- Настройки профиля -->
+            <section class="content-section" id="profileSection">
+                <div class="section-header">
+                    <h2><i class="fas fa-cog"></i> Настройки профиля</h2>
+                </div>
+                <div class="profile-settings" id="profileSettings">
+                    <!-- Загружается через JS -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Модальное окно деталей заказа -->
+    <div class="modal-overlay" id="orderModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalOrderTitle">Заказ #</h3>
+                <button class="modal-close" id="closeOrderModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="orderModalBody">
+                <!-- Загружается через JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно подтверждения доставки -->
+    <div class="modal-overlay" id="deliveryModal">
+        <div class="modal delivery-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-check-circle"></i> Подтверждение доставки</h3>
+                <button class="modal-close" id="closeDeliveryModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="delivery-info">
+                    <p><strong>Заказ:</strong> <span id="deliveryOrderId">#</span></p>
+                    <p><strong>Адрес:</strong> <span id="deliveryAddress">...</span></p>
+                </div>
+                
+                <div class="photo-section">
+                    <h4><i class="fas fa-camera"></i> Фото подтверждения *</h4>
+                    
+                    <div class="photo-options">
+                        <button class="photo-btn" id="takePhotoBtn">
+                            <i class="fas fa-camera"></i>
+                            <span>Сделать фото</span>
+                        </button>
+                        <button class="photo-btn" id="choosePhotoBtn">
+                            <i class="fas fa-folder-open"></i>
+                            <span>Выбрать из галереи</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Скрытые инпуты -->
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+                    <input type="file" id="galleryInput" accept="image/*" style="display: none;">
+                    
+                    <!-- Превью фото -->
+                    <div class="photo-preview" id="photoPreview">
+                        <div class="preview-placeholder">
+                            <i class="fas fa-image"></i>
+                            <p>Фото еще не выбрано</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Кнопка удаления фото -->
+                    <button class="btn-remove-photo" id="removePhotoBtn" style="display: none;">
+                        <i class="fas fa-trash"></i> Удалить фото
+                    </button>
+                </div>
+                
+                <div class="notes-section">
+                    <h4><i class="fas fa-sticky-note"></i> Примечания</h4>
+                    <textarea id="deliveryNotes" 
+                              placeholder="Комментарии по доставке (опционально)" 
+                              rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelDeliveryBtn">
+                    Отмена
+                </button>
+                <button class="btn btn-primary" id="confirmDeliveryBtn" disabled>
+                    <i class="fas fa-check"></i> Подтвердить доставку
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно статуса "Забран" -->
+    <div class="modal-overlay" id="pickupModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-box-open"></i> Подтверждение получения</h3>
+                <button class="modal-close" id="closePickupModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Вы подтверждаете, что забрали заказ <strong id="pickupOrderId">#</strong> со склада?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelPickupBtn">
+                    Отмена
+                </button>
+                <button class="btn btn-primary" id="confirmPickupBtn">
+                    <i class="fas fa-check"></i> Да, забрал
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Уведомления -->
+    <div class="notifications-container" id="notificationsContainer"></div>
+
+    <script src="{{ url_for('static', filename='js/courier.js') }}"></script>
+</body>
+</html>

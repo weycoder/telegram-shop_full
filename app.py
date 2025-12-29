@@ -4,6 +4,9 @@ import json
 import uuid
 from flask import Flask, render_template, jsonify, request, send_from_directory, session
 from flask_cors import CORS
+import hashlib
+import base64
+import os
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -30,6 +33,12 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+# Хэширование пароля
+def hash_password(password):
+    salt = "telegram_shop_salt"
+    return f"sha256${salt}${hashlib.sha256((salt + password).encode()).hexdigest()}"
+
 # ========== БАЗА ДАННЫХ ==========
 def get_db():
     """Подключение к БД"""
@@ -42,6 +51,114 @@ def init_db():
     with app.app_context():
         db = get_db()
         cursor = db.cursor()
+
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS couriers
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           username
+                           TEXT
+                           UNIQUE
+                           NOT
+                           NULL,
+                           password_hash
+                           TEXT
+                           NOT
+                           NULL,
+                           full_name
+                           TEXT
+                           NOT
+                           NULL,
+                           phone
+                           TEXT
+                           NOT
+                           NULL,
+                           vehicle_type
+                           TEXT,
+                           is_active
+                           INTEGER
+                           DEFAULT
+                           1,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
+
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS order_assignments
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           order_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           courier_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           assigned_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           status
+                           TEXT
+                           DEFAULT
+                           'assigned',
+                           delivery_started
+                           TIMESTAMP,
+                           delivered_at
+                           TIMESTAMP,
+                           photo_proof
+                           TEXT,
+                           customer_signature
+                           TEXT,
+                           delivery_notes
+                           TEXT,
+                           FOREIGN
+                           KEY
+                       (
+                           order_id
+                       ) REFERENCES orders
+                       (
+                           id
+                       ),
+                           FOREIGN KEY
+                       (
+                           courier_id
+                       ) REFERENCES couriers
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
+        # Тестовые курьеры
+        if cursor.execute("SELECT COUNT(*) FROM couriers").fetchone()[0] == 0:
+            # Пароль: 123456 (sha256 hash)
+            cursor.executemany('''
+                               INSERT INTO couriers (username, password_hash, full_name, phone, vehicle_type)
+                               VALUES (?, ?, ?, ?, ?)
+                               ''', [
+                                   ('courier1',
+                                    'sha256$salt$8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92',
+                                    'Иван Курьеров', '+79991112233', 'car'),
+                                   ('courier2',
+                                    'sha256$salt$8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92',
+                                    'Петр Доставкин', '+79992223344', 'bike'),
+                                   ('courier3',
+                                    'sha256$salt$8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92',
+                                    'Алексей Развозов', '+79993334455', 'foot')
+                               ])
 
         # Таблица товаров
         cursor.execute('''
@@ -339,6 +456,338 @@ def get_pickup_points():
     finally:
         db.close()
 
+
+@app.route('/api/courier/login', methods=['POST'])
+def courier_login():
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Введите логин и пароль'}), 400
+
+        db = get_db()
+        courier = db.execute(
+            'SELECT * FROM couriers WHERE username = ? AND is_active = 1',
+            (username,)
+        ).fetchone()
+        db.close()
+
+        if not courier:
+            return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+        # Проверяем пароль (упрощенная проверка для демо)
+        expected_hash = f"sha256$salt${hashlib.sha256(('salt' + password).encode()).hexdigest()}"
+        if courier['password_hash'] != expected_hash:
+            return jsonify({'success': False, 'error': 'Неверный пароль'}), 401
+
+        # Успешная авторизация
+        courier_data = dict(courier)
+        courier_data.pop('password_hash', None)  # Не отправляем хэш пароля
+
+        return jsonify({
+            'success': True,
+            'courier': courier_data,
+            'token': f"courier_{courier['id']}_{datetime.now().timestamp()}"
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Получить заказы для курьера
+@app.route('/api/courier/orders', methods=['GET'])
+def get_courier_orders():
+    try:
+        courier_id = request.args.get('courier_id', type=int)
+
+        if not courier_id:
+            return jsonify({'success': False, 'error': 'Не указан ID курьера'}), 400
+
+        db = get_db()
+
+        # Активные заказы (назначенные курьеру)
+        active_orders = db.execute('''
+                                   SELECT o.*,
+                                          a.status as assignment_status,
+                                          a.assigned_at,
+                                          a.delivery_started,
+                                          a.delivered_at
+                                   FROM orders o
+                                            JOIN order_assignments a ON o.id = a.order_id
+                                   WHERE a.courier_id = ?
+                                     AND a.status IN ('assigned', 'picked_up')
+                                     AND o.status = 'pending'
+                                   ORDER BY a.assigned_at DESC
+                                   ''', (courier_id,)).fetchall()
+
+        # Выполненные заказы
+        completed_orders = db.execute('''
+                                      SELECT o.*,
+                                             a.status as assignment_status,
+                                             a.assigned_at,
+                                             a.delivered_at,
+                                             a.photo_proof
+                                      FROM orders o
+                                               JOIN order_assignments a ON o.id = a.order_id
+                                      WHERE a.courier_id = ?
+                                        AND a.status = 'delivered'
+                                      ORDER BY a.delivered_at DESC LIMIT 50
+                                      ''', (courier_id,)).fetchall()
+
+        # Заказы на сегодня
+        today_orders = db.execute('''
+                                  SELECT o.*, a.status as assignment_status
+                                  FROM orders o
+                                           JOIN order_assignments a ON o.id = a.order_id
+                                  WHERE a.courier_id = ?
+                                    AND DATE (a.assigned_at) = DATE ('now')
+                                  ORDER BY a.assigned_at DESC
+                                  ''', (courier_id,)).fetchall()
+
+        db.close()
+
+        return jsonify({
+            'success': True,
+            'active_orders': [dict(order) for order in active_orders],
+            'completed_orders': [dict(order) for order in completed_orders],
+            'today_orders': [dict(order) for order in today_orders]
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Назначить заказ курьеру (для админа)
+@app.route('/api/courier/assign-order', methods=['POST'])
+def assign_order_to_courier():
+    try:
+        data = request.json
+        order_id = data.get('order_id')
+        courier_id = data.get('courier_id')
+
+        if not order_id or not courier_id:
+            return jsonify({'success': False, 'error': 'Не указан ID заказа или курьера'}), 400
+
+        db = get_db()
+
+        # Проверяем, что заказ существует и не назначен
+        order = db.execute(
+            'SELECT * FROM orders WHERE id = ? AND status = "pending"',
+            (order_id,)
+        ).fetchone()
+
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден или уже обработан'}), 404
+
+        # Проверяем курьера
+        courier = db.execute(
+            'SELECT * FROM couriers WHERE id = ? AND is_active = 1',
+            (courier_id,)
+        ).fetchone()
+
+        if not courier:
+            return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+        # Назначаем заказ
+        cursor = db.execute('''
+                            INSERT INTO order_assignments (order_id, courier_id, status)
+                            VALUES (?, ?, 'assigned')
+                            ''', (order_id, courier_id))
+
+        db.commit()
+        db.close()
+
+        return jsonify({'success': True, 'assignment_id': cursor.lastrowid})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Обновить статус доставки
+@app.route('/api/courier/update-status', methods=['POST'])
+def update_delivery_status():
+    try:
+        data = request.json
+        assignment_id = data.get('assignment_id')
+        order_id = data.get('order_id')
+        courier_id = data.get('courier_id')
+        status = data.get('status')
+        photo_data = data.get('photo_data')  # base64 encoded
+        notes = data.get('notes', '')
+
+        db = get_db()
+
+        # Проверяем права курьера
+        assignment = db.execute('''
+                                SELECT *
+                                FROM order_assignments
+                                WHERE id = ?
+                                  AND courier_id = ?
+                                  AND order_id = ?
+                                ''', (assignment_id, courier_id, order_id)).fetchone()
+
+        if not assignment:
+            return jsonify({'success': False, 'error': 'Назначение не найдено'}), 404
+
+        # Сохраняем фото если есть
+        photo_url = None
+        if photo_data and status == 'delivered':
+            # Декодируем base64 и сохраняем файл
+            try:
+                # Удаляем префикс data:image/...;base64,
+                if ',' in photo_data:
+                    photo_data = photo_data.split(',')[1]
+
+                # Декодируем
+                image_data = base64.b64decode(photo_data)
+
+                # Генерируем имя файла
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"delivery_{order_id}_{timestamp}.jpg"
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+                # Сохраняем файл
+                with open(filepath, 'wb') as f:
+                    f.write(image_data)
+
+                photo_url = f"/static/uploads/{filename}"
+
+            except Exception as e:
+                print(f"Ошибка сохранения фото: {e}")
+
+        # Обновляем статус
+        if status == 'picked_up':
+            db.execute('''
+                       UPDATE order_assignments
+                       SET status           = ?,
+                           delivery_started = CURRENT_TIMESTAMP
+                       WHERE id = ?
+                       ''', (status, assignment_id))
+
+        elif status == 'delivered':
+            db.execute('''
+                       UPDATE order_assignments
+                       SET status         = ?,
+                           delivered_at   = CURRENT_TIMESTAMP,
+                           photo_proof    = ?,
+                           delivery_notes = ?
+                       WHERE id = ?
+                       ''', (status, photo_url, notes, assignment_id))
+
+            # Обновляем статус заказа
+            db.execute('''
+                       UPDATE orders
+                       SET status = 'processing'
+                       WHERE id = ?
+                       ''', (order_id,))
+
+        else:
+            db.execute('''
+                       UPDATE order_assignments
+                       SET status = ?
+                       WHERE id = ?
+                       ''', (status, assignment_id))
+
+        db.commit()
+        db.close()
+
+        return jsonify({'success': True, 'photo_url': photo_url})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Загрузить фото (отдельный endpoint)
+@app.route('/api/courier/upload-photo', methods=['POST'])
+def upload_delivery_photo():
+    try:
+        if 'photo' not in request.files:
+            return jsonify({'success': False, 'error': 'Файл не выбран'}), 400
+
+        file = request.files['photo']
+        order_id = request.form.get('order_id', 'unknown')
+
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'Файл не выбран'}), 400
+
+        # Проверяем тип файла
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        if not ('.' in file.filename and
+                file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({'success': False, 'error': 'Недопустимый формат файла'}), 400
+
+        # Генерируем имя файла
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"delivery_{order_id}_{timestamp}.{file.filename.rsplit('.', 1)[1].lower()}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Сохраняем файл
+        file.save(filepath)
+
+        # URL для доступа
+        photo_url = f"/static/uploads/{filename}"
+
+        return jsonify({
+            'success': True,
+            'photo_url': photo_url,
+            'filename': filename
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Получить детали заказа
+@app.route('/api/courier/order/<int:order_id>')
+def get_order_details(order_id):
+    try:
+        db = get_db()
+
+        order = db.execute('''
+                           SELECT o.*,
+                                  a.status    as assignment_status,
+                                  a.assigned_at,
+                                  a.delivery_started,
+                                  a.delivered_at,
+                                  a.photo_proof,
+                                  a.delivery_notes,
+                                  c.full_name as courier_name
+                           FROM orders o
+                                    LEFT JOIN order_assignments a ON o.id = a.order_id
+                                    LEFT JOIN couriers c ON a.courier_id = c.id
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
+
+        # Декодируем items
+        order_dict = dict(order)
+        try:
+            order_dict['items_list'] = json.loads(order_dict['items'])
+        except:
+            order_dict['items_list'] = []
+
+        # Декодируем адрес доставки если есть
+        if order_dict.get('delivery_address'):
+            try:
+                order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
+            except:
+                order_dict['delivery_address_obj'] = {}
+
+        db.close()
+
+        return jsonify({'success': True, 'order': order_dict})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/courier')
+def courier_panel():
+    """Курьерская панель"""
+    return render_template('courier.html')
 
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
