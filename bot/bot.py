@@ -103,35 +103,21 @@ def init_database():
     conn.close()
     logger.info("✅ База данных инициализирована")
 
+
 def save_user_for_notifications(telegram_id, username, first_name, last_name):
-    """Сохранить пользователя для уведомлений"""
-    conn = get_db_connection()
+    """Сохраняем пользователя для уведомлений"""
+    conn = sqlite3.connect("shop.db")
+    cursor = conn.cursor()
+
     try:
-        cursor = conn.cursor()
-
-        # Проверяем существует ли пользователь
-        cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,))
-        user = cursor.fetchone()
-
-        if not user:
-            # Создаем пользователя
-            cursor.execute('''
-                           INSERT INTO users (telegram_id, username, first_name, last_name, created_at)
-                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                           ''', (telegram_id, username, first_name, last_name))
-        else:
-            # Обновляем информацию
-            cursor.execute('''
-                           UPDATE users
-                           SET username   = ?,
-                               first_name = ?,
-                               last_name  = ?,
-                               last_seen  = CURRENT_TIMESTAMP
-                           WHERE telegram_id = ?
-                           ''', (username, first_name, last_name, telegram_id))
+        # Сохраняем в таблицу users (или telegram_users)
+        cursor.execute('''
+            INSERT OR REPLACE INTO users (telegram_id, username, first_name, last_name, last_seen)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (telegram_id, username, first_name, last_name))
 
         conn.commit()
-        logger.info(f"✅ Пользователь {telegram_id} сохранен для уведомлений")
+        logger.info(f"✅ Пользователь {first_name} сохранен для уведомлений (telegram_id: {telegram_id})")
 
     except Exception as e:
         logger.error(f"❌ Ошибка сохранения пользователя: {e}")
@@ -461,11 +447,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Сохраняем в контексте
     context.user_data['telegram_id'] = user.id
 
+    # ВАЖНО: Передаем user_id и username в URL веб-приложения!
+    web_app_url = f"{WEBAPP_URL}/webapp?user_id={user.id}&username={user.username or user.first_name}"
+
     # Клавиатура с Web App кнопкой
     keyboard = [
         [InlineKeyboardButton(
             text="🛒 ОТКРЫТЬ МАГАЗИН",
-            web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp")
+            web_app=WebAppInfo(url=web_app_url)  # Используем URL с параметрами
         )],
         [InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders"),
          InlineKeyboardButton("🚚 ТРЕК ЗАКАЗА", callback_data="track_order")],
@@ -474,17 +463,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Если пользователь админ
     if user.id in ADMIN_IDS:
+        admin_url = f"{WEBAPP_URL}/admin?user_id={user.id}"
         keyboard.append([
             InlineKeyboardButton(
                 text="👨‍💼 ПАНЕЛЬ АДМИНИСТРАТОРА",
-                web_app=WebAppInfo(url=f"{WEBAPP_URL}/admin")
+                web_app=WebAppInfo(url=admin_url)
             )
         ])
 
     # Если пользователь курьер
     if is_user_courier(user.id):
+        courier_url = f"{WEBAPP_URL}/courier?user_id={user.id}"
         keyboard.append([
-            InlineKeyboardButton("🚚 ПАНЕЛЬ КУРЬЕРА", web_app=WebAppInfo(url=f"{WEBAPP_URL}/courier"))
+            InlineKeyboardButton("🚚 ПАНЕЛЬ КУРЬЕРА", web_app=WebAppInfo(url=courier_url))
         ])
 
     welcome_text = f"""

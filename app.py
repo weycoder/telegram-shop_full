@@ -586,7 +586,7 @@ def send_order_notification(order_id, status, courier_id=None):
     finally:
         if db:
             db.close()
-            
+
 def assign_order_to_courier(order_id, delivery_type):
     """Автоматически назначить заказ курьеру"""
     db = get_db()
@@ -696,6 +696,18 @@ def api_categories():
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
     data = request.json
+
+    # ДОБАВЬТЕ ЛОГИРОВАНИЕ
+    print("=" * 50)
+    print("📦 ПОЛУЧЕН ЗАПРОС НА СОЗДАНИЕ ЗАКАЗА")
+    print("=" * 50)
+    print(f"📋 user_id: {data.get('user_id', 'НЕТ!')}")
+    print(f"👤 username: {data.get('username', 'НЕТ!')}")
+    print(f"📦 items: {len(data.get('items', []))} товаров")
+    print(f"💰 total: {data.get('total', 0)} руб.")
+    print(f"🚚 delivery_type: {data.get('delivery_type')}")
+    print("=" * 50)
+
     db = get_db()
     try:
         delivery_type = data.get('delivery_type')
@@ -711,14 +723,53 @@ def api_create_order():
         recipient_name = delivery_address.get('recipient_name', data.get('recipient_name', ''))
         phone_number = delivery_address.get('phone', data.get('phone_number', ''))
 
+        # ПОЛУЧАЕМ user_id и username
+        user_id = data.get('user_id', 0)
+        username = data.get('username', 'Гость')
+
+        # ПРОВЕРКА: если user_id = 0, ищем другой способ
+        if user_id == 0:
+            print("⚠️ ВНИМАНИЕ: user_id = 0! Пробуем альтернативные методы...")
+
+            # Вариант 1: Ищем в заголовках Telegram Web App
+            telegram_data = request.headers.get('X-Telegram-Init-Data')
+            if telegram_data:
+                try:
+                    import urllib.parse
+                    parsed = urllib.parse.parse_qs(telegram_data)
+                    if 'user' in parsed:
+                        user_json = json.loads(parsed['user'][0])
+                        user_id = user_json.get('id', 0)
+                        username = user_json.get('username', username)
+                        print(f"✅ Найден telegram_id из Web App: {user_id}")
+                except Exception as e:
+                    print(f"⚠️ Не удалось распарсить Telegram данные: {e}")
+
+            # Вариант 2: Ищем по username в базе
+            if user_id == 0 and username != 'Гость':
+                user_record = db.execute('SELECT telegram_id FROM telegram_users WHERE username = ?',
+                                         (username,)).fetchone()
+                if user_record:
+                    user_id = user_record['telegram_id']
+                    print(f"✅ Найден user_id по username: {user_id}")
+
+            # Вариант 3: Если все еще 0, генерируем временный ID
+            if user_id == 0:
+                import random
+                user_id = random.randint(100000000, 999999999)
+                print(f"⚠️ Сгенерирован временный user_id: {user_id}")
+
+        print(f"👤 Используемый user_id: {user_id}")
+        print(f"👤 Используемый username: {username}")
+
         cursor = db.execute('''
                             INSERT INTO orders (user_id, username, items, total_price, status, delivery_type,
                                                 delivery_address, pickup_point, payment_method, recipient_name,
                                                 phone_number)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
-                                data.get('user_id', 0),
-                                data.get('username', 'Гость'),
+                                user_id,  # Используем исправленный user_id
+                                username,  # Используем исправленный username
                                 json.dumps(data['items'], ensure_ascii=False),
                                 data['total'],
                                 'pending',
@@ -739,18 +790,23 @@ def api_create_order():
         # НАЗНАЧАЕМ КУРЬЕРА АВТОМАТИЧЕСКИ
         if data.get('delivery_type') == 'courier':
             courier_id = assign_order_to_courier(order_id, 'courier')
+            print(f"✅ Курьер назначен на заказ #{order_id}")
         else:
             # Для самовывоза тоже отправляем уведомление о создании заказа
             send_order_notification(order_id, 'created')
+            print(f"✅ Уведомление о создании заказа #{order_id} отправлено")
 
         db.close()
 
-        print(f"✅ Создан заказ #{order_id}")
+        print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
+        print("=" * 50)
         return jsonify({'success': True, 'order_id': order_id})
 
     except Exception as e:
         db.close()
         print(f"❌ Ошибка создания заказа: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

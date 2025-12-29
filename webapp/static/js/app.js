@@ -42,6 +42,34 @@ class TelegramShop {
         console.log('✅ Магазин инициализирован');
     }
 
+    function getTelegramParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return {
+            userId: urlParams.get('user_id') || 0,
+            username: urlParams.get('username') || 'Гость'
+        };
+    }
+
+    // При создании заказа
+    async function createOrder(orderData) {
+        const params = getTelegramParams();
+
+        // Добавляем данные из Telegram
+        orderData.user_id = parseInt(params.userId);
+        orderData.username = params.username;
+
+        console.log('📦 Создание заказа с данными:', orderData);
+
+        const response = await fetch('/api/create-order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(orderData)
+        });
+
+        return await response.json();
+    }
+
+
     bindEvents() {
         console.log('🔗 Назначаем обработчики событий...');
 
@@ -58,6 +86,21 @@ class TelegramShop {
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('cart-overlay')) this.closeCart();
             if (e.target.classList.contains('product-modal-overlay')) this.closeProductModal();
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const params = getTelegramParams();
+            console.log('✅ Параметры из Telegram:', params);
+
+            // Сохраняем глобально
+            window.telegramUserId = params.userId;
+            window.telegramUsername = params.username;
+
+            // Показываем приветствие
+            if (params.userId && params.userId !== '0') {
+                document.getElementById('welcome-text').innerText =
+                    `👋 Привет, ${params.username}!`;
+            }
         });
 
         // Escape для закрытия
