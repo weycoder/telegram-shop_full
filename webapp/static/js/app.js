@@ -351,33 +351,59 @@ class TelegramShop {
         this.loadProducts(category);
     }
 
-    // ========== ПРОСМОТР ТОВАРА ==========
-    async viewProduct(productId) {
+    async function viewProduct(productId) {
         try {
-            console.log(`👁️ Загрузка товара #${productId}...`);
-
-            // Показываем загрузку в модальном окне
-            this.openProductModalLoading();
+            // Добавьте console.log для отладки
+            console.log('🔄 Загрузка товара ID:', productId);
 
             const response = await fetch(`/api/products/${productId}`);
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Узнаем что именно возвращает сервер
+                const errorText = await response.text();
+                console.error('❌ Сервер вернул:', response.status, errorText);
+
+                // Если 404 - проверяем эндпоинт
+                if (response.status === 404) {
+                    console.log('🛠️ Проверяем доступность API:');
+                    await this.testAllEndpoints();
+                }
+
+                throw new Error(`Не удалось загрузить товар: ${response.status}`);
             }
 
             const product = await response.json();
+            console.log('✅ Товар получен:', product);
 
-            if (product.error) {
-                throw new Error(product.error);
-            }
-
-            this.currentProduct = product;
-            this.renderProductModal(product);
+            // Дальше ваш код показа товара...
 
         } catch (error) {
-            console.error('❌ Ошибка загрузки товара:', error);
-            this.showNotification('❌ Не удалось загрузить товар', 'error');
-            this.closeProductModal();
+            console.error('🚨 Ошибка:', error);
+            alert('Товар временно недоступен');
+        }
+    }
+
+    // Добавьте эту функцию для теста всех эндпоинтов
+    async function testAllEndpoints() {
+        const endpoints = [
+            '/api/products',
+            '/api/products/1',
+            '/api/products/2',
+            '/api/products/3',
+            '/api/products/4',
+            '/api/products/5',
+            '/api/products/6',
+            '/api/categories',
+            '/api/test'
+        ];
+
+        for (let endpoint of endpoints) {
+            try {
+                const response = await fetch(endpoint);
+                console.log(`${endpoint}: ${response.status} ${response.ok ? '✅' : '❌'}`);
+            } catch (e) {
+                console.log(`${endpoint}: ❌ Ошибка ${e.message}`);
+            }
         }
     }
 
