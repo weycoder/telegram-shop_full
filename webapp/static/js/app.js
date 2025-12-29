@@ -17,6 +17,23 @@ class TelegramShop {
         console.log('🛍️ Telegram Shop создан');
     }
 
+    getTelegramParams() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            this.userId = parseInt(urlParams.get('user_id')) || 0;
+            this.username = urlParams.get('username') || 'Гость';
+
+            console.log('✅ Параметры Telegram:', {
+                userId: this.userId,
+                username: this.username
+            });
+        } catch (error) {
+            console.error('❌ Ошибка получения параметров Telegram:', error);
+            this.userId = 0;
+            this.username = 'Гость';
+        }
+    }
+
     async init() {
         if (this.isInitialized) return;
 
@@ -41,15 +58,6 @@ class TelegramShop {
         this.isInitialized = true;
         console.log('✅ Магазин инициализирован');
     }
-
-    function getTelegramParams() {
-        const urlParams = new URLSearchParams(window.location.search);
-        return {
-            userId: urlParams.get('user_id') || 0,
-            username: urlParams.get('username') || 'Гость'
-        };
-    }
-
     // При создании заказа
     async function createOrder(orderData) {
         const params = getTelegramParams();
