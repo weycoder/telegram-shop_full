@@ -501,6 +501,8 @@
     <script>
         let currentCourier = null;
         let currentToken = null;
+        let currentOrderId = null;
+        let currentPhoto = null;
 
         // Функция входа
         async function login() {
@@ -632,7 +634,39 @@
 
                     data.active_orders.forEach(order => {
                         const assignment = order.assignment_status || 'assigned';
-                        const items = order.items_list || JSON.parse(order.items || '[]');
+
+                        // Получаем детальную информацию об адресе
+                        let addressText = 'Адрес не указан';
+                        if (order.delivery_address_obj) {
+                            const addr = order.delivery_address_obj;
+                            if (addr.city || addr.street) {
+                                addressText = `${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
+                                if (addr.apartment) addressText += `, кв. ${addr.apartment}`;
+                            }
+                        } else if (order.delivery_address) {
+                            try {
+                                const addr = JSON.parse(order.delivery_address);
+                                if (addr.city || addr.street) {
+                                    addressText = `${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
+                                    if (addr.apartment) addressText += `, кв. ${addr.apartment}`;
+                                }
+                            } catch (e) {
+                                addressText = order.delivery_address;
+                            }
+                        }
+
+                        // Получаем товары
+                        let itemsCount = 0;
+                        if (order.items_list && Array.isArray(order.items_list)) {
+                            itemsCount = order.items_list.length;
+                        } else if (order.items) {
+                            try {
+                                const items = JSON.parse(order.items);
+                                itemsCount = items.length;
+                            } catch (e) {
+                                itemsCount = 0;
+                            }
+                        }
 
                         html += `
                             <div class="order-card">
@@ -646,7 +680,7 @@
                                 <div class="order-info">
                                     <div class="info-item">
                                         <span class="info-label">Сумма:</span>
-                                        <span class="info-value">${order.total_price} ₽</span>
+                                        <span class="info-value">${order.total_price || 0} ₽</span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Получатель:</span>
@@ -657,8 +691,12 @@
                                         <span class="info-value">${order.phone_number || 'Не указан'}</span>
                                     </div>
                                     <div class="info-item">
+                                        <span class="info-label">Адрес:</span>
+                                        <span class="info-value" style="font-size: 12px;">${addressText}</span>
+                                    </div>
+                                    <div class="info-item">
                                         <span class="info-label">Товаров:</span>
-                                        <span class="info-value">${items.length} шт.</span>
+                                        <span class="info-value">${itemsCount} шт.</span>
                                     </div>
                                 </div>
 
@@ -709,6 +747,15 @@
                         const deliveredDate = order.delivered_at ?
                             new Date(order.delivered_at).toLocaleDateString('ru-RU') : 'Не указана';
 
+                        // Получаем детальную информацию об адресе
+                        let addressText = 'Адрес не указан';
+                        if (order.delivery_address_obj) {
+                            const addr = order.delivery_address_obj;
+                            if (addr.city || addr.street) {
+                                addressText = `${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
+                            }
+                        }
+
                         html += `
                             <div class="order-card">
                                 <div class="order-header">
@@ -719,7 +766,7 @@
                                 <div class="order-info">
                                     <div class="info-item">
                                         <span class="info-label">Сумма:</span>
-                                        <span class="info-value">${order.total_price} ₽</span>
+                                        <span class="info-value">${order.total_price || 0} ₽</span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Дата доставки:</span>
@@ -728,6 +775,10 @@
                                     <div class="info-item">
                                         <span class="info-label">Получатель:</span>
                                         <span class="info-value">${order.recipient_name || 'Не указан'}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Адрес:</span>
+                                        <span class="info-value" style="font-size: 12px;">${addressText}</span>
                                     </div>
                                 </div>
 
@@ -783,7 +834,7 @@
                                             <strong>Заказ #${order.id}</strong><br>
                                             <small>${order.recipient_name || 'Не указан'} • ${date}</small>
                                         </div>
-                                        <div style="font-weight: bold;">${order.total_price} ₽</div>
+                                        <div style="font-weight: bold;">${order.total_price || 0} ₽</div>
                                     </div>
                                 </div>
                             `;
@@ -828,11 +879,24 @@
                         <div style="margin-bottom: 20px;">
                             <h3 style="margin-bottom: 15px;">📋 Информация о заказе</h3>
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                                <p><strong>Статус:</strong> ${getStatusText(order.status)}</p>
-                                <p><strong>Сумма:</strong> ${order.total_price} ₽</p>
+                                <p><strong>Номер заказа:</strong> #${order.id}</p>
+                                <p><strong>Статус заказа:</strong> ${getStatusText(order.status || order.assignment_status)}</p>
+                                <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
+                                <p><strong>Тип доставки:</strong> ${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</p>
+                                <p><strong>Способ оплаты:</strong> ${order.payment_method === 'cash' ? 'Наличные' : 'Перевод'}</p>
+                                <p><strong>Дата создания:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
+                            </div>
+                        </div>
+                    `;
+
+                    // Информация о клиенте
+                    html += `
+                        <div style="margin-bottom: 20px;">
+                            <h3 style="margin-bottom: 15px;">👤 Информация о клиенте</h3>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                 <p><strong>Получатель:</strong> ${order.recipient_name || 'Не указан'}</p>
                                 <p><strong>Телефон:</strong> ${order.phone_number || 'Не указан'}</p>
-                                <p><strong>Дата создания:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
+                                ${order.username ? `<p><strong>Username:</strong> @${order.username}</p>` : ''}
                             </div>
                         </div>
                     `;
@@ -842,10 +906,11 @@
                             <div style="margin-bottom: 20px;">
                                 <h3 style="margin-bottom: 15px;">📍 Адрес доставки</h3>
                                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                                    <p>${address.city || ''}, ${address.street || ''} ${address.house || ''}</p>
-                                    ${address.apartment ? `<p>Квартира: ${address.apartment}</p>` : ''}
-                                    ${address.floor ? `<p>Этаж: ${address.floor}</p>` : ''}
-                                    ${address.doorcode ? `<p>Код домофона: ${address.doorcode}</p>` : ''}
+                                    <p><strong>Город:</strong> ${address.city || 'Не указан'}</p>
+                                    <p><strong>Улица:</strong> ${address.street || 'Не указана'} ${address.house || ''}</p>
+                                    ${address.apartment ? `<p><strong>Квартира:</strong> ${address.apartment}</p>` : ''}
+                                    ${address.floor ? `<p><strong>Этаж:</strong> ${address.floor}</p>` : ''}
+                                    ${address.doorcode ? `<p><strong>Домофон:</strong> ${address.doorcode}</p>` : ''}
                                 </div>
                             </div>
                         `;
@@ -858,10 +923,21 @@
                                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                     ${items.map(item => `
                                         <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6;">
-                                            <strong>${item.name}</strong><br>
-                                            <small>${item.quantity} × ${item.price} ₽ = ${item.quantity * item.price} ₽</small>
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <div>
+                                                    <strong>${item.name}</strong><br>
+                                                    <small>${item.quantity} × ${item.price} ₽</small>
+                                                </div>
+                                                <div style="font-weight: bold;">${item.quantity * item.price} ₽</div>
+                                            </div>
                                         </div>
                                     `).join('')}
+                                    <div style="margin-top: 10px; padding-top: 10px; border-top: 2px solid #ddd;">
+                                        <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                                            <div>Итого:</div>
+                                            <div>${order.total_price || 0} ₽</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -870,9 +946,20 @@
                     if (order.delivery_notes) {
                         html += `
                             <div style="margin-bottom: 20px;">
-                                <h3 style="margin-bottom: 15px;">📝 Примечания к доставке</h3>
+                                <h3 style="margin-bottom: 15px;">📝 Примечания курьера</h3>
                                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                     <p>${order.delivery_notes}</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    if (order.photo_proof) {
+                        html += `
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 15px;">📷 Фото подтверждения</h3>
+                                <div style="text-align: center;">
+                                    <img src="${order.photo_proof}" alt="Фото доставки" style="max-width: 100%; border-radius: 8px; border: 1px solid #ddd;">
                                 </div>
                             </div>
                         `;
@@ -917,70 +1004,139 @@
         }
 
         // Показать форму доставки с фото
-        function showDeliveryForm(orderId) {
-            let html = `
-                <div class="photo-upload">
-                    <h4 style="margin-bottom: 15px;">📸 Подтверждение доставки</h4>
+        async function showDeliveryForm(orderId) {
+            currentOrderId = orderId;
+            currentPhoto = null;
 
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 8px;">Примечания к доставке:</label>
-                        <textarea id="delivery-notes" style="width: 100%; padding: 10px; border-radius: 6px; border: 2px solid #e0e0e0;" rows="3" placeholder="Клиент был дома, передал лично..."></textarea>
-                    </div>
+            // Загружаем информацию о заказе
+            try {
+                const response = await fetch(`/api/courier/order/${orderId}`);
+                const data = await response.json();
 
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 8px;">Фото подтверждения:</label>
-                        <input type="file" id="delivery-photo" accept="image/*" capture="environment" style="width: 100%; padding: 10px;">
-                    </div>
+                if (data.success) {
+                    const order = data.order;
+                    const address = order.delivery_address_obj || {};
+                    const items = order.items_list || [];
 
-                    <div id="photo-preview" class="photo-preview"></div>
+                    // Формируем адрес
+                    let addressText = 'Адрес не указан';
+                    if (address.city || address.street) {
+                        addressText = `${address.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
+                        if (addr.apartment) addressText += `, кв. ${addr.apartment}`;
+                    }
 
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="btn-action btn-deliver" onclick="completeDelivery(${orderId})">
-                            ✅ Подтвердить доставку
-                        </button>
-                        <button class="btn-action" onclick="closeModal()">
-                            ❌ Отмена
-                        </button>
-                    </div>
-                </div>
-            `;
+                    // Формируем состав заказа
+                    let itemsText = '';
+                    if (items.length > 0) {
+                        items.forEach(item => {
+                            itemsText += `${item.name} × ${item.quantity} = ${item.quantity * item.price} ₽\n`;
+                        });
+                    }
 
-            document.getElementById('modal-order-id').textContent = orderId;
-            document.getElementById('modal-content').innerHTML = html;
-            document.getElementById('order-modal').style.display = 'flex';
+                    let html = `
+                        <div class="photo-upload">
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 10px;">📦 Информация о заказе #${order.id}</h3>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    <p><strong>Получатель:</strong> ${order.recipient_name || 'Не указан'}</p>
+                                    <p><strong>Телефон:</strong> ${order.phone_number || 'Не указан'}</p>
+                                    <p><strong>Адрес:</strong> ${addressText}</p>
+                                    <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
+                                </div>
+                            </div>
 
-            // Предпросмотр фото
-            document.getElementById('delivery-photo').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const preview = document.getElementById('photo-preview');
-                        preview.innerHTML = `<img src="${e.target.result}" alt="Предпросмотр">`;
-                        preview.style.display = 'block';
-                    };
-                    reader.readAsDataURL(file);
+                            <h4 style="margin-bottom: 15px;">📸 Подтверждение доставки</h4>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px;">Примечания к доставке:</label>
+                                <textarea id="delivery-notes" style="width: 100%; padding: 10px; border-radius: 6px; border: 2px solid #e0e0e0;" rows="3" placeholder="Клиент был дома, передал лично..."></textarea>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px;">Фото подтверждения (обязательно):</label>
+                                <div style="display: flex; gap: 10px;">
+                                    <button class="btn-action" onclick="document.getElementById('cameraInput').click()" style="flex: 1;">
+                                        📷 Сделать фото
+                                    </button>
+                                    <button class="btn-action" onclick="document.getElementById('galleryInput').click()" style="flex: 1;">
+                                        🖼️ Выбрать из галереи
+                                    </button>
+                                </div>
+                                <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+                                <input type="file" id="galleryInput" accept="image/*" style="display: none;">
+                            </div>
+
+                            <div id="photo-preview" class="photo-preview"></div>
+
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button class="btn-action btn-deliver" onclick="completeDelivery()" id="confirmDeliveryBtn" disabled>
+                                    ✅ Подтвердить доставку
+                                </button>
+                                <button class="btn-action" onclick="closeModal()">
+                                    ❌ Отмена
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    document.getElementById('modal-order-id').textContent = orderId;
+                    document.getElementById('modal-content').innerHTML = html;
+                    document.getElementById('order-modal').style.display = 'flex';
+
+                    // Добавляем обработчики для фото
+                    document.getElementById('cameraInput').addEventListener('change', handlePhotoSelection);
+                    document.getElementById('galleryInput').addEventListener('change', handlePhotoSelection);
                 }
-            });
+            } catch (error) {
+                console.error('Error loading order for delivery:', error);
+                alert('Ошибка загрузки информации о заказе');
+            }
+        }
+
+        // Обработка выбора фото
+        function handlePhotoSelection(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Проверяем тип файла
+            if (!file.type.startsWith('image/')) {
+                alert('❌ Выберите изображение');
+                return;
+            }
+
+            // Проверяем размер (макс 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('❌ Файл слишком большой (макс 5MB)');
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                currentPhoto = {
+                    data: e.target.result,
+                    file: file
+                };
+
+                // Показываем превью
+                const preview = document.getElementById('photo-preview');
+                preview.innerHTML = `<img src="${e.target.result}" alt="Выбранное фото">`;
+                preview.style.display = 'block';
+
+                // Активируем кнопку подтверждения
+                document.getElementById('confirmDeliveryBtn').disabled = false;
+            };
+
+            reader.readAsDataURL(file);
         }
 
         // Завершить доставку
-        async function completeDelivery(orderId) {
+        async function completeDelivery() {
             const notes = document.getElementById('delivery-notes').value;
-            const photoInput = document.getElementById('delivery-photo');
 
-            let photoData = null;
-            if (photoInput.files[0]) {
-                const file = photoInput.files[0];
-                const reader = new FileReader();
-
-                await new Promise((resolve) => {
-                    reader.onload = function(e) {
-                        photoData = e.target.result;
-                        resolve();
-                    };
-                    reader.readAsDataURL(file);
-                });
+            if (!currentPhoto) {
+                alert('❌ Сначала добавьте фото подтверждения доставки');
+                return;
             }
 
             try {
@@ -988,10 +1144,10 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        order_id: orderId,
+                        order_id: currentOrderId,
                         courier_id: currentCourier.id,
                         status: 'delivered',
-                        photo_data: photoData,
+                        photo_data: currentPhoto.data,
                         notes: notes
                     })
                 });
@@ -999,11 +1155,15 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    alert(`✅ Заказ #${orderId} успешно доставлен!`);
+                    alert(`✅ Заказ #${currentOrderId} успешно доставлен!`);
                     closeModal();
                     loadActiveOrders();
                     loadCompletedOrders();
                     loadStatistics();
+
+                    // Сбрасываем фото
+                    currentPhoto = null;
+                    currentOrderId = null;
                 } else {
                     alert(data.error || 'Ошибка подтверждения доставки');
                 }
@@ -1132,6 +1292,9 @@
         // Закрыть модальное окно
         function closeModal() {
             document.getElementById('order-modal').style.display = 'none';
+            // Сбрасываем фото при закрытии
+            currentPhoto = null;
+            currentOrderId = null;
         }
 
         // Получить текст статуса

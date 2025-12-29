@@ -521,7 +521,7 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
             },
             'picked_up': {
                 'title': '📦 Товар у курьера!',
-                'message': f'Заказ #{order_id} собран и готов к доставке.'
+                'message': f'Курьер забрал заказ #{order_id} и уже мчтится к вам!'
             },
             'on_the_way': {
                 'title': '🚗 Курьер едет к вам!',
@@ -594,8 +594,6 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
 
                 if courier_phone:
                     simple_message += f"📱 Телефон: {courier_phone}\n"
-
-                simple_message += f"\n📋 Отследить: /track_{order_id}"
 
                 data_simple = {
                     'chat_id': telegram_id,
@@ -947,58 +945,122 @@ def get_courier_orders():
 
         db = get_db()
 
-        # Активные заказы
+        # Активные заказы - ДОБАВИМ ВСЕ НЕОБХОДИМЫЕ ПОЛЯ
         active_orders = db.execute('''
-            SELECT o.*, 
-                   a.status as assignment_status,
-                   a.assigned_at,
-                   a.delivery_started,
-                   a.delivered_at
-            FROM orders o
-            JOIN order_assignments a ON o.id = a.order_id
-            WHERE a.courier_id = ? 
-              AND a.status IN ('assigned', 'picked_up')
-              AND o.status = 'pending'
-            ORDER BY a.assigned_at DESC
-        ''', (courier_id,)).fetchall()
+                                   SELECT o.id,
+                                          o.user_id,
+                                          o.username,
+                                          o.items,
+                                          o.total_price,
+                                          o.status as order_status,
+                                          o.delivery_type,
+                                          o.delivery_address,
+                                          o.pickup_point,
+                                          o.payment_method,
+                                          o.recipient_name,
+                                          o.phone_number,
+                                          o.created_at,
+                                          a.status as assignment_status,
+                                          a.assigned_at,
+                                          a.delivery_started,
+                                          a.delivered_at,
+                                          a.photo_proof,
+                                          a.delivery_notes
+                                   FROM orders o
+                                            JOIN order_assignments a ON o.id = a.order_id
+                                   WHERE a.courier_id = ?
+                                     AND a.status IN ('assigned', 'picked_up')
+                                     AND o.status NOT IN ('delivered', 'cancelled')
+                                   ORDER BY a.assigned_at DESC
+                                   ''', (courier_id,)).fetchall()
 
         # Завершенные заказы
         completed_orders = db.execute('''
-            SELECT o.*, 
-                   a.status as assignment_status,
-                   a.assigned_at,
-                   a.delivered_at,
-                   a.photo_proof
-            FROM orders o
-            JOIN order_assignments a ON o.id = a.order_id
-            WHERE a.courier_id = ? 
-              AND a.status = 'delivered'
-            ORDER BY a.delivered_at DESC LIMIT 50
-        ''', (courier_id,)).fetchall()
+                                      SELECT o.id,
+                                             o.user_id,
+                                             o.username,
+                                             o.items,
+                                             o.total_price,
+                                             o.status as order_status,
+                                             o.delivery_type,
+                                             o.delivery_address,
+                                             o.pickup_point,
+                                             o.payment_method,
+                                             o.recipient_name,
+                                             o.phone_number,
+                                             o.created_at,
+                                             a.status as assignment_status,
+                                             a.assigned_at,
+                                             a.delivered_at,
+                                             a.photo_proof,
+                                             a.delivery_notes
+                                      FROM orders o
+                                               JOIN order_assignments a ON o.id = a.order_id
+                                      WHERE a.courier_id = ?
+                                        AND a.status = 'delivered'
+                                      ORDER BY a.delivered_at DESC LIMIT 50
+                                      ''', (courier_id,)).fetchall()
 
         # Заказы на сегодня
         today_orders = db.execute('''
-            SELECT o.*, 
-                   a.status as assignment_status
-            FROM orders o
-            JOIN order_assignments a ON o.id = a.order_id
-            WHERE a.courier_id = ? 
-              AND DATE(a.assigned_at) = DATE('now')
-            ORDER BY o.created_at DESC
-        ''', (courier_id,)).fetchall()
+                                  SELECT o.id,
+                                         o.user_id,
+                                         o.username,
+                                         o.items,
+                                         o.total_price,
+                                         o.status as order_status,
+                                         o.delivery_type,
+                                         o.delivery_address,
+                                         o.pickup_point,
+                                         o.payment_method,
+                                         o.recipient_name,
+                                         o.phone_number,
+                                         o.created_at,
+                                         a.status as assignment_status
+                                  FROM orders o
+                                           JOIN order_assignments a ON o.id = a.order_id
+                                  WHERE a.courier_id = ?
+                                    AND DATE (a.assigned_at) = DATE ('now')
+                                  ORDER BY o.created_at DESC
+                                  ''', (courier_id,)).fetchall()
 
         db.close()
 
+        # Функция для преобразования заказов
+        def process_orders(orders):
+            processed = []
+            for order in orders:
+                order_dict = dict(order)
+                # Парсим JSON поля
+                try:
+                    order_dict['items_list'] = json.loads(order_dict['items'])
+                except:
+                    order_dict['items_list'] = []
+
+                # Парсим адрес доставки
+                if order_dict.get('delivery_address'):
+                    try:
+                        order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
+                    except:
+                        order_dict['delivery_address_obj'] = {}
+                else:
+                    order_dict['delivery_address_obj'] = {}
+
+                processed.append(order_dict)
+            return processed
+
         return jsonify({
             'success': True,
-            'active_orders': [dict(order) for order in active_orders],
-            'completed_orders': [dict(order) for order in completed_orders],
-            'today_orders': [dict(order) for order in today_orders]
+            'active_orders': process_orders(active_orders),
+            'completed_orders': process_orders(completed_orders),
+            'today_orders': process_orders(today_orders)
         })
 
     except Exception as e:
+        print(f"❌ Ошибка получения заказов курьера: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @app.route('/api/courier/update-status', methods=['POST'])
 def update_delivery_status():
@@ -1080,24 +1142,25 @@ def update_delivery_status():
 
 @app.route('/api/courier/order/<int:order_id>', methods=['GET'])
 def get_order_details(order_id):
-    """Получить детали заказа"""
+    """Получить детали заказа для курьера"""
     try:
         db = get_db()
         order = db.execute('''
-                           SELECT o.*,
-                                  a.status    as assignment_status,
-                                  a.assigned_at,
-                                  a.delivery_started,
-                                  a.delivered_at,
-                                  a.photo_proof,
-                                  a.delivery_notes,
-                                  c.full_name as courier_name,
-                                  c.phone     as courier_phone
-                           FROM orders o
-                                    LEFT JOIN order_assignments a ON o.id = a.order_id
-                                    LEFT JOIN couriers c ON a.courier_id = c.id
-                           WHERE o.id = ?
-                           ''', (order_id,)).fetchone()
+            SELECT 
+                o.*,
+                a.status as assignment_status,
+                a.assigned_at,
+                a.delivery_started,
+                a.delivered_at,
+                a.photo_proof,
+                a.delivery_notes,
+                c.full_name as courier_name,
+                c.phone as courier_phone
+            FROM orders o
+            LEFT JOIN order_assignments a ON o.id = a.order_id
+            LEFT JOIN couriers c ON a.courier_id = c.id
+            WHERE o.id = ?
+        ''', (order_id,)).fetchone()
 
         if not order:
             db.close()
@@ -1116,6 +1179,8 @@ def get_order_details(order_id):
                 order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
             except:
                 order_dict['delivery_address_obj'] = {}
+        else:
+            order_dict['delivery_address_obj'] = {}
 
         db.close()
         return jsonify({'success': True, 'order': order_dict})

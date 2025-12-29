@@ -390,39 +390,31 @@ class CourierApp {
             minute: '2-digit'
         });
 
+        // Имя и телефон получателя
+        const customerName = order.recipient_name || 'Имя не указано';
+        const customerPhone = order.phone_number || 'Телефон не указан';
+
         // Адрес доставки
         let address = '';
-        let customerName = order.recipient_name || 'Клиент';
-
-        if (order.delivery_address) {
-            try {
-                const addr = JSON.parse(order.delivery_address);
-                if (addr.city && addr.street) {
-                    address = `${addr.city}, ${addr.street} ${addr.house || ''}`;
-                    if (addr.apartment) address += `, кв. ${addr.apartment}`;
-                }
-            } catch (e) {
-                address = order.delivery_address;
+        if (order.delivery_address_obj) {
+            const addr = order.delivery_address_obj;
+            if (addr.city && addr.street) {
+                address = `${addr.city}, ${addr.street} ${addr.house || ''}`;
+                if (addr.apartment) address += `, кв. ${addr.apartment}`;
             }
         }
 
         // Товары
         let itemsHtml = '';
-        if (order.items) {
+        let totalItems = 0;
+        if (order.items_list && Array.isArray(order.items_list)) {
+            totalItems = order.items_list.reduce((sum, item) => sum + (item.quantity || 1), 0);
+            itemsHtml = `<div class="order-items-count">${totalItems} товар(ов)</div>`;
+        } else if (order.items) {
             try {
                 const items = JSON.parse(order.items);
-                items.slice(0, 3).forEach(item => {
-                    itemsHtml += `
-                        <div class="order-item">
-                            <span>${item.name} × ${item.quantity}</span>
-                            <span>${parseInt(item.price * item.quantity).toLocaleString('ru-RU')} ₽</span>
-                        </div>
-                    `;
-                });
-
-                if (items.length > 3) {
-                    itemsHtml += `<div class="order-item" style="color: var(--gray-color); font-style: italic;">... и еще ${items.length - 3} товаров</div>`;
-                }
+                totalItems = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+                itemsHtml = `<div class="order-items-count">${totalItems} товар(ов)</div>`;
             } catch (e) {
                 console.error('Ошибка парсинга товаров:', e);
             }
@@ -435,7 +427,7 @@ class CourierApp {
             if (status === 'assigned') {
                 actionButtons = `
                     <button class="action-btn pickup">
-                        <i class="fas fa-box-open"></i> Забрать
+                        <i class="fas fa-box-open"></i> Забрать заказ
                     </button>
                 `;
             } else if (status === 'picked_up') {
@@ -470,7 +462,7 @@ class CourierApp {
                         <i class="fas fa-user"></i>
                         <div>
                             <div class="customer-name">${customerName}</div>
-                            ${order.phone_number ? `<div class="customer-phone">${order.phone_number}</div>` : ''}
+                            <div class="customer-phone">${customerPhone}</div>
                         </div>
                     </div>
                     ${address ? `
@@ -481,11 +473,7 @@ class CourierApp {
                     ` : ''}
                 </div>
 
-                ${itemsHtml ? `
-                    <div class="order-items">
-                        ${itemsHtml}
-                    </div>
-                ` : ''}
+                ${itemsHtml}
 
                 <div class="order-footer">
                     <div class="order-total">${parseInt(order.total_price || 0).toLocaleString('ru-RU')} ₽</div>
@@ -713,8 +701,7 @@ class CourierApp {
         this.showModal('pickupModal');
     }
 
-    // Показать окно доставки
-    async showDeliveryModal(orderId) {
+    async function showDeliveryModal(orderId) {
         this.currentOrderId = orderId;
         this.currentPhoto = null;
 
@@ -725,21 +712,68 @@ class CourierApp {
 
             if (result.success) {
                 const order = result.order;
-                document.getElementById('deliveryOrderId').textContent = `#${order.id}`;
 
-                // Адрес
-                let address = '';
+                // Заполняем информацию в модальном окне
+                document.getElementById('deliveryOrderId').textContent = `Заказ #${order.id}`;
+
+                // Имя получателя
+                document.getElementById('deliveryCustomerName').textContent =
+                    order.recipient_name || 'Имя не указано';
+
+                // Телефон
+                document.getElementById('deliveryCustomerPhone').textContent =
+                    order.phone_number || 'Телефон не указан';
+
+                // Адрес доставки
+                let addressHtml = '';
                 if (order.delivery_address_obj) {
                     const addr = order.delivery_address_obj;
-                    address = `${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
+                    if (addr.city && addr.street) {
+                        addressHtml = `
+                            <div class="delivery-info">
+                                <p><strong>Адрес доставки:</strong></p>
+                                <p>${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}</p>
+                                ${addr.apartment ? `<p>Квартира: ${addr.apartment}</p>` : ''}
+                                ${addr.floor ? `<p>Этаж: ${addr.floor}</p>` : ''}
+                                ${addr.doorcode ? `<p>Код домофона: ${addr.doorcode}</p>` : ''}
+                            </div>
+                        `;
+                    }
                 }
-                document.getElementById('deliveryAddress').textContent = address || 'Адрес не указан';
+
+                // Состав заказа
+                let itemsHtml = '';
+                if (order.items_list && Array.isArray(order.items_list)) {
+                    itemsHtml = `
+                        <div class="order-items-info">
+                            <p><strong>Состав заказа:</strong></p>
+                            ${order.items_list.map(item => `
+                                <p>${item.name} × ${item.quantity} = ${item.quantity * item.price} ₽</p>
+                            `).join('')}
+                            <p><strong>Итого: ${order.total_price || 0} ₽</strong></p>
+                        </div>
+                    `;
+                }
+
+                // Обновляем содержимое модального окна
+                document.getElementById('deliveryModalContent').innerHTML = `
+                    <div class="delivery-details">
+                        <div class="customer-info">
+                            <p><strong>Получатель:</strong> ${order.recipient_name || 'Не указан'}</p>
+                            <p><strong>Телефон:</strong> ${order.phone_number || 'Не указан'}</p>
+                        </div>
+                        ${addressHtml}
+                        ${itemsHtml}
+                    </div>
+                `;
 
                 this.showModal('deliveryModal');
+            } else {
+                throw new Error(result.error);
             }
         } catch (error) {
             console.error('Ошибка загрузки заказа:', error);
-            this.showNotification('❌ Ошибка загрузки заказа', 'error');
+            this.showNotification('❌ Ошибка загрузки информации о заказе', 'error');
         }
     }
 
