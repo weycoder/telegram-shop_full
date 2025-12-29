@@ -31,6 +31,7 @@ notification_queue = queue.Queue()
 bot_app = None
 
 
+
 # ========== БАЗА ДАННЫХ ==========
 
 def get_db_connection():
@@ -39,6 +40,66 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+
+def init_database():
+    """Инициализация базы данных"""
+    conn = sqlite3.connect('shop.db')
+    cursor = conn.cursor()
+
+    # Таблица пользователей для уведомлений
+    cursor.execute('''
+                   CREATE TABLE IF NOT EXISTS users
+                   (
+                       id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       telegram_id
+                       INTEGER
+                       UNIQUE,
+                       username
+                       TEXT,
+                       first_name
+                       TEXT,
+                       last_name
+                       TEXT,
+                       created_at
+                       TIMESTAMP
+                       DEFAULT
+                       CURRENT_TIMESTAMP,
+                       last_seen
+                       TIMESTAMP
+                       DEFAULT
+                       CURRENT_TIMESTAMP
+                   )
+                   ''')
+
+    # Таблица уведомлений
+    cursor.execute('''
+                   CREATE TABLE IF NOT EXISTS order_notifications
+                   (
+                       id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       order_id
+                       INTEGER,
+                       user_id
+                       INTEGER,
+                       status
+                       TEXT,
+                       created_at
+                       TIMESTAMP
+                       DEFAULT
+                       CURRENT_TIMESTAMP
+                   )
+                   ''')
+
+    conn.commit()
+    conn.close()
+    logger.info("✅ База данных инициализирована")
 
 def save_user_for_notifications(telegram_id, username, first_name, last_name):
     """Сохранить пользователя для уведомлений"""
@@ -335,76 +396,107 @@ async def track_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать все заказы пользователя"""
-    user = update.effective_user
+    # Получаем пользователя разными способами
+    if hasattr(update, 'callback_query'):
+        user = update.callback_query.from_user
+        message = update.callback_query
+        is_callback = True
+    else:
+        user = update.effective_user
+        message = update.message
+        is_callback = False
 
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
 
+        # Сначала находим user_id по telegram_id
+        cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (user.id,))
+        user_record = cursor.fetchone()
+
+        if not user_record:
+            response = "📭 *У вас пока нет заказов.*\n\n" \
+                       "Нажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
+
+            if is_callback:
+                await message.edit_message_text(response, parse_mode='Markdown')
+            else:
+                await message.reply_text(response, parse_mode='Markdown')
+            return
+
+        user_id = user_record['id']
+
         cursor.execute('''
-                       SELECT o.id,
-                              o.total_price,
-                              o.status,
-                              o.created_at,
-                              a.status    as delivery_status,
-                              c.full_name as courier_name
+                       SELECT o.id, o.total_price, o.status, o.created_at
                        FROM orders o
-                                LEFT JOIN order_assignments a ON o.id = a.order_id
-                                LEFT JOIN couriers c ON a.courier_id = c.id
                        WHERE o.user_id = ?
                        ORDER BY o.created_at DESC
-                       ''', (user.id,))
+                       ''', (user_id,))
 
         orders = cursor.fetchall()
 
         if not orders:
-            await update.message.reply_text(
-                "📭 *У вас пока нет заказов.*\n\n"
-                "Нажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!",
-                parse_mode='Markdown'
-            )
+            response = "📭 *У вас пока нет заказов.*\n\n" \
+                       "Нажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
+
+            if is_callback:
+                await message.edit_message_text(response, parse_mode='Markdown')
+            else:
+                await message.reply_text(response, parse_mode='Markdown')
             return
 
-        message = "📋 *Ваши заказы:*\n\n"
+        # Отправляем первый заказ отдельно
+        first_order = orders[0]
+        message_text = format_order_message(first_order)
+        keyboard = [[
+            InlineKeyboardButton(
+                f"📦 Отследить заказ #{first_order['id']}",
+                callback_data=f"track_{first_order['id']}"
+            )
+        ]]
 
-        for order in orders:
-            status_icon = get_status_icon(order['status'])
-            delivery_icon = get_delivery_icon(order['delivery_status'])
-
-            message += f"{status_icon} *Заказ #{order['id']}*\n"
-            message += f"💵 Сумма: {order['total_price']} ₽\n"
-            message += f"📊 Статус: {get_order_status_text(order['status'])}\n"
-            message += f"🚚 Доставка: {delivery_icon} {get_delivery_status_text(order['delivery_status'])}\n"
-
-            if order['courier_name']:
-                message += f"👤 Курьер: {order['courier_name']}\n"
-
-            message += f"📅 Дата: {order['created_at'][:10]}\n"
-
-            # Кнопка для отслеживания этого заказа
-            keyboard = [[
+        if len(orders) > 1:
+            keyboard.append([
                 InlineKeyboardButton(
-                    f"📦 Отследить заказ #{order['id']}",
-                    callback_data=f"track_{order['id']}"
+                    "📋 Показать все заказы",
+                    callback_data=f"all_orders_{user_id}"
                 )
-            ]]
+            ])
 
-            await update.message.reply_text(
-                message,
+        if is_callback:
+            await message.edit_message_text(
+                message_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        else:
+            await message.reply_text(
+                message_text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
 
-            message = ""  # Сбрасываем для следующего заказа
-
     except Exception as e:
         logger.error(f"Ошибка получения заказов: {e}")
-        await update.message.reply_text(
-            "❌ Произошла ошибка при загрузке заказов.",
-            parse_mode='Markdown'
-        )
+        error_msg = "❌ Произошла ошибка при загрузке заказов."
+        if is_callback:
+            await message.edit_message_text(error_msg, parse_mode='Markdown')
+        else:
+            await message.reply_text(error_msg, parse_mode='Markdown')
     finally:
         conn.close()
+
+
+def format_order_message(order):
+    """Форматировать сообщение о заказе"""
+    order = dict(order)
+    status_icon = get_status_icon(order['status'])
+
+    return f"""{status_icon} *Заказ #{order['id']}*
+💵 Сумма: {order['total_price']} ₽
+📊 Статус: {get_order_status_text(order['status'])}
+📅 Дата: {order['created_at'][:10]}
+"""
 
 
 async def show_order_status(update, user_id, order_id):
@@ -698,4 +790,5 @@ def main():
 
 
 if __name__ == '__main__':
+    init_database()  # Добавьте эту строку
     main()

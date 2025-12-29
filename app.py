@@ -836,6 +836,7 @@ def courier_login():
 
 @app.route('/api/courier/orders', methods=['GET'])
 def get_courier_orders():
+    """Получить заказы курьера"""
     try:
         courier_id = request.args.get('courier_id', type=int)
         if not courier_id:
@@ -843,46 +844,64 @@ def get_courier_orders():
 
         db = get_db()
 
+        # Активные заказы
         active_orders = db.execute('''
-                                   SELECT o.*,
-                                          a.status as assignment_status,
-                                          a.assigned_at,
-                                          a.delivery_started,
-                                          a.delivered_at
-                                   FROM orders o
-                                            JOIN order_assignments a ON o.id = a.order_id
-                                   WHERE a.courier_id = ?
-                                     AND a.status IN ('assigned', 'picked_up')
-                                     AND o.status = 'pending'
-                                   ORDER BY a.assigned_at DESC
-                                   ''', (courier_id,)).fetchall()
+            SELECT o.*, 
+                   a.status as assignment_status,
+                   a.assigned_at,
+                   a.delivery_started,
+                   a.delivered_at
+            FROM orders o
+            JOIN order_assignments a ON o.id = a.order_id
+            WHERE a.courier_id = ? 
+              AND a.status IN ('assigned', 'picked_up')
+              AND o.status = 'pending'
+            ORDER BY a.assigned_at DESC
+        ''', (courier_id,)).fetchall()
 
+        # Завершенные заказы
         completed_orders = db.execute('''
-                                      SELECT o.*,
-                                             a.status as assignment_status,
-                                             a.assigned_at,
-                                             a.delivered_at,
-                                             a.photo_proof
-                                      FROM orders o
-                                               JOIN order_assignments a ON o.id = a.order_id
-                                      WHERE a.courier_id = ?
-                                        AND a.status = 'delivered'
-                                      ORDER BY a.delivered_at DESC LIMIT 50
-                                      ''', (courier_id,)).fetchall()
+            SELECT o.*, 
+                   a.status as assignment_status,
+                   a.assigned_at,
+                   a.delivered_at,
+                   a.photo_proof
+            FROM orders o
+            JOIN order_assignments a ON o.id = a.order_id
+            WHERE a.courier_id = ? 
+              AND a.status = 'delivered'
+            ORDER BY a.delivered_at DESC LIMIT 50
+        ''', (courier_id,)).fetchall()
+
+        # Заказы на сегодня
+        today_orders = db.execute('''
+            SELECT o.*, 
+                   a.status as assignment_status
+            FROM orders o
+            JOIN order_assignments a ON o.id = a.order_id
+            WHERE a.courier_id = ? 
+              AND DATE(a.assigned_at) = DATE('now')
+            ORDER BY o.created_at DESC
+        ''', (courier_id,)).fetchall()
 
         db.close()
 
         return jsonify({
             'success': True,
             'active_orders': [dict(order) for order in active_orders],
-            'completed_orders': [dict(order) for order in completed_orders]
+            'completed_orders': [dict(order) for order in completed_orders],
+            'today_orders': [dict(order) for order in today_orders]
         })
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+
+
 @app.route('/api/courier/update-status', methods=['POST'])
 def update_delivery_status():
+    """Обновить статус доставки"""
     try:
         data = request.json
         order_id = data.get('order_id')
@@ -893,6 +912,7 @@ def update_delivery_status():
 
         db = get_db()
 
+        # Проверяем назначение
         assignment = db.execute('SELECT * FROM order_assignments WHERE order_id = ? AND courier_id = ?',
                                 (order_id, courier_id)).fetchone()
 
@@ -900,10 +920,7 @@ def update_delivery_status():
             db.close()
             return jsonify({'success': False, 'error': 'Назначение не найдено'}), 404
 
-        # Получаем информацию о курьере для уведомления
-        courier = db.execute('SELECT full_name FROM couriers WHERE id = ?', (courier_id,)).fetchone()
-        courier_name = courier['full_name'] if courier else None
-
+        # Сохраняем фото, если есть
         photo_url = None
         if photo_data and status == 'delivered':
             try:
@@ -919,9 +936,11 @@ def update_delivery_status():
                     f.write(image_data)
 
                 photo_url = f"/static/uploads/{filename}"
+                print(f"✅ Фото доставки сохранено: {filename}")
             except Exception as e:
                 print(f"⚠️ Ошибка сохранения фото: {e}")
 
+        # Обновляем статус
         if status == 'picked_up':
             db.execute(
                 'UPDATE order_assignments SET status = ?, delivery_started = CURRENT_TIMESTAMP WHERE order_id = ? AND courier_id = ?',
@@ -938,16 +957,23 @@ def update_delivery_status():
         db.commit()
         db.close()
 
-        # Отправляем уведомление о изменении статуса
+        # Отправляем уведомление в бот
+        courier = db.execute('SELECT full_name, phone FROM couriers WHERE id = ?', (courier_id,)).fetchone()
+        courier_name = courier['full_name'] if courier else None
+        courier_phone = courier['phone'] if courier else None
+
         send_order_notification(order_id, status, courier_id)
 
         return jsonify({'success': True, 'photo_url': photo_url})
+
     except Exception as e:
+        print(f"❌ Ошибка обновления статуса: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/courier/order/<int:order_id>')
+@app.route('/api/courier/order/<int:order_id>', methods=['GET'])
 def get_order_details(order_id):
+    """Получить детали заказа"""
     try:
         db = get_db()
         order = db.execute('''
@@ -958,7 +984,8 @@ def get_order_details(order_id):
                                   a.delivered_at,
                                   a.photo_proof,
                                   a.delivery_notes,
-                                  c.full_name as courier_name
+                                  c.full_name as courier_name,
+                                  c.phone     as courier_phone
                            FROM orders o
                                     LEFT JOIN order_assignments a ON o.id = a.order_id
                                     LEFT JOIN couriers c ON a.courier_id = c.id
@@ -970,6 +997,8 @@ def get_order_details(order_id):
             return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
 
         order_dict = dict(order)
+
+        # Парсим JSON поля
         try:
             order_dict['items_list'] = json.loads(order_dict['items'])
         except:
@@ -983,7 +1012,9 @@ def get_order_details(order_id):
 
         db.close()
         return jsonify({'success': True, 'order': order_dict})
+
     except Exception as e:
+        print(f"❌ Ошибка получения деталей заказа: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1057,6 +1088,60 @@ def courier_change_password():
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
+
+
+@app.route('/api/assign-courier', methods=['POST'])
+def assign_courier():
+    """Назначить курьера на заказ"""
+    try:
+        data = request.json
+        order_id = data.get('order_id')
+
+        if not order_id:
+            return jsonify({'success': False, 'error': 'Не указан ID заказа'}), 400
+
+        db = get_db()
+
+        # Проверяем, не назначен ли уже курьер
+        existing = db.execute('SELECT courier_id FROM order_assignments WHERE order_id = ?', (order_id,)).fetchone()
+        if existing:
+            db.close()
+            return jsonify({'success': False, 'error': 'Курьер уже назначен'}), 400
+
+        # Получаем случайного активного курьера
+        courier = db.execute('''
+                             SELECT id, full_name, phone
+                             FROM couriers
+                             WHERE is_active = 1
+                             ORDER BY RANDOM() LIMIT 1
+                             ''').fetchone()
+
+        if not courier:
+            db.close()
+            return jsonify({'success': False, 'error': 'Нет доступных курьеров'}), 404
+
+        # Назначаем заказ
+        db.execute('''
+                   INSERT INTO order_assignments (order_id, courier_id, status)
+                   VALUES (?, ?, 'assigned')
+                   ''', (order_id, courier['id']))
+
+        db.commit()
+        db.close()
+
+        print(f"✅ Заказ #{order_id} назначен курьеру #{courier['id']} ({courier['full_name']})")
+
+        return jsonify({
+            'success': True,
+            'courier_id': courier['id'],
+            'courier_name': courier['full_name'],
+            'courier_phone': courier['phone']
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка назначения курьера: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 
 # ========== API ДЛЯ АДМИНА ==========
