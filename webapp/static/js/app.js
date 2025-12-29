@@ -1,5 +1,28 @@
 // Telegram Shop - Полная версия с всеми функциями
 console.log('🟢 app.js начал загружаться');
+
+// Функция для получения параметров из URL (вынесена из класса)
+function getTelegramParams() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = parseInt(urlParams.get('user_id')) || 0;
+        const username = urlParams.get('username') || 'Гость';
+
+        console.log('✅ Параметры из Telegram:', { userId, username });
+
+        return {
+            userId: userId,
+            username: username
+        };
+    } catch (error) {
+        console.error('❌ Ошибка получения параметров Telegram:', error);
+        return {
+            userId: 0,
+            username: 'Гость'
+        };
+    }
+}
+
 class TelegramShop {
     constructor() {
         this.cart = this.loadCart();
@@ -14,24 +37,12 @@ class TelegramShop {
             address_details: null
         };
 
-        console.log('🛍️ Telegram Shop создан');
-    }
+        // Получаем параметры Telegram при создании
+        const params = getTelegramParams();
+        this.userId = params.userId;
+        this.username = params.username;
 
-    getTelegramParams() {
-        try {
-            const urlParams = new URLSearchParams(window.location.search);
-            this.userId = parseInt(urlParams.get('user_id')) || 0;
-            this.username = urlParams.get('username') || 'Гость';
-
-            console.log('✅ Параметры Telegram:', {
-                userId: this.userId,
-                username: this.username
-            });
-        } catch (error) {
-            console.error('❌ Ошибка получения параметров Telegram:', error);
-            this.userId = 0;
-            this.username = 'Гость';
-        }
+        console.log('🛍️ Telegram Shop создан для пользователя:', this.username, 'ID:', this.userId);
     }
 
     async init() {
@@ -58,26 +69,30 @@ class TelegramShop {
         this.isInitialized = true;
         console.log('✅ Магазин инициализирован');
     }
-    // При создании заказа
-    async function createOrder(orderData) {
-        const params = getTelegramParams();
 
+    // Метод createOrder как часть класса
+    async createOrder(orderData) {
         // Добавляем данные из Telegram
-        orderData.user_id = parseInt(params.userId);
-        orderData.username = params.username;
+        orderData.user_id = this.userId;
+        orderData.username = this.username;
 
         console.log('📦 Создание заказа с данными:', orderData);
 
-        const response = await fetch('/api/create-order', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(orderData)
-        });
+        try {
+            const response = await fetch('/api/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            });
 
-        return await response.json();
+            return await response.json();
+        } catch (error) {
+            console.error('❌ Ошибка создания заказа:', error);
+            throw error;
+        }
     }
 
-
+    // Обновленный bindEvents
     bindEvents() {
         console.log('🔗 Назначаем обработчики событий...');
 
@@ -96,20 +111,13 @@ class TelegramShop {
             if (e.target.classList.contains('product-modal-overlay')) this.closeProductModal();
         });
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const params = getTelegramParams();
-            console.log('✅ Параметры из Telegram:', params);
-
-            // Сохраняем глобально
-            window.telegramUserId = params.userId;
-            window.telegramUsername = params.username;
-
-            // Показываем приветствие
-            if (params.userId && params.userId !== '0') {
-                document.getElementById('welcome-text').innerText =
-                    `👋 Привет, ${params.username}!`;
+        // Показываем приветствие
+        if (this.userId && this.userId !== 0) {
+            const welcomeElement = document.getElementById('welcome-text');
+            if (welcomeElement) {
+                welcomeElement.innerText = `👋 Привет, ${this.username}!`;
             }
-        });
+        }
 
         // Escape для закрытия
         document.addEventListener('keydown', (e) => {
@@ -131,7 +139,7 @@ class TelegramShop {
             });
         }
 
-        // ДЕЛЕГИРОВАНИЕ ДЛЯ КНОПОК "ПОДРОБНЕЕ" - ДОБАВЬТЕ ЭТОТ КОД
+        // ДЕЛЕГИРОВАНИЕ ДЛЯ КНОПОК "ПОДРОБНЕЕ"
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-block');
             if (btn && btn.textContent.includes('Подробнее')) {
@@ -213,11 +221,11 @@ class TelegramShop {
         if (!window.Telegram) window.Telegram = {};
         if (!window.Telegram.WebApp) {
             window.Telegram.WebApp = {
-                expand: function() { console.log('[Stub] WebApp расширен'); },
-                setHeaderColor: function() { console.log('[Stub] Цвет заголовка изменен'); },
-                setBackgroundColor: function() { console.log('[Stub] Фон изменен'); },
-                enableClosingConfirmation: function() { console.log('[Stub] Подтверждение закрытия включено'); },
-                close: function() {
+                expand: function () { console.log('[Stub] WebApp расширен'); },
+                setHeaderColor: function () { console.log('[Stub] Цвет заголовка изменен'); },
+                setBackgroundColor: function () { console.log('[Stub] Фон изменен'); },
+                enableClosingConfirmation: function () { console.log('[Stub] Подтверждение закрытия включено'); },
+                close: function () {
                     console.log('[Stub] Закрытие WebApp');
                     if (confirm('Закрыть приложение?')) {
                         window.close();
@@ -225,15 +233,15 @@ class TelegramShop {
                 },
                 BackButton: {
                     isVisible: false,
-                    show: function() {
+                    show: function () {
                         console.log('[Stub] Кнопка "Назад" показана');
                         this.isVisible = true;
                     },
-                    hide: function() {
+                    hide: function () {
                         console.log('[Stub] Кнопка "Назад" скрыта');
                         this.isVisible = false;
                     },
-                    onClick: function(callback) {
+                    onClick: function (callback) {
                         console.log('[Stub] Обработчик кнопки "Назад" установлен');
                         this.callback = callback;
                     }
@@ -1164,7 +1172,8 @@ class TelegramShop {
 
     async showAddressSelection() {
         try {
-            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
+            // Используем this.userId из конструктора
+            const userId = this.userId;
 
             // ЕСЛИ userId = 0 (гость), все равно проверяем localStorage
             let addresses = [];
@@ -1248,8 +1257,7 @@ class TelegramShop {
         } catch (error) {
             console.error('❌ Ошибка загрузки адресов:', error);
             // Показываем форму для ввода адреса
-            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
-            await this.showAddressForm(userId);
+            await this.showAddressForm(this.userId);
         }
     }
 
@@ -1386,9 +1394,8 @@ class TelegramShop {
 
     async saveAddress() {
         try {
-            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
             const addressData = {
-                user_id: userId,
+                user_id: this.userId,
                 city: document.getElementById('city').value,
                 street: document.getElementById('street').value,
                 house: document.getElementById('house').value,
@@ -1407,7 +1414,7 @@ class TelegramShop {
 
             let result;
 
-            if (userId === 0) {
+            if (this.userId === 0) {
                 // Для гостя сохраняем в localStorage
                 result = this.saveGuestAddress(addressData);
             } else {
@@ -1597,9 +1604,7 @@ class TelegramShop {
 
     async selectAddress(addressId) {
         try {
-            const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0;
-
-            if (userId === 0) {
+            if (this.userId === 0) {
                 this.deliveryData.address_id = `guest_${addressId}`;
                 this.deliveryData.address_details = localStorage.getItem('guest_addresses')
                     ? JSON.parse(localStorage.getItem('guest_addresses'))[addressId]
@@ -1630,7 +1635,7 @@ class TelegramShop {
                 body: JSON.stringify({
                     order_id: orderId,
                     status: status,
-                    user_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 0
+                    user_id: this.userId
                 })
             });
 
@@ -1652,23 +1657,6 @@ class TelegramShop {
 
     async confirmOrder() {
         try {
-            let userData = {
-                user_id: 0,
-                username: 'Гость',
-                first_name: '',
-                last_name: ''
-            };
-
-            if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-                const user = Telegram.WebApp.initDataUnsafe.user;
-                userData = {
-                    user_id: user.id || 0,
-                    username: user.username || '',
-                    first_name: user.first_name || '',
-                    last_name: user.last_name || ''
-                };
-            }
-
             // Подготавливаем данные о доставке и оплате
             let deliveryDetails = {};
 
@@ -1684,7 +1672,8 @@ class TelegramShop {
 
             // Подготавливаем данные заказа
             const orderData = {
-                ...userData,
+                user_id: this.userId,
+                username: this.username,
                 items: this.cart.map(item => ({
                     id: item.id,
                     name: item.name,
@@ -1697,21 +1686,13 @@ class TelegramShop {
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
                 recipient_name: deliveryDetails.recipient_name || '',
-                phone_number: deliveryDetails.phone || '',
-                created_at: new Date().toISOString()
+                phone_number: deliveryDetails.phone || ''
             };
 
             console.log('📤 Отправка заказа:', orderData);
 
-            const response = await fetch('/api/create-order', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(orderData)
-            });
-
-            const result = await response.json();
+            // Используем метод createOrder класса
+            const result = await this.createOrder(orderData);
             console.log('📥 Ответ сервера:', result);
 
             if (result.success) {
@@ -1912,8 +1893,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.appendChild(errorDiv);
     }
 });
-
-// ... существующий код в конце
 
 console.log('✅ app.js полностью загружен, класс TelegramShop определен');
 
