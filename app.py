@@ -826,6 +826,175 @@ def get_pickup_points():
         db.close()
 
 
+@app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
+def admin_manage_categories():
+    """Управление категориями"""
+    db = get_db()
+    try:
+        if request.method == 'GET':
+            categories = db.execute('''
+                                    SELECT DISTINCT category
+                                    FROM products
+                                    WHERE category IS NOT NULL
+                                      AND category != ''
+                                    ORDER BY category
+                                    ''').fetchall()
+            return jsonify([row['category'] for row in categories])
+
+        elif request.method == 'POST':
+            data = request.get_json()
+            new_category = data.get('name', '').strip()
+
+            if not new_category:
+                return jsonify({'success': False, 'error': 'Название категории не может быть пустым'}), 400
+
+            # Проверяем, есть ли уже такая категория
+            existing = db.execute(
+                'SELECT COUNT(*) as count FROM products WHERE LOWER(category) = LOWER(?)',
+                (new_category,)
+            ).fetchone()
+
+            if existing['count'] > 0:
+                return jsonify({'success': False, 'error': 'Такая категория уже существует'}), 400
+
+            # Добавляем тестовый товар
+            db.execute('''
+                       INSERT INTO products (name, description, price, image_url, category, stock)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ''', (
+                           f'Товар категории {new_category}',
+                           f'Автоматически созданный товар',
+                           1000,
+                           'https://via.placeholder.com/300x200',
+                           new_category,
+                           10
+                       ))
+
+            db.commit()
+            return jsonify({'success': True, 'message': f'Категория "{new_category}" создана'})
+
+        elif request.method == 'DELETE':
+            category_name = request.args.get('name', '').strip()
+            if not category_name:
+                return jsonify({'success': False, 'error': 'Не указана категория'}), 400
+
+            # Удаляем категорию у товаров
+            db.execute(
+                'UPDATE products SET category = "" WHERE LOWER(category) = LOWER(?)',
+                (category_name,)
+            )
+            db.commit()
+            return jsonify({'success': True, 'message': f'Категория "{category_name}" удалена'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/courier/change-password', methods=['POST'])
+def courier_change_password():
+    """Сменить пароль курьера"""
+    db = get_db()
+    try:
+        data = request.json
+        courier_id = data.get('courier_id')
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+
+        if not courier_id or not old_password or not new_password:
+            return jsonify({'success': False, 'error': 'Заполните все поля'}), 400
+
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'error': 'Новый пароль должен быть не менее 6 символов'}), 400
+
+        # Проверяем старый пароль
+        courier = db.execute('SELECT password FROM couriers WHERE id = ?', (courier_id,)).fetchone()
+        if not courier:
+            return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+        if courier['password'] != old_password:
+            return jsonify({'success': False, 'error': 'Неверный текущий пароль'}), 401
+
+        # Обновляем пароль
+        db.execute('UPDATE couriers SET password = ? WHERE id = ?', (new_password, courier_id))
+        db.commit()
+
+        return jsonify({'success': True, 'message': 'Пароль успешно изменен'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+@app.route('/api/courier/profile', methods=['GET', 'PUT'])
+def courier_profile():
+    """Получить/обновить профиль курьера"""
+    db = get_db()
+    try:
+        if request.method == 'GET':
+            courier_id = request.args.get('courier_id', type=int)
+            if not courier_id:
+                return jsonify({'success': False, 'error': 'Не указан ID курьера'}), 400
+
+            courier = db.execute('''
+                                 SELECT id, username, full_name, phone, vehicle_type, is_active, created_at
+                                 FROM couriers
+                                 WHERE id = ?
+                                 ''', (courier_id,)).fetchone()
+
+            if not courier:
+                return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+            return jsonify({'success': True, 'profile': dict(courier)})
+
+        elif request.method == 'PUT':
+            data = request.json
+            courier_id = data.get('courier_id')
+
+            if not courier_id:
+                return jsonify({'success': False, 'error': 'Не указан ID курьера'}), 400
+
+            # Проверяем, что курьер существует
+            courier = db.execute('SELECT id FROM couriers WHERE id = ?', (courier_id,)).fetchone()
+            if not courier:
+                return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+            # Обновляем данные
+            db.execute('''
+                       UPDATE couriers
+                       SET full_name    = ?,
+                           phone        = ?,
+                           vehicle_type = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('full_name', ''),
+                           data.get('phone', ''),
+                           data.get('vehicle_type', ''),
+                           courier_id
+                       ))
+
+            db.commit()
+
+            # Возвращаем обновленный профиль
+            updated = db.execute('''
+                                 SELECT id, username, full_name, phone, vehicle_type, is_active, created_at
+                                 FROM couriers
+                                 WHERE id = ?
+                                 ''', (courier_id,)).fetchone()
+
+            return jsonify({
+                'success': True,
+                'message': 'Профиль обновлен',
+                'profile': dict(updated)
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
 # ========== API ДЛЯ АДМИНА ==========
 @app.route('/api/admin/dashboard')
 def admin_dashboard():
