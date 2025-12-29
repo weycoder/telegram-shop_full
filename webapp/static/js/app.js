@@ -1,5 +1,5 @@
 // Telegram Shop - Полная версия с всеми функциями
-
+console.log('🟢 app.js начал загружаться');
 class TelegramShop {
     constructor() {
         this.cart = this.loadCart();
@@ -1569,7 +1569,7 @@ class TelegramShop {
     // ========== НОВЫЕ ФУНКЦИИ ДЛЯ БОТА И УВЕДОМЛЕНИЙ ==========
 
     async notifyBotAboutOrder(orderId, status) {
-        """Отправить уведомление боту о статусе заказа"""
+        // Отправить уведомление боту о статусе заказа
         try {
             const response = await fetch('/api/notify-bot', {
                 method: 'POST',
@@ -1861,5 +1861,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.appendChild(errorDiv);
     }
 });
+
+// ... существующий код в конце
+
+console.log('✅ app.js полностью загружен, класс TelegramShop определен');
 
 window.TelegramShop = TelegramShop;
