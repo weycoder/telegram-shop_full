@@ -379,110 +379,77 @@ class CourierApp {
 
     // Создание карточки заказа
     createOrderCard(order, isCompleted = false) {
-        const status = order.assignment_status || order.status;
-        const statusText = this.getStatusText(status);
-        const statusClass = `status-${status}`;
-
-        // Форматируем дату
-        const date = new Date(order.created_at || order.assigned_at);
-        const timeString = date.toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        // Имя и телефон получателя
-        const customerName = order.recipient_name || 'Имя не указано';
-        const customerPhone = order.phone_number || 'Телефон не указан';
-
-        // Адрес доставки
-        let address = '';
-        if (order.delivery_address_obj) {
-            const addr = order.delivery_address_obj;
-            if (addr.city && addr.street) {
-                address = `${addr.city}, ${addr.street} ${addr.house || ''}`;
-                if (addr.apartment) address += `, кв. ${addr.apartment}`;
-            }
-        }
-
-        // Товары
-        let itemsHtml = '';
-        let totalItems = 0;
-        if (order.items_list && Array.isArray(order.items_list)) {
-            totalItems = order.items_list.reduce((sum, item) => sum + (item.quantity || 1), 0);
-            itemsHtml = `<div class="order-items-count">${totalItems} товар(ов)</div>`;
-        } else if (order.items) {
+        // 1. Получаем адрес ПРАВИЛЬНО
+        let address = "Адрес не указан";
+        if (order.delivery_address) {
             try {
-                const items = JSON.parse(order.items);
-                totalItems = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
-                itemsHtml = `<div class="order-items-count">${totalItems} товар(ов)</div>`;
-            } catch (e) {
-                console.error('Ошибка парсинга товаров:', e);
+                // Если адрес в JSON - парсим
+                if (typeof order.delivery_address === 'string') {
+                    const addrObj = JSON.parse(order.delivery_address);
+                    address = addrObj.full_address || addrObj.address || "Адрес не указан";
+                } else if (order.delivery_address_obj) {
+                    // Если уже распарсено в бэкенде
+                    address = order.delivery_address_obj.full_address ||
+                              order.delivery_address_obj.address ||
+                              "Адрес не указан";
+                }
+            } catch(e) {
+                // Если не JSON, используем как строку
+                address = order.delivery_address;
             }
         }
 
-        // Кнопки действий
-        let actionButtons = '';
+        // 2. Получатель и телефон
+        const recipient = order.recipient_name || order.username || "Не указан";
+        const phone = order.phone_number || "Телефон не указан";
 
-        if (!isCompleted) {
-            if (status === 'assigned') {
-                actionButtons = `
-                    <button class="action-btn pickup">
-                        <i class="fas fa-box-open"></i> Забрать заказ
-                    </button>
-                `;
-            } else if (status === 'picked_up') {
-                actionButtons = `
-                    <button class="action-btn deliver">
-                        <i class="fas fa-check-circle"></i> Доставить
-                    </button>
-                `;
-            }
+        // 3. Сумма
+        const total = order.total_price || order.sum || 0;
 
-            actionButtons += `
-                <button class="action-btn details">
-                    <i class="fas fa-info-circle"></i> Подробности
-                </button>
-            `;
+        // 4. Дата доставки
+        let deliveryDate = "Дата не указана";
+        if (order.delivery_started) {
+            deliveryDate = new Date(order.delivery_started).toLocaleDateString('ru-RU');
+        } else if (order.assigned_at) {
+            deliveryDate = new Date(order.assigned_at).toLocaleDateString('ru-RU');
         }
 
         return `
-            <div class="order-card ${isCompleted ? 'delivered' : ''}" data-order-id="${order.id}">
+            <div class="order-card ${isCompleted ? 'completed' : 'active'}" data-order-id="${order.id}">
                 <div class="order-header">
-                    <div>
-                        <div class="order-id">Заказ #${order.id}</div>
-                        <div class="order-time">
-                            <i class="far fa-clock"></i> ${timeString}
-                        </div>
-                    </div>
-                    <div class="order-status ${statusClass}">${statusText}</div>
+                    <h4>Заказ #${order.id}</h4>
+                    <span class="order-sum">${total} ₽</span>
                 </div>
 
-                <div class="order-customer">
-                    <div class="customer-info">
+                <div class="order-info">
+                    <div class="info-row">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span><strong>Адрес:</strong> ${address}</span>
+                    </div>
+                    <div class="info-row">
                         <i class="fas fa-user"></i>
-                        <div>
-                            <div class="customer-name">${customerName}</div>
-                            <div class="customer-phone">${customerPhone}</div>
-                        </div>
+                        <span><strong>Получатель:</strong> ${recipient}</span>
                     </div>
-                    ${address ? `
-                        <div class="order-address">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span>${address}</span>
-                        </div>
-                    ` : ''}
+                    <div class="info-row">
+                        <i class="fas fa-phone"></i>
+                        <span><strong>Телефон:</strong> ${phone}</span>
+                    </div>
+                    <div class="info-row">
+                        <i class="fas fa-calendar"></i>
+                        <span><strong>Доставка:</strong> ${deliveryDate}</span>
+                    </div>
                 </div>
 
-                ${itemsHtml}
-
-                <div class="order-footer">
-                    <div class="order-total">${parseInt(order.total_price || 0).toLocaleString('ru-RU')} ₽</div>
-                    ${actionButtons ? `
-                        <div class="order-actions">
-                            ${actionButtons}
-                        </div>
-                    ` : ''}
-                </div>
+                ${!isCompleted ? `
+                    <div class="order-actions">
+                        <button class="btn btn-success" onclick="app.startDelivery(${order.id})">
+                            <i class="fas fa-play"></i> Начать доставку
+                        </button>
+                        <button class="btn btn-danger" onclick="app.cancelOrder(${order.id})">
+                            <i class="fas fa-times"></i> Отменить
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
     }
