@@ -496,7 +496,7 @@ def send_order_notification(order_id, status, courier_id=None):
         order = db.execute('''
                            SELECT o.*, tu.telegram_id
                            FROM orders o
-                                    LEFT JOIN telegram_users tu ON o.user_id = tu.telegram_id # Ищем по telegram_id
+                                    LEFT JOIN telegram_users tu ON o.user_id = tu.telegram_id
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
 
@@ -598,7 +598,6 @@ def send_order_notification(order_id, status, courier_id=None):
 
         print(f"📨 Отправка уведомления: заказ #{order_id}, telegram_id: {telegram_id}, статус: {status}")
 
-        # Формируем данные для отправки в бот
         notification_data = {
             'secret_token': BOT_SECRET_TOKEN,
             'telegram_id': telegram_id,
