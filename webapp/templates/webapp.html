@@ -148,24 +148,11 @@
         </div>
     </div>
 
+    <!-- Сначала загружаем скрипт -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+    <!-- Затем инициализируем -->
     <script>
-        // Telegram Web App интеграция
-        if (window.Telegram && Telegram.WebApp) {
-            // Расширяем на весь экран
-            Telegram.WebApp.expand();
-
-            // Устанавливаем минимальную высоту для контента
-            Telegram.WebApp.setViewportHeight();
-
-            // Настраиваем тему
-            if (Telegram.WebApp.colorScheme === 'dark') {
-                document.body.classList.add('dark-mode');
-            }
-
-            console.log('✅ Telegram Web App готов');
-        }
-
         // Переключение между landing page и магазином
         document.getElementById('openShopBtn').addEventListener('click', function() {
             document.getElementById('landingPage').style.display = 'none';
@@ -201,35 +188,62 @@
             }
         });
 
-        // Инициализация магазина сразу
+        // Инициализация магазина при загрузке страницы
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('📋 DOM загружен, проверяем доступность класса...');
+            console.log('📋 DOM загружен');
 
-            // Проверяем, что класс TelegramShop определен
-            if (typeof window.TelegramShop === 'function') {
-                console.log('✅ Класс TelegramShop доступен');
+            // Telegram Web App интеграция
+            if (window.Telegram && Telegram.WebApp) {
+                // Расширяем на весь экран
+                Telegram.WebApp.expand();
 
-                // Создаем экземпляр магазина если его нет
-                if (!window.shop) {
-                    try {
-                        window.shop = new window.TelegramShop();
-                        console.log('✅ Экземпляр магазина создан');
-                    } catch (error) {
-                        console.error('❌ Ошибка создания магазина:', error);
-                    }
+                // Устанавливаем минимальную высоту для контента
+                Telegram.WebApp.setViewportHeight();
+
+                // Настраиваем тему
+                if (Telegram.WebApp.colorScheme === 'dark') {
+                    document.body.classList.add('dark-mode');
                 }
-            } else {
-                console.error('❌ Класс TelegramShop не определен!');
-                console.log('Проверьте загрузку app.js');
+
+                console.log('✅ Telegram Web App готов');
             }
+
+            // Проверяем доступность класса TelegramShop
+            setTimeout(function() {
+                if (typeof TelegramShop === 'function') {
+                    console.log('✅ Класс TelegramShop доступен');
+                    // Экземпляр будет создан при нажатии кнопки "Открыть магазин"
+                } else {
+                    console.error('❌ Класс TelegramShop не определен!');
+                    // Показываем сообщение об ошибке
+                    const errorDiv = document.createElement('div');
+                    errorDiv.style.cssText = `
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: white;
+                        padding: 20px;
+                        border-radius: 10px;
+                        box-shadow: 0 0 20px rgba(0,0,0,0.2);
+                        text-align: center;
+                        z-index: 9999;
+                    `;
+                    errorDiv.innerHTML = `
+                        <p style="color: red; margin-bottom: 10px;">Ошибка загрузки приложения</p>
+                        <button onclick="location.reload()" style="
+                            background: #667eea;
+                            color: white;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 5px;
+                            cursor: pointer;
+                        ">Обновить страницу</button>
+                    `;
+                    document.body.appendChild(errorDiv);
+                }
+            }, 100);
         });
-    </script>
-    <script>
-        // Обработчик ошибок загрузки скрипта
-        document.querySelector('script[src*="app.js"]').onerror = function() {
-            console.error('❌ Ошибка загрузки app.js');
-            alert('Ошибка загрузки приложения. Пожалуйста, обновите страницу.');
-        };
     </script>
 </body>
 </html>
