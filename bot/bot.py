@@ -456,8 +456,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="🛒 ОТКРЫТЬ МАГАЗИН",
             web_app=WebAppInfo(url=web_app_url)  # Используем URL с параметрами
         )],
-        [InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders"),
-         InlineKeyboardButton("🚚 ТРЕК ЗАКАЗА", callback_data="track_order")],
+        [InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders")],
         [InlineKeyboardButton("❓ ПОМОЩЬ", callback_data="help")]
     ]
 
@@ -548,6 +547,9 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id = query.message.chat_id if query.message else user.id
             message_id = query.message.message_id if query.message else None
             is_callback = True
+
+            # ОТВЕТ НА CALLBACK - ФИКС ПРОБЛЕМЫ
+            await query.answer()  # Правильно - английская 'c' в 'callback'
         else:
             logger.error("❌ Неизвестный тип обновления")
             return
@@ -572,11 +574,11 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not user_record:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"))]]
 
                 if is_callback:
-                    await update.callback_query.answer()
-                    await update.callback_query.edit_message_text(
+                    # Уже ответили выше, теперь редактируем сообщение
+                    await query.edit_message_text(
                         response,
                         parse_mode='Markdown',
                         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -610,11 +612,10 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not orders:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"))]]
 
                 if is_callback:
-                    await update.callback_query.answer()
-                    await update.callback_query.edit_message_text(
+                    await query.edit_message_text(
                         response,
                         parse_mode='Markdown',
                         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -644,14 +645,13 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Простая клавиатура
             keyboard = [
-                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))],
+                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp"))],
                 [InlineKeyboardButton("🔄 Обновить", callback_data="refresh_orders")]
             ]
 
             if is_callback:
-                await update.callback_query.answer()
                 try:
-                    await update.callback_query.edit_message_text(
+                    await query.edit_message_text(
                         orders_text,
                         reply_markup=InlineKeyboardMarkup(keyboard),
                         parse_mode='Markdown'
@@ -677,9 +677,8 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             error_msg = "❌ Произошла ошибка при загрузке заказов."
 
             if is_callback:
-                await update.callback_query.answer()
                 try:
-                    await update.callback_query.edit_message_text(error_msg, parse_mode='Markdown')
+                    await query.edit_message_text(error_msg, parse_mode='Markdown')
                 except:
                     await context.bot.send_message(chat_id=chat_id, text=error_msg)
             else:
