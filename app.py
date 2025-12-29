@@ -3,6 +3,7 @@ import sqlite3
 import json
 import uuid
 import requests
+import telegram
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 import base64
@@ -20,9 +21,9 @@ app.config['DATABASE'] = 'shop.db'
 app.config['UPLOAD_FOLDER'] = 'webapp/static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
-# Конфигурация для бота (добавьте в переменные окружения)
-BOT_WEBHOOK_URL = os.environ.get('BOT_WEBHOOK_URL', 'https://telegram-shop-bot.onrender.com/notify')
-BOT_SECRET_TOKEN = os.environ.get('BOT_SECRET_TOKEN', '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50')
+# ========== КОНФИГУРАЦИЯ ДЛЯ TELEGRAM БОТА ==========
+TELEGRAM_BOT_TOKEN = '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50'  # Ваш токен бота
+TELEGRAM_BOT = telegram.Bot(token=TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
@@ -484,15 +485,94 @@ def init_db():
 init_db()
 
 
+
 # ========== НОВЫЕ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ ==========
 
+
+def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=None, courier_phone=None):
+    """Синхронная отправка уведомления через Telegram API"""
+    try:
+        if not TELEGRAM_BOT:
+            print("⚠️ Telegram бот не настроен")
+            return False
+
+        # Проверяем, что telegram_id валидный
+        if not telegram_id or telegram_id == 0:
+            print(f"⚠️ Неверный telegram_id: {telegram_id}")
+            return False
+
+        # Форматируем сообщение
+        status_messages = {
+            'created': {
+                'title': '✅ *Заказ принят!*',
+                'message': f'Заказ #{order_id} успешно создан и передан на обработку.'
+            },
+            'assigned': {
+                'title': '👤 *Курьер назначен!*',
+                'message': f'Заказ #{order_id} принят курьером и скоро будет доставлен.'
+            },
+            'picked_up': {
+                'title': '📦 *Товар у курьера!*',
+                'message': f'Заказ #{order_id} собран и готов к доставке.'
+            },
+            'on_the_way': {
+                'title': '🚗 *Курьер едет к вам!*',
+                'message': f'Заказ #{order_id} уже в пути. Прибудет в ближайшее время!'
+            },
+            'delivered': {
+                'title': '🎉 *Заказ доставлен!*',
+                'message': f'Заказ #{order_id} успешно передан. Спасибо за покупку!'
+            }
+        }
+
+        status_info = status_messages.get(status, {
+            'title': f'📦 *Статус заказа #{order_id} изменен*',
+            'message': f'Новый статус: {status}'
+        })
+
+        # Собираем сообщение
+        message = f"{status_info['title']}\n\n{status_info['message']}\n\n"
+
+        if courier_name:
+            message += f"👤 *Курьер:* {courier_name}\n"
+
+        if courier_phone:
+            message += f"📱 *Телефон:* `{courier_phone}`\n"
+
+        message += f"\n📋 *Отследить:* /track_{order_id}"
+
+        # Отправляем сообщение
+        TELEGRAM_BOT.send_message(
+            chat_id=telegram_id,
+            text=message,
+            parse_mode='Markdown',
+            disable_web_page_preview=True
+        )
+
+        print(f"✅ Telegram уведомление отправлено пользователю {telegram_id} (заказ #{order_id})")
+        return True
+
+    except telegram.error.Unauthorized as e:
+        print(f"❌ Бот заблокирован пользователем {telegram_id}: {e}")
+        return False
+    except telegram.error.BadRequest as e:
+        print(f"❌ Неверный chat_id {telegram_id} или форматирование: {e}")
+        return False
+    except telegram.error.TelegramError as e:
+        print(f"❌ Ошибка Telegram API: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Неизвестная ошибка отправки: {e}")
+        return False
+
+
 def send_order_notification(order_id, status, courier_id=None):
-    """Упрощенная версия отправки уведомлений"""
+    """Отправка уведомлений покупателю через Telegram бота напрямую"""
     db = None
     try:
         db = get_db()
 
-        # Просто получаем заказ
+        # Получаем информацию о заказе
         order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
 
         if not order:
@@ -509,79 +589,37 @@ def send_order_notification(order_id, status, courier_id=None):
             return False
 
         # Получаем информацию о курьере если есть
-        courier_info = {}
+        courier_name = None
+        courier_phone = None
+
         if courier_id:
             courier = db.execute('SELECT full_name, phone FROM couriers WHERE id = ?',
                                  (courier_id,)).fetchone()
             if courier:
-                courier_dict = dict(courier)
-                courier_info = {
-                    'name': courier_dict['full_name'],
-                    'phone': courier_dict['phone']
-                }
+                courier = dict(courier)
+                courier_name = courier.get('full_name')
+                courier_phone = courier.get('phone')
 
-        # Закрываем базу
-        if db:
-            db.close()
-            db = None
+        # Отправляем уведомление через Telegram API
+        success = send_telegram_notification_sync(
+            telegram_id=telegram_id,
+            order_id=order_id,
+            status=status,
+            courier_name=courier_name,
+            courier_phone=courier_phone
+        )
 
-        # Простое сообщение
-        message = f"📦 Заказ #{order_id}\n\n"
-
-        if status == 'created':
-            message += "✅ Заказ принят!\n"
-        elif status == 'assigned':
-            message += "👤 Курьер назначен!\n"
-        elif status == 'picked_up':
-            message += "📦 Товар у курьера!\n"
-        elif status == 'on_the_way':
-            message += "🚗 Курьер едет к вам!\n"
-        elif status == 'delivered':
-            message += "🎉 Заказ доставлен!\n"
+        if success:
+            print(f"✅ Уведомление для заказа #{order_id} отправлено (статус: {status})")
         else:
-            message += f"📊 Статус: {status}\n"
+            print(f"⚠️ Уведомление для заказа #{order_id} не отправлено")
 
-        if courier_info.get('name'):
-            message += f"\n👤 Курьер: {courier_info['name']}\n"
-
-        if courier_info.get('phone'):
-            message += f"📱 Телефон: {courier_info['phone']}\n"
-
-        message += f"\n📋 Команда для отслеживания: /track_{order_id}"
-
-        # Формируем данные
-        notification_data = {
-            'secret_token': BOT_SECRET_TOKEN,
-            'telegram_id': telegram_id,
-            'order_id': order_id,
-            'status': status,
-            'message': message,
-            'courier_info': courier_info,
-            'timestamp': datetime.now().isoformat()
-        }
-
-        # Отправляем HTTP запрос к боту
-        try:
-            response = requests.post(
-                BOT_WEBHOOK_URL,
-                json=notification_data,
-                headers={'Content-Type': 'application/json'},
-                timeout=5
-            )
-
-            if response.status_code == 200:
-                print(f"✅ Уведомление для заказа #{order_id} отправлено в бот")
-                return True
-            else:
-                print(f"❌ Ошибка отправки: HTTP {response.status_code}")
-                return False
-
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Ошибка соединения с ботом: {e}")
-            return False
+        return success
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления: {e}")
+        print(f"❌ Критическая ошибка отправки уведомления: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         if db:
