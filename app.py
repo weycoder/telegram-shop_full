@@ -2,7 +2,7 @@ import os
 import sqlite3
 import json
 import uuid
-import requests  # Добавим для HTTP запросов к боту
+import requests
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 import base64
@@ -433,10 +433,7 @@ def init_db():
                                INSERT INTO couriers (username, password, full_name, phone, vehicle_type)
                                VALUES (?, ?, ?, ?, ?)
                                ''', [
-                                   ('courier1', '123456', 'Иван Курьеров', '+79991112233', 'car'),
-                                   ('courier2', '123456', 'Петр Доставкин', '+79992223344', 'bike'),
-                                   ('courier3', '123456', 'Алексей Развозов', '+79993334455', 'foot'),
-                                   ('admin', 'admin123', 'Администратор', '+79990000000', 'car')
+                                   ('courier1', '123456', 'Иван Курьеров', '+79991112233', 'car')
                                ])
 
         # Тестовые товары
@@ -499,7 +496,7 @@ def send_order_notification(order_id, status, courier_id=None):
         order = db.execute('''
                            SELECT o.*, u.telegram_id
                            FROM orders o
-                                    LEFT JOIN telegram_users u ON o.user_id = u.id  # ИСПРАВЛЕНО: u.telegram_id
+                                    LEFT JOIN telegram_users u ON o.user_id = u.id
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
 
@@ -576,7 +573,7 @@ def send_order_notification(order_id, status, courier_id=None):
         # Формируем данные для отправки в бот
         notification_data = {
             'secret_token': BOT_SECRET_TOKEN,
-            'telegram_id': telegram_id, 
+            'telegram_id': telegram_id,
             'order_id': order_id,
             'status': status,
             'title': status_info['title'],
