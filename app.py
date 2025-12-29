@@ -491,6 +491,7 @@ init_db()
 
 def send_order_notification(order_id, status, courier_id=None):
     """Отправка уведомлений покупателю через Telegram бота"""
+    db = None
     try:
         db = get_db()
 
@@ -498,7 +499,7 @@ def send_order_notification(order_id, status, courier_id=None):
         order = db.execute('''
                            SELECT o.*, u.telegram_id
                            FROM orders o
-                                    LEFT JOIN telegram_users u ON o.user_id = u.telegram_id
+                                    LEFT JOIN telegram_users u ON o.user_id = u.id  # ИСПРАВЛЕНО: u.telegram_id
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
 
@@ -506,8 +507,10 @@ def send_order_notification(order_id, status, courier_id=None):
             print(f"⚠️ Заказ #{order_id} не найден")
             return False
 
-        user_id = order['user_id']
-        order_data = dict(order)
+        # Преобразуем Row в dict
+        order_dict = dict(order)
+        user_id = order_dict['user_id']
+        telegram_id = order_dict.get('telegram_id')
 
         # Получаем информацию о курьере если есть
         courier_info = {}
@@ -518,10 +521,16 @@ def send_order_notification(order_id, status, courier_id=None):
                                  WHERE id = ?
                                  ''', (courier_id,)).fetchone()
             if courier:
+                courier_dict = dict(courier)
                 courier_info = {
-                    'name': courier['full_name'],
-                    'phone': courier['phone']
+                    'name': courier_dict['full_name'],
+                    'phone': courier_dict['phone']
                 }
+
+        # Закрываем базу данных перед HTTP запросом
+        if db:
+            db.close()
+            db = None
 
         # Сообщения для разных статусов
         messages = {
@@ -560,18 +569,22 @@ def send_order_notification(order_id, status, courier_id=None):
             'message': f'Новый статус: {status}'
         })
 
+        if not telegram_id:
+            print(f"⚠️ У пользователя заказа #{order_id} нет telegram_id для уведомлений")
+            return False
+
         # Формируем данные для отправки в бот
         notification_data = {
             'secret_token': BOT_SECRET_TOKEN,
-            'telegram_id': order.get('telegram_id'),
+            'telegram_id': telegram_id,  # ИСПРАВЛЕНО
             'order_id': order_id,
             'status': status,
             'title': status_info['title'],
             'message': status_info['message'],
             'order_info': {
-                'total_price': order['total_price'],
-                'recipient_name': order['recipient_name'],
-                'payment_method': order['payment_method']
+                'total_price': order_dict['total_price'],
+                'recipient_name': order_dict['recipient_name'],
+                'payment_method': order_dict['payment_method']
             },
             'courier_info': courier_info,
             'timestamp': datetime.now().isoformat()
@@ -588,47 +601,20 @@ def send_order_notification(order_id, status, courier_id=None):
 
             if response.status_code == 200:
                 print(f"✅ Уведомление для заказа #{order_id} отправлено в бот (статус: {status})")
-
-                # Логируем успешную отправку
-                db.execute('''
-                           INSERT INTO notification_logs (order_id, telegram_id, status, message, sent_at, success)
-                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
-                           ''', (order_id, order.get('telegram_id'), status, status_info['message']))
-
-                db.commit()
                 return True
             else:
                 print(f"❌ Ошибка отправки уведомления: HTTP {response.status_code}")
-
-                # Логируем ошибку
-                db.execute('''
-                           INSERT INTO notification_logs (order_id, telegram_id, status, message, sent_at, success,
-                                                          error_message)
-                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, ?)
-                           ''', (order_id, order.get('telegram_id'), status, status_info['message'],
-                                 f"HTTP {response.status_code}"))
-
-                db.commit()
                 return False
 
         except requests.exceptions.RequestException as e:
             print(f"❌ Ошибка соединения с ботом: {e}")
-
-            # Логируем ошибку соединения
-            db.execute('''
-                       INSERT INTO notification_logs (order_id, telegram_id, status, message, sent_at, success,
-                                                      error_message)
-                       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, ?)
-                       ''', (order_id, order.get('telegram_id'), status, status_info['message'], str(e)))
-
-            db.commit()
             return False
 
     except Exception as e:
         print(f"❌ Критическая ошибка отправки уведомления: {e}")
         return False
     finally:
-        if 'db' in locals():
+        if db:
             db.close()
 
 
@@ -897,11 +883,10 @@ def get_courier_orders():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-
-
 @app.route('/api/courier/update-status', methods=['POST'])
 def update_delivery_status():
     """Обновить статус доставки"""
+    db = None
     try:
         data = request.json
         order_id = data.get('order_id')
@@ -917,7 +902,6 @@ def update_delivery_status():
                                 (order_id, courier_id)).fetchone()
 
         if not assignment:
-            db.close()
             return jsonify({'success': False, 'error': 'Назначение не найдено'}), 404
 
         # Сохраняем фото, если есть
@@ -955,19 +939,25 @@ def update_delivery_status():
                        (status, order_id, courier_id))
 
         db.commit()
-        db.close()
 
-        # Отправляем уведомление в бот
+        # Получаем информацию о курьере ДО закрытия базы
         courier = db.execute('SELECT full_name, phone FROM couriers WHERE id = ?', (courier_id,)).fetchone()
         courier_name = courier['full_name'] if courier else None
         courier_phone = courier['phone'] if courier else None
 
+        # ЗАКРЫВАЕМ базу данных ПЕРЕД отправкой уведомления
+        if db:
+            db.close()
+
+        # Отправляем уведомление в бот
         send_order_notification(order_id, status, courier_id)
 
         return jsonify({'success': True, 'photo_url': photo_url})
 
     except Exception as e:
         print(f"❌ Ошибка обновления статуса: {e}")
+        if db:
+            db.close()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

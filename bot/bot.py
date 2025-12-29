@@ -545,17 +545,21 @@ async def track_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать все заказы пользователя"""
     try:
-        # Определяем источник вызова
-        if update.callback_query:
+        # Определяем тип обновления
+        if update.message:
+            user = update.effective_user
+            chat_id = update.effective_chat.id
+            message_id = update.message.message_id
+            is_callback = False
+        elif update.callback_query:
             query = update.callback_query
             user = query.from_user
             chat_id = query.message.chat_id if query.message else user.id
             message_id = query.message.message_id if query.message else None
+            is_callback = True
         else:
-            query = None
-            user = update.effective_user
-            chat_id = update.effective_chat.id if update.effective_chat else user.id
-            message_id = None
+            logger.error("❌ Неизвестный тип обновления")
+            return
 
         if not user:
             logger.error("❌ Не удалось определить пользователя")
@@ -564,7 +568,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"📋 Получение заказов для пользователя {user.id} ({user.username})")
 
         # Подключаемся к базе данных
-        conn = sqlite3.connect("shop.db")
+        conn = sqlite3.connect(SHOP_DB_PATH)
         conn.row_factory = sqlite3.Row
 
         try:
@@ -576,25 +580,16 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if not user_record:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
-
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_DOMAIN}/"))]]
 
-                if query:
-                    try:
-                        await query.answer()
-                        await query.edit_message_text(
-                            response,
-                            parse_mode='Markdown',
-                            reply_markup=InlineKeyboardMarkup(keyboard)
-                        )
-                    except:
-                        await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=response,
-                            parse_mode='Markdown',
-                            reply_markup=InlineKeyboardMarkup(keyboard)
-                        )
+                if is_callback:
+                    await update.callback_query.answer()
+                    await update.callback_query.edit_message_text(
+                        response,
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
                 else:
                     await context.bot.send_message(
                         chat_id=chat_id,
@@ -623,25 +618,16 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if not orders:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
-
                 keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))]]
+                    [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_DOMAIN}/"))]]
 
-                if query:
-                    try:
-                        await query.answer()
-                        await query.edit_message_text(
-                            response,
-                            parse_mode='Markdown',
-                            reply_markup=InlineKeyboardMarkup(keyboard)
-                        )
-                    except:
-                        await context.bot.send_message(
-                            chat_id=chat_id,
-                            text=response,
-                            parse_mode='Markdown',
-                            reply_markup=InlineKeyboardMarkup(keyboard)
-                        )
+                if is_callback:
+                    await update.callback_query.answer()
+                    await update.callback_query.edit_message_text(
+                        response,
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
                 else:
                     await context.bot.send_message(
                         chat_id=chat_id,
@@ -651,65 +637,58 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                 return
 
-            # Формируем список заказов
+            # Формируем список заказов (ПРОСТОЙ ТЕКСТ без сложного форматирования)
             orders_text = "📋 *Ваши заказы:*\n\n"
 
             for order in orders:
-                order_dict = dict(order)
+                order = dict(order)
 
-                # Простой текст без сложного форматирования
-                orders_text += f"📦 *Заказ #{order_dict['id']}*\n"
-                orders_text += f"💵 Сумма: {order_dict['total_price']} ₽\n"
-                orders_text += f"📊 Статус: {get_order_status_text(order_dict['status'])}\n"
-                orders_text += f"👤 Получатель: {order_dict['recipient_name']}\n"
-                orders_text += f"📅 Дата: {order_dict['created_at'][:10]}\n"
-                orders_text += f"🚚 Доставка: {'Курьер' if order_dict.get('delivery_type') == 'courier' else 'Самовывоз'}\n\n"
-                orders_text += "────────────\n"
+                # Используем простой текст
+                orders_text += f"📦 Заказ #{order['id']}\n"
+                orders_text += f"💵 Сумма: {order['total_price']} ₽\n"
+                orders_text += f"📊 Статус: {order['status']}\n"
+                orders_text += f"👤 Получатель: {order['recipient_name']}\n"
+                orders_text += f"📅 Дата: {order['created_at'][:10]}\n"
+                orders_text += f"🚚 Тип: {'Курьер' if order.get('delivery_type') == 'courier' else 'Самовывоз'}\n\n"
 
-            # Создаем простую клавиатуру
+            # Простая клавиатура
             keyboard = [
-                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_URL}/"))],
+                [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=f"https://{WEBAPP_DOMAIN}/"))],
                 [InlineKeyboardButton("🔄 Обновить", callback_data="refresh_orders")]
             ]
 
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            # Отправляем/редактируем сообщение
-            if query:
+            if is_callback:
+                await update.callback_query.answer()
                 try:
-                    await query.answer()
-                    await query.edit_message_text(
+                    await update.callback_query.edit_message_text(
                         orders_text,
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown',
-                        disable_web_page_preview=True
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
                     )
                 except Exception as e:
-                    logger.error(f"Ошибка редактирования: {e}")
+                    # Если не можем отредактировать, отправляем новое сообщение
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text=orders_text,
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown',
-                        disable_web_page_preview=True
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
                     )
             else:
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=orders_text,
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown',
-                    disable_web_page_preview=True
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
                 )
 
         except Exception as e:
             logger.error(f"❌ Ошибка получения заказов: {e}")
-            error_msg = "❌ Произошла ошибка при загрузке заказов. Попробуйте позже."
+            error_msg = "❌ Произошла ошибка при загрузке заказов."
 
-            if query:
+            if is_callback:
+                await update.callback_query.answer()
                 try:
-                    await query.answer()
-                    await query.edit_message_text(error_msg, parse_mode='Markdown')
+                    await update.callback_query.edit_message_text(error_msg, parse_mode='Markdown')
                 except:
                     await context.bot.send_message(chat_id=chat_id, text=error_msg)
             else:
@@ -1026,6 +1005,6 @@ def main():
 
 
 if __name__ == '__main__':
-    asyncio.create_task(process_notification_queue())
     init_database()  # Добавьте эту строку
     main()
+    asyncio.create_task(process_notification_queue())
