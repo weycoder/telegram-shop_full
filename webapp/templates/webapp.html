@@ -203,11 +203,33 @@
 
         // Инициализация магазина сразу
         document.addEventListener('DOMContentLoaded', function() {
-            // Автоматически создаем экземпляр магазина
-            if (typeof TelegramShop !== 'undefined' && !window.shop) {
-                window.shop = new TelegramShop();
+            console.log('📋 DOM загружен, проверяем доступность класса...');
+
+            // Проверяем, что класс TelegramShop определен
+            if (typeof window.TelegramShop === 'function') {
+                console.log('✅ Класс TelegramShop доступен');
+
+                // Создаем экземпляр магазина если его нет
+                if (!window.shop) {
+                    try {
+                        window.shop = new window.TelegramShop();
+                        console.log('✅ Экземпляр магазина создан');
+                    } catch (error) {
+                        console.error('❌ Ошибка создания магазина:', error);
+                    }
+                }
+            } else {
+                console.error('❌ Класс TelegramShop не определен!');
+                console.log('Проверьте загрузку app.js');
             }
         });
+    </script>
+    <script>
+        // Обработчик ошибок загрузки скрипта
+        document.querySelector('script[src*="app.js"]').onerror = function() {
+            console.error('❌ Ошибка загрузки app.js');
+            alert('Ошибка загрузки приложения. Пожалуйста, обновите страницу.');
+        };
     </script>
 </body>
 </html>

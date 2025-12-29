@@ -351,7 +351,7 @@ class TelegramShop {
         this.loadProducts(category);
     }
 
-    async function viewProduct(productId) {
+    async viewProduct(productId) {
         try {
             // Добавьте console.log для отладки
             console.log('🔄 Загрузка товара ID:', productId);
@@ -384,7 +384,7 @@ class TelegramShop {
     }
 
     // Добавьте эту функцию для теста всех эндпоинтов
-    async function testAllEndpoints() {
+    async testAllEndpoints() {
         const endpoints = [
             '/api/products',
             '/api/products/1',
@@ -1828,3 +1828,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = TelegramShop;
 }
+
+window.TelegramShop = TelegramShop;
