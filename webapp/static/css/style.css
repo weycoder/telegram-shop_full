@@ -1792,3 +1792,42 @@ html {
 .dark-mode .notification-message i {
     color: #8BC34A;
 }
+
+/* Добавить в конец файла */
+#closeCartAndReturn {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+    transition: all 0.3s ease;
+}
+
+#closeCartAndReturn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+/* Убедиться, что delivery-actions видны */
+.delivery-actions {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+    background: white;
+    display: flex;
+    gap: 10px;
+    position: sticky;
+    bottom: 0;
+}
+
+.delivery-actions .btn {
+    flex: 1;
+}

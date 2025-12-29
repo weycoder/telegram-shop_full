@@ -814,9 +814,53 @@ class TelegramShop {
         });
     }
 
+        // Добавить в класс TelegramShop
+    resetCartInterface() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        // Сбрасываем к стандартному виду корзины
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
+                    <button class="close-cart" id="closeCart" title="Закрыть">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="cart-items" id="cartItems">
+                    <!-- Товары будут здесь -->
+                </div>
+
+                <div class="cart-footer">
+                    <div class="cart-summary">
+                        <div class="cart-total">
+                            <span>Итого:</span>
+                            <span class="total-price" id="cartTotal">0 ₽</span>
+                        </div>
+                        <div class="cart-actions">
+                            <button class="btn btn-outline" id="clearCart">
+                                <i class="fas fa-trash"></i> Очистить
+                            </button>
+                            <button class="btn btn-primary" id="checkoutBtn">
+                                <i class="fas fa-paper-plane"></i> Купить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Назначаем обработчики
+        this.bindEvent('closeCart', 'click', () => this.closeCart());
+        this.bindEvent('clearCart', 'click', () => this.clearCart());
+        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+    }
+
 
     toggleCart() {
-        // Сбрасываем данные доставки при открытии корзины
+        // ОЧИЩАЕМ все данные о доставке и предыдущих состояниях
         this.deliveryData = {
             type: null,
             address_id: null,
@@ -824,14 +868,57 @@ class TelegramShop {
             address_details: null
         };
 
-        // Всегда обновляем отображение перед открытием
+        // ВСЕГДА показываем обычную корзину, а не окно подтверждения
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        // Сбрасываем содержимое корзины к стандартному виду
         this.updateCartDisplay();
 
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (cartOverlay) {
-            cartOverlay.style.display = 'flex';
-            this.updateBackButton();
-        }
+        // Устанавливаем стандартный HTML для корзины
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
+                    <button class="close-cart" id="closeCart" title="Закрыть">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="cart-items" id="cartItems">
+                    <!-- Товары будут загружены через updateCartDisplay() -->
+                </div>
+
+                <div class="cart-footer">
+                    <div class="cart-summary">
+                        <div class="cart-total">
+                            <span>Итого:</span>
+                            <span class="total-price" id="cartTotal">0 ₽</span>
+                        </div>
+                        <div class="cart-actions">
+                            <button class="btn btn-outline" id="clearCart">
+                                <i class="fas fa-trash"></i> Очистить
+                            </button>
+                            <button class="btn btn-primary" id="checkoutBtn">
+                                <i class="fas fa-paper-plane"></i> Купить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Обновляем отображение товаров
+        this.updateCartDisplay();
+
+        // Назначаем обработчики
+        this.bindEvent('closeCart', 'click', () => this.closeCart());
+        this.bindEvent('clearCart', 'click', () => this.clearCart());
+        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+
+        // Показываем корзину
+        cartOverlay.style.display = 'flex';
+        this.updateBackButton();
     }
 
     closeCart() {
@@ -917,26 +1004,17 @@ class TelegramShop {
                     </button>
                 </div>
                 <div class="delivery-actions">
-                    <button class="btn btn-outline" id="backToDeliveryBtn">
+                    <!-- ИЗМЕНЕНИЕ ЗДЕСЬ: вызываем returnToCartFromDelivery() -->
+                    <button class="btn btn-outline" onclick="shop.returnToCartFromDelivery()">
                         <i class="fas fa-arrow-left"></i> Назад
                     </button>
                 </div>
             </div>
         `;
 
-        // НАЗНАЧАЕМ ОБРАБОТЧИКИ
+        // Назначаем обработчики
         document.getElementById('courierOption').addEventListener('click', () => this.selectDeliveryType('courier'));
         document.getElementById('pickupOption').addEventListener('click', () => this.selectDeliveryType('pickup'));
-
-        // ФИКС: правильный обработчик для кнопки "Назад"
-        document.getElementById('backToCartBtn').addEventListener('click', () => {
-            // ВОЗВРАЩАЕМ ОБЫЧНУЮ КОРЗИНУ
-            this.closeCart(); // Сначала закрываем
-            setTimeout(() => {
-                this.toggleCart(); // Потом открываем нормальную корзину
-            }, 100);
-        });
-
         document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
     }
 
@@ -953,21 +1031,31 @@ class TelegramShop {
     returnToCartFromDelivery() {
         console.log('🔙 Возврат в корзину из выбора доставки');
 
-        // Закрываем текущий вид
+        // Сбрасываем данные доставки
+        this.deliveryData = {
+            type: null,
+            address_id: null,
+            pickup_point: null,
+            address_details: null
+        };
+
+        // Закрываем текущее окно выбора доставки
         this.closeCart();
 
-        // Даем время на анимацию закрытия
+        // Даём время на анимацию закрытия (300ms)
         setTimeout(() => {
-            // Открываем обычную корзину
-            this.toggleCart();
+            // Восстанавливаем обычный интерфейс корзины
+            this.resetCartInterface();
 
-            // Сбрасываем данные доставки
-            this.deliveryData = {
-                type: null,
-                address_id: null,
-                pickup_point: null,
-                address_details: null
-            };
+            // Обновляем отображение товаров
+            this.updateCartDisplay();
+
+            // ОТКРЫВАЕМ корзину снова
+            const cartOverlay = document.getElementById('cartOverlay');
+            if (cartOverlay) {
+                cartOverlay.style.display = 'flex';
+                this.updateBackButton();
+            }
         }, 300);
     }
 
@@ -1471,7 +1559,7 @@ class TelegramShop {
                     <div class="confirmation-message">
                         <p>Мы свяжемся с вами для уточнения деталей</p>
                     </div>
-                    <button class="btn btn-primary" id="returnToShopBtn">
+                    <button class="btn btn-primary" id="closeCartAndReturn">
                         <i class="fas fa-home"></i> Вернуться в магазин
                     </button>
                 </div>
@@ -1479,14 +1567,19 @@ class TelegramShop {
         `;
 
         // НАЗНАЧАЕМ ОБРАБОТЧИК
-        document.getElementById('returnToShopBtn').addEventListener('click', () => {
-            // Очищаем корзину ПОСЛЕ показа суммы
+        document.getElementById('closeCartAndReturn').addEventListener('click', () => {
+            // Очищаем корзину
             this.cart = [];
             this.saveCart();
             this.updateCartCount();
 
-            // Закрываем корзину и возвращаемся в магазин
+            // Закрываем корзину
             this.closeCart();
+
+            // Сбрасываем интерфейс корзины для следующего раза
+            setTimeout(() => {
+                this.resetCartInterface();
+            }, 300);
         });
     }
 
