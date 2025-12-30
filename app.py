@@ -539,7 +539,7 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
         }
 
         status_info = status_messages.get(status, {
-            'title': f'📦 Статус заказа #{order_id} изменен',
+            'title': f'📦 Статус заказа #{   order_id} изменен',
             'message': f'Новый статус: {status}'
         })
 
@@ -1281,6 +1281,8 @@ def update_delivery_status():
 
 # ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
 
+# ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
+
 @app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
 def admin_get_order_details(order_id):
     """Получить детали заказа для админки"""
@@ -1322,7 +1324,7 @@ def admin_get_order_details(order_id):
 
 @app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
 def admin_update_order_status(order_id):
-    """Изменить статус заказа в админке"""
+    """Изменить статус заказа в админке - БЕЗ УВЕДОМЛЕНИЙ"""
     db = get_db()
     try:
         data = request.get_json()
@@ -1332,14 +1334,13 @@ def admin_update_order_status(order_id):
             db.close()
             return jsonify({'error': 'Некорректный статус'}), 400
 
-        # Обновляем статус заказа
+        # Обновляем статус заказа (только обновляем, без уведомлений)
         db.execute('UPDATE orders SET status = ? WHERE id = ?',
                    (new_status, order_id))
         db.commit()
         db.close()
 
-        # Отправляем уведомление
-        send_order_notification(order_id, new_status)
+        print(f"✅ Статус заказа #{order_id} изменен на '{new_status}' (без уведомления клиенту)")
 
         return jsonify({'success': True, 'status': new_status})
 
@@ -1352,7 +1353,7 @@ def admin_update_order_status(order_id):
 
 @app.route('/api/admin/orders/<int:order_id>/cancel', methods=['PUT'])
 def admin_cancel_order(order_id):
-    """Отменить заказ в админке"""
+    """Отменить заказ в админке - БЕЗ УВЕДОМЛЕНИЙ"""
     db = get_db()
     try:
         # Получаем текущий статус
@@ -1365,14 +1366,13 @@ def admin_cancel_order(order_id):
             db.close()
             return jsonify({'error': 'Нельзя отменить завершенный заказ'}), 400
 
-        # Обновляем статус
+        # Обновляем статус (только отменяем, без уведомлений)
         db.execute('UPDATE orders SET status = "cancelled" WHERE id = ?',
                    (order_id,))
         db.commit()
         db.close()
 
-        # Отправляем уведомление
-        send_order_notification(order_id, 'cancelled')
+        print(f"✅ Заказ #{order_id} отменен (без уведомления клиенту)")
 
         return jsonify({'success': True})
 
@@ -1381,7 +1381,6 @@ def admin_cancel_order(order_id):
             db.close()
         print(f"❌ Ошибка отмены заказа #{order_id}: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/courier/order/<int:order_id>', methods=['GET'])
 def get_order_details(order_id):

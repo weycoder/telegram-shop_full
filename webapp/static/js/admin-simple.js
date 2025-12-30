@@ -237,6 +237,7 @@ class AdminPanel {
         }
     }
 
+
     // Метод для отмены заказа
     async cancelOrder(orderId) {
         if (!confirm(`Отменить заказ #${orderId}? Это действие нельзя отменить.`)) {
