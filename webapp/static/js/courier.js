@@ -45,7 +45,6 @@ class CourierApp {
         if (mainEl) mainEl.style.display = 'none';
     }
 
-
     showCourierInterface() {
         const loginEl = document.getElementById('login-screen');
         const mainEl = document.getElementById('main-screen');
@@ -55,7 +54,6 @@ class CourierApp {
 
         // Обновляем данные курьера
         if (this.currentCourier) {
-            // В твоем HTML есть #courier-info?
             const infoEl = document.getElementById('courier-info');
             if (infoEl) {
                 infoEl.textContent = `${this.currentCourier.full_name} • ${this.currentCourier.phone}`;
@@ -64,77 +62,60 @@ class CourierApp {
     }
 
     // Назначение обработчиков событий
-        // Назначение обработчиков событий
     bindEvents() {
         console.log('🔗 Назначаем обработчики событий...');
 
-        // Безопасное назначение обработчиков с проверкой существования элементов
-        this.safeAddEventListener('loginForm', 'submit', (e) => {
-            e.preventDefault();
-            this.login();
-        });
+        // Вход через глобальную функцию login() из courier.html
+        const loginForm = document.getElementById('login-screen');
+        if (loginForm) {
+            const loginBtn = loginForm.querySelector('.btn');
+            if (loginBtn) {
+                loginBtn.addEventListener('click', () => {
+                    this.login();
+                });
+            }
+        }
 
-        this.safeAddEventListener('logoutBtn', 'click', (e) => {
-            e.preventDefault();
-            this.logout();
-        });
-
-        this.safeAddEventListener('menuToggle', 'click', () => {
-            document.querySelector('.sidebar')?.classList?.toggle('collapsed');
-            document.querySelector('.main-content')?.classList?.toggle('expanded');
-        });
-
-        this.safeAddEventListener('refreshActive', 'click', () => {
-            this.loadOrders();
-        });
+        // Выход через глобальную функцию logout()
+        const logoutBtn = document.querySelector('.logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                this.logout();
+            });
+        }
 
         // Закрытие модальных окон
-        this.safeAddEventListener('closeOrderModal', 'click', () => {
-            this.hideModal('orderModal');
-        });
-
-        this.safeAddEventListener('closeDeliveryModal', 'click', () => {
-            this.hideModal('deliveryModal');
-        });
-
-        this.safeAddEventListener('closePickupModal', 'click', () => {
-            this.hideModal('pickupModal');
-        });
-
-        this.safeAddEventListener('cancelDeliveryBtn', 'click', () => {
-            this.hideModal('deliveryModal');
-        });
-
-        this.safeAddEventListener('cancelPickupBtn', 'click', () => {
-            this.hideModal('pickupModal');
-        });
-
-        // Безопасное делегирование для кнопок
         document.addEventListener('click', (e) => {
             // Подробности заказа
-            if (e.target.closest('.action-btn.details')) {
+            if (e.target.closest('.btn-details') || e.target.closest('.action-btn.details')) {
                 const orderCard = e.target.closest('.order-card');
                 if (orderCard) {
-                    const orderId = orderCard.dataset.orderId;
-                    this.showOrderDetails(orderId);
+                    const orderId = this.extractOrderId(orderCard);
+                    if (orderId) {
+                        this.showOrderDetails(orderId);
+                    }
                 }
             }
 
             // Забрать заказ
-            if (e.target.closest('.action-btn.pickup')) {
+            if (e.target.closest('.btn-pickup') || e.target.closest('.action-btn.pickup')) {
                 const orderCard = e.target.closest('.order-card');
                 if (orderCard) {
-                    const orderId = orderCard.dataset.orderId;
-                    this.showPickupConfirmation(orderId);
+                    const orderId = this.extractOrderId(orderCard);
+                    if (orderId) {
+                        this.showPickupConfirmation(orderId);
+                    }
                 }
             }
 
             // Доставка
-            if (e.target.closest('.action-btn.deliver')) {
+            if (e.target.closest('.btn-deliver') || e.target.closest('.action-btn.deliver')) {
                 const orderCard = e.target.closest('.order-card');
                 if (orderCard) {
-                    const orderId = orderCard.dataset.orderId;
-                    this.showDeliveryModal(orderId);
+                    const orderId = this.extractOrderId(orderCard);
+                    if (orderId) {
+                        this.showDeliveryModal(orderId);
+                    }
                 }
             }
         });
@@ -143,62 +124,36 @@ class CourierApp {
         this.bindPhotoEvents();
     }
 
-    // Безопасный метод добавления обработчика
-    safeAddEventListener(elementId, event, handler) {
-        const element = document.getElementById(elementId);
-        if (element) {
-            element.addEventListener(event, handler);
-        } else {
-            console.warn(`⚠️ Элемент #${elementId} не найден для назначения обработчика ${event}`);
+    extractOrderId(orderCard) {
+        // Пробуем разные способы извлечения ID заказа
+        if (orderCard.dataset.orderId) {
+            return orderCard.dataset.orderId;
         }
+
+        const orderIdEl = orderCard.querySelector('.order-id');
+        if (orderIdEl) {
+            const match = orderIdEl.textContent.match(/#(\d+)/);
+            if (match) return match[1];
+        }
+
+        return null;
     }
 
     // Обработчики для работы с фото
     bindPhotoEvents() {
-        // Безопасно добавляем обработчики для фото
-        const photoElements = {
-            'takePhotoBtn': () => document.getElementById('cameraInput')?.click(),
-            'choosePhotoBtn': () => document.getElementById('galleryInput')?.click(),
-            'removePhotoBtn': () => this.removePhoto(),
-            'confirmDeliveryBtn': () => this.confirmDelivery(),
-            'confirmPickupBtn': () => this.confirmPickup()
-        };
-
-        for (const [id, handler] of Object.entries(photoElements)) {
-            this.safeAddEventListener(id, 'click', handler);
-        }
-
-        // Обработка выбора файла (камера)
-        const cameraInput = document.getElementById('cameraInput');
-        if (cameraInput) {
-            cameraInput.addEventListener('change', (e) => {
-                this.handlePhotoSelection(e.target.files[0]);
-            });
-        }
-
-        // Обработка выбора файла (галерея)
-        const galleryInput = document.getElementById('galleryInput');
-        if (galleryInput) {
-            galleryInput.addEventListener('change', (e) => {
-                this.handlePhotoSelection(e.target.files[0]);
-            });
-        }
-
-        // Подтверждение доставки
-        document.getElementById('confirmDeliveryBtn').addEventListener('click', () => {
-            this.confirmDelivery();
-        });
-
-        // Подтверждение получения
-        document.getElementById('confirmPickupBtn').addEventListener('click', () => {
-            this.confirmPickup();
+        // Используем делегирование для обработки фото
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'cameraInput' || e.target.id === 'galleryInput') {
+                const file = e.target.files[0];
+                if (file) {
+                    this.handlePhotoSelection(file);
+                }
+            }
         });
     }
 
     // Авторизация
-    // Авторизация
     async login() {
-        // Используем правильные ID из твоего HTML
         const usernameInput = document.getElementById('login-username');
         const passwordInput = document.getElementById('login-password');
 
@@ -304,15 +259,12 @@ class CourierApp {
 
     // Отображение активных заказов
     displayActiveOrders(orders) {
-        const container = document.getElementById('activeOrdersGrid');
+        const container = document.getElementById('active-orders-list');
+        if (!container) return;
 
         if (orders.length === 0) {
             container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-clipboard-check"></i>
-                    <h3>Нет активных заказов</h3>
-                    <p>Все заказы выполнены или ожидают назначения</p>
-                </div>
+                <div class="loader">Нет активных заказов</div>
             `;
             return;
         }
@@ -323,19 +275,16 @@ class CourierApp {
         });
 
         container.innerHTML = html;
-
-        // Обновляем счетчик
-        document.getElementById('activeBadge').textContent = orders.length;
     }
 
     // Загрузка заказов на сегодня
     async loadTodayOrders() {
-        // Уже загружены в loadOrders, просто показываем
         this.switchSection('today');
     }
 
     displayTodayOrders(orders) {
         const container = document.getElementById('todayOrdersGrid');
+        if (!container) return;
 
         if (orders.length === 0) {
             container.innerHTML = `
@@ -358,20 +307,16 @@ class CourierApp {
 
     // Загрузка истории
     async loadHistoryOrders() {
-        // Уже загружены в loadOrders
         this.switchSection('history');
     }
 
     displayHistoryOrders(orders) {
-        const container = document.getElementById('historyOrdersGrid');
+        const container = document.getElementById('completed-orders-list');
+        if (!container) return;
 
         if (orders.length === 0) {
             container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-history"></i>
-                    <h3>История доставок пуста</h3>
-                    <p>Вы еще не выполнили ни одной доставки</p>
-                </div>
+                <div class="loader">Нет выполненных заказов</div>
             `;
             return;
         }
@@ -386,20 +331,14 @@ class CourierApp {
 
     // Создание карточки заказа
     createOrderCard(order, isCompleted = false) {
-        // 1. Получаем адрес ПРАВИЛЬНО
+        // Получаем адрес
         let address = "Адрес не указан";
         let recipient = order.recipient_name || "Не указан";
         let phone = order.phone_number || "Телефон не указан";
 
-        console.log('📦 Обработка заказа #' + order.id, order);
-
-        // Пробуем получить данные из разных источников
         try {
-            // Пробуем из delivery_address_obj (уже распарсено в API)
             if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
                 const addr = order.delivery_address_obj;
-
-                // Формируем адрес
                 const parts = [];
                 if (addr.city) parts.push(addr.city);
                 if (addr.street) parts.push(`ул. ${addr.street}`);
@@ -408,7 +347,6 @@ class CourierApp {
 
                 if (parts.length > 0) address = parts.join(', ');
 
-                // Если нет recipient_name в основном объекте, берем из адреса
                 if (!order.recipient_name && addr.recipient_name) {
                     recipient = addr.recipient_name;
                 }
@@ -416,9 +354,7 @@ class CourierApp {
                 if (!order.phone_number && addr.phone) {
                     phone = addr.phone;
                 }
-            }
-            // Пробуем распарсить delivery_address как JSON
-            else if (order.delivery_address && typeof order.delivery_address === 'string') {
+            } else if (order.delivery_address && typeof order.delivery_address === 'string') {
                 try {
                     const addr = JSON.parse(order.delivery_address);
                     if (typeof addr === 'object') {
@@ -439,7 +375,6 @@ class CourierApp {
                         }
                     }
                 } catch (e) {
-                    // Если не JSON, может быть просто строка
                     address = order.delivery_address;
                 }
             }
@@ -447,10 +382,10 @@ class CourierApp {
             console.error('❌ Ошибка обработки адреса заказа #' + order.id, e);
         }
 
-        // 3. Сумма
+        // Сумма
         const total = order.total_price || order.sum || 0;
 
-        // 4. Дата доставки
+        // Дата доставки
         let deliveryDate = "Дата не указана";
         if (order.delivery_started) {
             deliveryDate = new Date(order.delivery_started).toLocaleDateString('ru-RU');
@@ -466,22 +401,22 @@ class CourierApp {
             if (status === 'assigned') {
                 actionsHtml = `
                     <div class="order-actions">
-                        <button class="action-btn pickup" data-order-id="${order.id}">
-                            <i class="fas fa-play"></i> Начать доставку
+                        <button class="btn-action btn-pickup" onclick="updateOrderStatus(${order.id}, 'picked_up')">
+                            🚚 Взять в доставку
                         </button>
-                        <button class="action-btn details" data-order-id="${order.id}">
-                            <i class="fas fa-info-circle"></i> Детали
+                        <button class="btn-action btn-details" onclick="showOrderDetails(${order.id})">
+                            📋 Детали
                         </button>
                     </div>
                 `;
             } else if (status === 'picked_up') {
                 actionsHtml = `
                     <div class="order-actions">
-                        <button class="action-btn deliver" data-order-id="${order.id}">
-                            <i class="fas fa-check"></i> Доставить
+                        <button class="btn-action btn-deliver" onclick="showDeliveryForm(${order.id})">
+                            ✅ Доставить
                         </button>
-                        <button class="action-btn details" data-order-id="${order.id}">
-                            <i class="fas fa-info-circle"></i> Детали
+                        <button class="btn-action btn-details" onclick="showOrderDetails(${order.id})">
+                            📋 Детали
                         </button>
                     </div>
                 `;
@@ -489,9 +424,14 @@ class CourierApp {
         } else {
             actionsHtml = `
                 <div class="order-actions">
-                    <button class="action-btn details" data-order-id="${order.id}">
-                        <i class="fas fa-info-circle"></i> Детали
+                    <button class="btn-action btn-details" onclick="showOrderDetails(${order.id})">
+                        📋 Детали заказа
                     </button>
+                    ${order.photo_proof ? `
+                        <button class="btn-action" onclick="window.open('${order.photo_proof}', '_blank')">
+                            📷 Фото
+                        </button>
+                    ` : ''}
                 </div>
             `;
         }
@@ -499,26 +439,28 @@ class CourierApp {
         return `
             <div class="order-card ${isCompleted ? 'completed' : 'active'}" data-order-id="${order.id}">
                 <div class="order-header">
-                    <h4>Заказ #${order.id}</h4>
-                    <span class="order-sum">${total} ₽</span>
+                    <div class="order-id">Заказ #${order.id}</div>
+                    <div class="order-status status-${order.assignment_status || order.status}">
+                        ${this.getStatusText(order.assignment_status || order.status)}
+                    </div>
                 </div>
 
                 <div class="order-info">
-                    <div class="info-row">
-                        <i class="fas fa-map-marker-alt"></i>
-                        <span><strong>Адрес:</strong> ${address}</span>
+                    <div class="info-item">
+                        <span class="info-label">Сумма:</span>
+                        <span class="info-value">${total} ₽</span>
                     </div>
-                    <div class="info-row">
-                        <i class="fas fa-user"></i>
-                        <span><strong>Получатель:</strong> ${recipient}</span>
+                    <div class="info-item">
+                        <span class="info-label">Получатель:</span>
+                        <span class="info-value">${recipient}</span>
                     </div>
-                    <div class="info-row">
-                        <i class="fas fa-phone"></i>
-                        <span><strong>Телефон:</strong> ${phone}</span>
+                    <div class="info-item">
+                        <span class="info-label">Телефон:</span>
+                        <span class="info-value">${phone}</span>
                     </div>
-                    <div class="info-row">
-                        <i class="fas fa-calendar"></i>
-                        <span><strong>Доставка:</strong> ${deliveryDate}</span>
+                    <div class="info-item">
+                        <span class="info-label">Адрес:</span>
+                        <span class="info-value" style="font-size: 12px;">${address}</span>
                     </div>
                 </div>
 
@@ -529,56 +471,32 @@ class CourierApp {
 
     // Обновление статистики
     updateStats(data) {
-        // Считаем доставленные сегодня
         const today = new Date().toISOString().split('T')[0];
         const todayDelivered = data.completed_orders?.filter(order => {
             const deliveredDate = order.delivered_at ? order.delivered_at.split('T')[0] : '';
             return deliveredDate === today;
         }).length || 0;
 
-        document.getElementById('todayDelivered').textContent = todayDelivered;
-        document.getElementById('totalDelivered').textContent = data.completed_orders?.length || 0;
+        const statToday = document.getElementById('stat-today');
+        const statActive = document.getElementById('stat-active');
+        const statCompleted = document.getElementById('stat-completed');
+
+        if (statToday) statToday.textContent = data.today_orders?.length || 0;
+        if (statActive) statActive.textContent = data.active_orders?.length || 0;
+        if (statCompleted) statCompleted.textContent = data.completed_orders?.length || 0;
     }
 
     // Загрузка профиля
     async loadProfile() {
         if (!this.currentCourier) return;
 
-        const container = document.getElementById('profileSettings');
-        container.innerHTML = `
-            <div class="profile-card">
-                <div class="profile-field">
-                    <label>ФИО</label>
-                    <div class="value">${this.currentCourier.full_name}</div>
-                </div>
+        const usernameEl = document.getElementById('profile-username');
+        const idEl = document.getElementById('profile-id');
+        const createdEl = document.getElementById('profile-created');
 
-                <div class="profile-field">
-                    <label>Телефон</label>
-                    <div class="value">${this.currentCourier.phone}</div>
-                </div>
-
-                <div class="profile-field">
-                    <label>Тип транспорта</label>
-                    <div class="value">
-                        ${this.currentCourier.vehicle_type === 'car' ? '🚗 Автомобиль' :
-                          this.currentCourier.vehicle_type === 'bike' ? '🚲 Велосипед' :
-                          this.currentCourier.vehicle_type === 'foot' ? '🚶 Пешком' : 'Не указано'}
-                    </div>
-                </div>
-
-                <div class="profile-field">
-                    <label>Статус</label>
-                    <div class="value">
-                        <span class="status-badge active">Активен</span>
-                    </div>
-                </div>
-
-                <div class="profile-field">
-                    <label>ID курьера</label>
-                    <div class="value">${this.currentCourier.id}</div>
-                </div>
-            </div>
-        `;
+        if (usernameEl) usernameEl.textContent = this.currentCourier.username;
+        if (idEl) idEl.textContent = this.currentCourier.id;
+        if (createdEl) createdEl.textContent = new Date(this.currentCourier.created_at).toLocaleDateString('ru-RU');
     }
 
     // Показать детали заказа
@@ -588,8 +506,8 @@ class CourierApp {
             const result = await response.json();
 
             if (result.success) {
-                this.displayOrderDetails(result.order);
-                this.showModal('orderModal');
+                // Используем глобальную функцию из courier.html
+                window.showOrderDetails(orderId);
             } else {
                 throw new Error(result.error);
             }
@@ -599,263 +517,30 @@ class CourierApp {
         }
     }
 
-    // Отображение деталей заказа
-    displayOrderDetails(order) {
-        document.getElementById('modalOrderTitle').textContent = `Заказ #${order.id}`;
-
-        // Адрес доставки
-        let addressHtml = '';
-        let recipient = order.recipient_name || "Не указан";
-        let phone = order.phone_number || "Телефон не указан";
-
-        try {
-            if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
-                const addr = order.delivery_address_obj;
-
-                addressHtml = `
-                    <div class="detail-section">
-                        <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
-                        <div class="detail-content">
-                            <p><strong>Город:</strong> ${addr.city || 'Не указан'}</p>
-                            <p><strong>Улица:</strong> ${addr.street || 'Не указана'} ${addr.house || ''}</p>
-                            ${addr.apartment ? `<p><strong>Квартира:</strong> ${addr.apartment}</p>` : ''}
-                            ${addr.floor ? `<p><strong>Этаж:</strong> ${addr.floor}</p>` : ''}
-                            ${addr.doorcode ? `<p><strong>Домофон:</strong> ${addr.doorcode}</p>` : ''}
-                        </div>
-                    </div>
-                `;
-
-                // Если нет данных в основном объекте, берем из адреса
-                if (!order.recipient_name && addr.recipient_name) {
-                    recipient = addr.recipient_name;
-                }
-
-                if (!order.phone_number && addr.phone) {
-                    phone = addr.phone;
-                }
-            } else if (order.delivery_address && typeof order.delivery_address === 'string') {
-                try {
-                    const addr = JSON.parse(order.delivery_address);
-                    if (typeof addr === 'object') {
-                        addressHtml = `
-                            <div class="detail-section">
-                                <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
-                                <div class="detail-content">
-                                    <p><strong>Город:</strong> ${addr.city || 'Не указан'}</p>
-                                    <p><strong>Улица:</strong> ${addr.street || 'Не указана'} ${addr.house || ''}</p>
-                                    ${addr.apartment ? `<p><strong>Квартира:</strong> ${addr.apartment}</p>` : ''}
-                                    ${addr.floor ? `<p><strong>Этаж:</strong> ${addr.floor}</p>` : ''}
-                                    ${addr.doorcode ? `<p><strong>Домофон:</strong> ${addr.doorcode}</p>` : ''}
-                                </div>
-                            </div>
-                        `;
-
-                        if (!order.recipient_name && addr.recipient_name) {
-                            recipient = addr.recipient_name;
-                        }
-
-                        if (!order.phone_number && addr.phone) {
-                            phone = addr.phone;
-                        }
-                    }
-                } catch (e) {
-                    // Просто строка
-                    addressHtml = `
-                        <div class="detail-section">
-                            <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
-                            <div class="detail-content">
-                                <p>${order.delivery_address}</p>
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-        } catch (e) {
-            console.error('Ошибка отображения адреса:', e);
-        }
-
-        // Товары
-        let itemsHtml = '';
-        if (order.items_list && Array.isArray(order.items_list)) {
-            itemsHtml = `
-                <div class="detail-section">
-                    <h4><i class="fas fa-boxes"></i> Состав заказа</h4>
-                    <div class="detail-content">
-                        ${order.items_list.map(item => `
-                            <div class="order-item-detail">
-                                <div class="item-name">${item.name} × ${item.quantity}</div>
-                                <div class="item-price">${parseInt(item.price * item.quantity).toLocaleString('ru-RU')} ₽</div>
-                            </div>
-                        `).join('')}
-                        <div class="order-total-detail">
-                            <strong>Итого:</strong>
-                            <strong>${parseInt(order.total_price).toLocaleString('ru-RU')} ₽</strong>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Информация о клиенте
-        const customerHtml = `
-            <div class="detail-section">
-                <h4><i class="fas fa-user"></i> Информация о клиенте</h4>
-                <div class="detail-content">
-                    <p><strong>Имя:</strong> ${recipient}</p>
-                    ${phone ? `<p><strong>Телефон:</strong> ${phone}</p>` : ''}
-                    <p><strong>Способ оплаты:</strong> ${this.getPaymentMethodText(order.payment_method)}</p>
-                </div>
-            </div>
-        `;
-
-        // Статус
-        const statusHtml = `
-            <div class="detail-section">
-                <h4><i class="fas fa-info-circle"></i> Статус</h4>
-                <div class="detail-content">
-                    <p><strong>Статус заказа:</strong> <span class="status-${order.status}">${this.getOrderStatusText(order.status)}</span></p>
-                    <p><strong>Статус доставки:</strong> <span class="status-${order.assignment_status}">${this.getStatusText(order.assignment_status)}</span></p>
-                    ${order.delivered_at ? `<p><strong>Доставлен:</strong> ${new Date(order.delivered_at).toLocaleString('ru-RU')}</p>` : ''}
-                </div>
-            </div>
-        `;
-
-        // Фото если есть
-        let photoHtml = '';
-        if (order.photo_proof) {
-            photoHtml = `
-                <div class="detail-section">
-                    <h4><i class="fas fa-camera"></i> Фото подтверждения</h4>
-                    <div class="detail-content">
-                        <img src="${order.photo_proof}" alt="Фото доставки" class="delivery-photo">
-                    </div>
-                </div>
-            `;
-        }
-
-        document.getElementById('orderModalBody').innerHTML = `
-            <div class="order-details-container">
-                ${customerHtml}
-                ${addressHtml}
-                ${itemsHtml}
-                ${statusHtml}
-                ${photoHtml}
-                ${order.delivery_notes ? `
-                    <div class="detail-section">
-                        <h4><i class="fas fa-sticky-note"></i> Примечания курьера</h4>
-                        <div class="detail-content">
-                            <p>${order.delivery_notes}</p>
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-
     // Показать подтверждение получения
     showPickupConfirmation(orderId) {
-        this.currentOrderId = orderId;
-        document.getElementById('pickupOrderId').textContent = `#${orderId}`;
-        this.showModal('pickupModal');
+        if (confirm(`Подтвердить получение заказа #${orderId} со склада?`)) {
+            this.updateOrderStatus(orderId, 'picked_up');
+        }
     }
 
     async showDeliveryModal(orderId) {
         this.currentOrderId = orderId;
         this.currentPhoto = null;
 
-        // Загружаем информацию о заказе
-        try {
-            const response = await fetch(`/api/courier/order/${orderId}`);
-            const result = await response.json();
-
-            if (result.success) {
-                const order = result.order;
-
-                // Получаем данные для отображения
-                let addressText = 'Адрес не указан';
-                let recipient = order.recipient_name || 'Имя не указано';
-                let phone = order.phone_number || 'Телефон не указан';
-
-                // Обрабатываем адрес
-                try {
-                    if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
-                        const addr = order.delivery_address_obj;
-                        const parts = [];
-                        if (addr.city) parts.push(addr.city);
-                        if (addr.street) parts.push(`ул. ${addr.street}`);
-                        if (addr.house) parts.push(`д. ${addr.house}`);
-                        if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
-
-                        if (parts.length > 0) addressText = parts.join(', ');
-
-                        if (!order.recipient_name && addr.recipient_name) {
-                            recipient = addr.recipient_name;
-                        }
-
-                        if (!order.phone_number && addr.phone) {
-                            phone = addr.phone;
-                        }
-                    } else if (order.delivery_address && typeof order.delivery_address === 'string') {
-                        try {
-                            const addr = JSON.parse(order.delivery_address);
-                            if (typeof addr === 'object') {
-                                const parts = [];
-                                if (addr.city) parts.push(addr.city);
-                                if (addr.street) parts.push(`ул. ${addr.street}`);
-                                if (addr.house) parts.push(`д. ${addr.house}`);
-                                if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
-
-                                if (parts.length > 0) addressText = parts.join(', ');
-
-                                if (!order.recipient_name && addr.recipient_name) {
-                                    recipient = addr.recipient_name;
-                                }
-
-                                if (!order.phone_number && addr.phone) {
-                                    phone = addr.phone;
-                                }
-                            }
-                        } catch (e) {
-                            addressText = order.delivery_address;
-                        }
-                    }
-                } catch (e) {
-                    console.error('Ошибка обработки адреса:', e);
-                }
-
-                // Обновляем содержимое модального окна
-                document.getElementById('deliveryModalContent').innerHTML = `
-                    <div class="delivery-details">
-                        <div class="customer-info">
-                            <p><strong>Получатель:</strong> ${recipient}</p>
-                            <p><strong>Телефон:</strong> ${phone}</p>
-                            <p><strong>Адрес:</strong> ${addressText}</p>
-                            <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
-                        </div>
-                    </div>
-                `;
-
-                this.showModal('deliveryModal');
-            } else {
-                throw new Error(result.error);
-            }
-        } catch (error) {
-            console.error('Ошибка загрузки заказа:', error);
-            this.showNotification('❌ Ошибка загрузки информации о заказе', 'error');
-        }
+        // Используем глобальную функцию из courier.html
+        window.showDeliveryForm(orderId);
     }
 
     // Обработка выбора фото
     handlePhotoSelection(file) {
         if (!file) return;
 
-        // Проверяем тип файла
         if (!file.type.startsWith('image/')) {
             this.showNotification('❌ Выберите изображение', 'error');
             return;
         }
 
-        // Проверяем размер (макс 5MB)
         if (file.size > 5 * 1024 * 1024) {
             this.showNotification('❌ Файл слишком большой (макс 5MB)', 'error');
             return;
@@ -869,15 +554,16 @@ class CourierApp {
                 file: file
             };
 
-            // Показываем превью
-            const preview = document.getElementById('photoPreview');
-            preview.innerHTML = `<img src="${e.target.result}" alt="Выбранное фото">`;
+            const preview = document.getElementById('photo-preview');
+            if (preview) {
+                preview.innerHTML = `<img src="${e.target.result}" alt="Выбранное фото">`;
+                preview.style.display = 'block';
+            }
 
-            // Показываем кнопку удаления
-            document.getElementById('removePhotoBtn').style.display = 'flex';
-
-            // Активируем кнопку подтверждения
-            document.getElementById('confirmDeliveryBtn').disabled = false;
+            const confirmBtn = document.getElementById('confirmDeliveryBtn');
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+            }
         };
 
         reader.onerror = () => {
@@ -885,23 +571,6 @@ class CourierApp {
         };
 
         reader.readAsDataURL(file);
-    }
-
-    // Удалить фото
-    removePhoto() {
-        this.currentPhoto = null;
-        document.getElementById('photoPreview').innerHTML = `
-            <div class="preview-placeholder">
-                <i class="fas fa-image"></i>
-                <p>Фото еще не выбрано</p>
-            </div>
-        `;
-        document.getElementById('removePhotoBtn').style.display = 'none';
-        document.getElementById('confirmDeliveryBtn').disabled = true;
-
-        // Сбрасываем инпуты
-        document.getElementById('cameraInput').value = '';
-        document.getElementById('galleryInput').value = '';
     }
 
     // Подтверждение получения заказа
@@ -926,7 +595,6 @@ class CourierApp {
 
             if (result.success) {
                 this.showNotification('✅ Заказ получен со склада', 'success');
-                this.hideModal('pickupModal');
                 await this.loadOrders();
             } else {
                 throw new Error(result.error);
@@ -944,10 +612,9 @@ class CourierApp {
             return;
         }
 
-        const notes = document.getElementById('deliveryNotes').value.trim();
+        const notes = document.getElementById('delivery-notes')?.value.trim() || '';
 
         try {
-            // Отправляем фото и данные
             const response = await fetch('/api/courier/update-status', {
                 method: 'POST',
                 headers: {
@@ -967,9 +634,6 @@ class CourierApp {
 
             if (result.success) {
                 this.showNotification('✅ Доставка подтверждена!', 'success');
-                this.hideModal('deliveryModal');
-                this.removePhoto();
-                document.getElementById('deliveryNotes').value = '';
                 await this.loadOrders();
             } else {
                 throw new Error(result.error);
@@ -986,7 +650,9 @@ class CourierApp {
             'assigned': 'Назначен',
             'picked_up': 'В доставке',
             'delivered': 'Доставлен',
-            'cancelled': 'Отменен'
+            'cancelled': 'Отменен',
+            'pending': 'Ожидает',
+            'processing': 'В обработке'
         };
         return statusMap[status] || status;
     }
@@ -1012,47 +678,46 @@ class CourierApp {
         return methods[method] || method;
     }
 
-    showModal(modalId) {
-        document.getElementById(modalId).style.display = 'flex';
-    }
-
-    hideModal(modalId) {
-        document.getElementById(modalId).style.display = 'none';
-    }
-
     showNotification(message, type = 'info') {
-        const container = document.getElementById('notificationsContainer');
+        console.log(`💬 [${type.toUpperCase()}] ${message}`);
 
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.innerHTML = `
-            <div class="notification-icon">
-                <i class="fas fa-${type === 'success' ? 'check-circle' :
-                                 type === 'error' ? 'exclamation-circle' :
-                                 type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
-            </div>
-            <div class="notification-content">
-                <h4>${type === 'success' ? 'Успешно!' :
-                       type === 'error' ? 'Ошибка!' :
-                       type === 'warning' ? 'Внимание!' : 'Информация'}</h4>
-                <p>${message}</p>
-            </div>
-        `;
+        // Используем уведомления из courier.html
+        const showMessage = window.showMessage;
+        if (showMessage) {
+            showMessage(message, type);
+        } else {
+            alert(message);
+        }
+    }
 
-        container.appendChild(notification);
+    async updateOrderStatus(orderId, status) {
+        if (!this.currentCourier) return;
 
-        // Анимация появления
-        setTimeout(() => notification.classList.add('show'), 10);
+        try {
+            const response = await fetch('/api/courier/update-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    courier_id: this.currentCourier.id,
+                    status: status
+                })
+            });
 
-        // Автоудаление
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 5000);
+            const result = await response.json();
+
+            if (result.success) {
+                this.showNotification(`Статус заказа #${orderId} обновлен`, 'success');
+                await this.loadOrders();
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Ошибка обновления статуса:', error);
+            this.showNotification('Ошибка обновления статуса', 'error');
+        }
     }
 }
 

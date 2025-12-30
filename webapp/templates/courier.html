@@ -1323,12 +1323,28 @@
             }
         });
     </script>
-    <script src="/static/js/courier.js"></script>
     <script>
         // Инициализация после загрузки DOM
         document.addEventListener('DOMContentLoaded', () => {
-            window.courierApp = new CourierApp();
-            console.log('✅ CourierApp инициализирован');
+            // Проверяем, существует ли уже экземпляр
+            if (!window.courierApp) {
+                window.courierApp = new CourierApp();
+                console.log('✅ CourierApp инициализирован');
+            }
+
+            // Экспортируем функции для глобального доступа
+            window.handlePhotoSelection = function(e) {
+                const file = e.target.files[0];
+                if (file && window.courierApp) {
+                    window.courierApp.handlePhotoSelection(file);
+                }
+            };
+
+            window.completeDelivery = function() {
+                if (window.courierApp) {
+                    window.courierApp.confirmDelivery();
+                }
+            };
         });
     </script>
 </body>
