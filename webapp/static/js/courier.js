@@ -38,22 +38,29 @@ class CourierApp {
 
     // Показать экран авторизации
     showLogin() {
-        document.getElementById('loginContainer').style.display = 'flex';
-        document.getElementById('courierContainer').style.display = 'none';
+        const loginEl = document.getElementById('login-screen');
+        const mainEl = document.getElementById('main-screen');
+
+        if (loginEl) loginEl.style.display = 'block';
+        if (mainEl) mainEl.style.display = 'none';
     }
 
-    // Показать основной интерфейс
+
     showCourierInterface() {
-        document.getElementById('loginContainer').style.display = 'none';
-        document.getElementById('courierContainer').style.display = 'flex';
+            const loginEl = document.getElementById('login-screen');
+            const mainEl = document.getElementById('main-screen');
 
-        // Обновляем данные курьера
-        if (this.currentCourier) {
-            document.getElementById('courierName').textContent = this.currentCourier.full_name;
-            document.getElementById('courierGreeting').textContent = `Добро пожаловать, ${this.currentCourier.full_name.split(' ')[0]}!`;
-            document.getElementById('courierPhone').textContent = this.currentCourier.phone;
+            if (loginEl) loginEl.style.display = 'none';
+            if (mainEl) mainEl.style.display = 'block';
+
+            // Обновляем данные курьера
+            if (this.currentCourier) {
+                const nameEl = document.getElementById('courier-info');
+                if (nameEl) {
+                    nameEl.textContent = `${this.currentCourier.full_name} • ${this.currentCourier.phone}`;
+                }
+            }
         }
-    }
 
     // Назначение обработчиков событий
     bindEvents() {
