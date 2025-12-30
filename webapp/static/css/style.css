@@ -2470,3 +2470,330 @@ html {
     background: #2d2d2d;
     border-top-color: #388e3c;
 }
+
+/* ========== КОМПАКТНЫЙ ВАРИАНТ ВЫБОРА ДОСТАВКИ ========== */
+
+.delivery-selection-content {
+    padding: 16px;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+}
+
+/* Компактный вариант опции доставки */
+.delivery-option-compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    border: 2px solid #e8f5e9;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.delivery-option-compact:hover {
+    border-color: #4CAF50;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+}
+
+.delivery-option-compact:active {
+    transform: translateY(0);
+}
+
+.delivery-option-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.delivery-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 18px;
+}
+
+.delivery-info h3 {
+    margin: 0 0 4px 0;
+    font-size: 16px;
+    color: #2E7D32;
+    font-weight: 700;
+}
+
+.delivery-info p {
+    margin: 0;
+    font-size: 13px;
+    color: #78909C;
+}
+
+.delivery-option-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.delivery-price {
+    font-size: 15px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+.delivery-price.free {
+    background: rgba(76, 175, 80, 0.1);
+    color: #2E7D32;
+}
+
+.delivery-price.paid {
+    background: rgba(255, 152, 0, 0.1);
+    color: #FF9800;
+}
+
+.delivery-option-right i {
+    color: #81C784;
+    font-size: 14px;
+}
+
+/* Компактная информация о доставке */
+.delivery-summary-compact {
+    background: linear-gradient(135deg, #f8fdf8, #f0f9f0);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 16px 0;
+    border: 2px solid #C8E6C9;
+}
+
+.summary-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #E8F5E9;
+}
+
+.summary-header i {
+    color: #4CAF50;
+    font-size: 18px;
+}
+
+.summary-header h4 {
+    margin: 0;
+    font-size: 16px;
+    color: #2E7D32;
+    font-weight: 700;
+}
+
+.summary-details {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: #546E7A;
+}
+
+.summary-value {
+    font-weight: 600;
+    color: #2E7D32;
+}
+
+.summary-value.free {
+    color: #4CAF50;
+    font-weight: 700;
+}
+
+.summary-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 2px dashed #C8E6C9;
+    font-size: 15px;
+    font-weight: 700;
+    color: #2E7D32;
+}
+
+.total-value {
+    font-size: 20px;
+    color: #2E7D32;
+    font-weight: 800;
+}
+
+/* Сообщение о скидке */
+.discount-notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: linear-gradient(135deg, #FFF8E1, #FFECB3);
+    border-radius: 12px;
+    border: 2px solid #FFD54F;
+    margin-top: 12px;
+}
+
+.discount-notice i {
+    color: #FF9800;
+    font-size: 20px;
+    background: white;
+    padding: 8px;
+    border-radius: 50%;
+}
+
+.discount-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.discount-text strong {
+    font-size: 14px;
+    color: #FF8F00;
+}
+
+.discount-text span {
+    font-size: 13px;
+    color: #F57C00;
+}
+
+/* Компактные кнопки действий */
+.delivery-actions-compact {
+    padding: 16px;
+    border-top: 2px solid #E8F5E9;
+    background: white;
+}
+
+.btn-back-to-cart {
+    width: 100%;
+    padding: 14px;
+    background: white;
+    color: #2E7D32;
+    border: 2px solid #4CAF50;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+}
+
+.btn-back-to-cart:hover {
+    background: #4CAF50;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+/* Темная тема */
+.dark-mode .delivery-option-compact {
+    background: #2D2D2D;
+    border-color: #388E3C;
+}
+
+.dark-mode .delivery-option-compact:hover {
+    border-color: #4CAF50;
+    background: #3D3D3D;
+}
+
+.dark-mode .delivery-info h3 {
+    color: #A5D6A7;
+}
+
+.dark-mode .delivery-info p {
+    color: #B0BEC5;
+}
+
+.dark-mode .delivery-price.free {
+    background: rgba(76, 175, 80, 0.2);
+    color: #A5D6A7;
+}
+
+.dark-mode .delivery-price.paid {
+    background: rgba(255, 152, 0, 0.2);
+    color: #FFCC80;
+}
+
+.dark-mode .delivery-summary-compact {
+    background: linear-gradient(135deg, #1B5E20, #2E7D32);
+    border-color: #4CAF50;
+}
+
+.dark-mode .summary-header h4 {
+    color: #E8F5E9;
+}
+
+.dark-mode .summary-header i {
+    color: #8BC34A;
+}
+
+.dark-mode .summary-row {
+    color: #C8E6C9;
+}
+
+.dark-mode .summary-value {
+    color: #A5D6A7;
+}
+
+.dark-mode .summary-value.free {
+    color: #8BC34A;
+}
+
+.dark-mode .summary-total {
+    color: #E8F5E9;
+    border-top-color: #4CAF50;
+}
+
+.dark-mode .total-value {
+    color: #C8E6C9;
+}
+
+.dark-mode .discount-notice {
+    background: linear-gradient(135deg, #5D4037, #8D6E63);
+    border-color: #FFB74D;
+}
+
+.dark-mode .discount-notice i {
+    color: #FFB74D;
+    background: #5D4037;
+}
+
+.dark-mode .discount-text strong {
+    color: #FFD54F;
+}
+
+.dark-mode .discount-text span {
+    color: #FFCC80;
+}
+
+.dark-mode .delivery-actions-compact {
+    background: #2D2D2D;
+    border-top-color: #388E3C;
+}
+
+.dark-mode .btn-back-to-cart {
+    background: #2D2D2D;
+    color: #8BC34A;
+    border-color: #4CAF50;
+}
+
+.dark-mode .btn-back-to-cart:hover {
+    background: #4CAF50;
+    color: #2D2D2D;
+}
