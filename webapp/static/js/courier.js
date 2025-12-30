@@ -329,57 +329,63 @@ class CourierApp {
         container.innerHTML = html;
     }
 
-    // Создание карточки заказа
     createOrderCard(order, isCompleted = false) {
-        // Получаем адрес
+        // Получаем адрес - УЛУЧШЕННАЯ ВЕРСИЯ
         let address = "Адрес не указан";
         let recipient = order.recipient_name || "Не указан";
         let phone = order.phone_number || "Телефон не указан";
 
         try {
+            // Пытаемся получить данные из разных источников
+            let deliveryData = null;
+
+            // 1. Сначала из delivery_address_obj
             if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
-                const addr = order.delivery_address_obj;
-                const parts = [];
-                if (addr.city) parts.push(addr.city);
-                if (addr.street) parts.push(`ул. ${addr.street}`);
-                if (addr.house) parts.push(`д. ${addr.house}`);
-                if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
-
-                if (parts.length > 0) address = parts.join(', ');
-
-                if (!order.recipient_name && addr.recipient_name) {
-                    recipient = addr.recipient_name;
-                }
-
-                if (!order.phone_number && addr.phone) {
-                    phone = addr.phone;
-                }
-            } else if (order.delivery_address && typeof order.delivery_address === 'string') {
+                deliveryData = order.delivery_address_obj;
+            }
+            // 2. Затем из delivery_address (как строка JSON)
+            else if (order.delivery_address && typeof order.delivery_address === 'string') {
                 try {
-                    const addr = JSON.parse(order.delivery_address);
-                    if (typeof addr === 'object') {
-                        const parts = [];
-                        if (addr.city) parts.push(addr.city);
-                        if (addr.street) parts.push(`ул. ${addr.street}`);
-                        if (addr.house) parts.push(`д. ${addr.house}`);
-                        if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
-
-                        if (parts.length > 0) address = parts.join(', ');
-
-                        if (!order.recipient_name && addr.recipient_name) {
-                            recipient = addr.recipient_name;
-                        }
-
-                        if (!order.phone_number && addr.phone) {
-                            phone = addr.phone;
-                        }
-                    }
+                    deliveryData = JSON.parse(order.delivery_address);
                 } catch (e) {
+                    // Если не JSON, используем как есть
                     address = order.delivery_address;
                 }
             }
+
+            // Если нашли данные о доставке
+            if (deliveryData) {
+                const parts = [];
+                if (deliveryData.city) parts.push(deliveryData.city);
+                if (deliveryData.street) parts.push(`ул. ${deliveryData.street}`);
+                if (deliveryData.house) parts.push(`д. ${deliveryData.house}`);
+                if (deliveryData.apartment) parts.push(`кв. ${deliveryData.apartment}`);
+
+                if (parts.length > 0) address = parts.join(', ');
+
+                // Получатель и телефон из данных доставки
+                if (!recipient || recipient === "Не указан") {
+                    recipient = deliveryData.recipient_name || "Не указан";
+                }
+                if (!phone || phone === "Телефон не указан") {
+                    phone = deliveryData.phone || "Телефон не указан";
+                }
+            }
+
+            // 3. Проверяем прямые поля заказа
+            if (!recipient || recipient === "Не указан") {
+                recipient = order.recipient_name || "Не указан";
+            }
+            if (!phone || phone === "Телефон не указан") {
+                phone = order.phone_number || "Телефон не указан";
+            }
+
         } catch (e) {
             console.error('❌ Ошибка обработки адреса заказа #' + order.id, e);
+            // Используем запасные значения
+            if (order.delivery_address && typeof order.delivery_address === 'string') {
+                address = order.delivery_address;
+            }
         }
 
         // Сумма

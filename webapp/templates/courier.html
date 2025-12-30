@@ -620,6 +620,66 @@
             }
         }
 
+        // Функция для извлечения данных о доставке из заказа
+        function extractDeliveryInfo(order) {
+            let addressText = 'Адрес не указан';
+            let recipientName = order.recipient_name || 'Не указан';
+            let phoneNumber = order.phone_number || 'Не указан';
+
+            // Пробуем разные источники данных
+            let deliveryData = null;
+
+            // 1. Из delivery_address_obj (если уже распарсено сервером)
+            if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
+                deliveryData = order.delivery_address_obj;
+            }
+            // 2. Из delivery_address (строка JSON)
+            else if (order.delivery_address && typeof order.delivery_address === 'string') {
+                try {
+                    deliveryData = JSON.parse(order.delivery_address);
+                } catch (e) {
+                    // Если не JSON, используем как текст адреса
+                    addressText = order.delivery_address;
+                }
+            }
+
+            // Если нашли данные о доставке
+            if (deliveryData) {
+                // Извлекаем адрес
+                const parts = [];
+                if (deliveryData.city) parts.push(deliveryData.city);
+                if (deliveryData.street) parts.push(deliveryData.street);
+                if (deliveryData.house) parts.push(deliveryData.house);
+
+                if (parts.length > 0) {
+                    addressText = parts.join(', ');
+                    if (deliveryData.apartment) addressText += `, кв. ${deliveryData.apartment}`;
+                } else if (deliveryData.address) {
+                    addressText = deliveryData.address;
+                }
+
+                // Извлекаем получателя и телефон
+                if (deliveryData.recipient_name) {
+                    recipientName = deliveryData.recipient_name;
+                }
+                if (deliveryData.phone) {
+                    phoneNumber = deliveryData.phone;
+                }
+                if (deliveryData.phone_number) {
+                    phoneNumber = deliveryData.phone_number;
+                }
+                if (deliveryData.recipient) {
+                    recipientName = deliveryData.recipient;
+                }
+            }
+
+            return {
+                address: addressText,
+                recipient: recipientName,
+                phone: phoneNumber
+            };
+        }
+
         // Загрузить активные заказы
         async function loadActiveOrders() {
             const container = document.getElementById('active-orders-list');
@@ -635,25 +695,8 @@
                     data.active_orders.forEach(order => {
                         const assignment = order.assignment_status || 'assigned';
 
-                        // Получаем детальную информацию об адресе
-                        let addressText = 'Адрес не указан';
-                        if (order.delivery_address_obj) {
-                            const addr = order.delivery_address_obj;
-                            if (addr.city || addr.street) {
-                                addressText = `${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
-                                if (addr.apartment) addressText += `, кв. ${addr.apartment}`;
-                            }
-                        } else if (order.delivery_address) {
-                            try {
-                                const addr = JSON.parse(order.delivery_address);
-                                if (addr.city || addr.street) {
-                                    addressText = `${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
-                                    if (addr.apartment) addressText += `, кв. ${addr.apartment}`;
-                                }
-                            } catch (e) {
-                                addressText = order.delivery_address;
-                            }
-                        }
+                        // Извлекаем информацию о доставке
+                        const deliveryInfo = extractDeliveryInfo(order);
 
                         // Получаем товары
                         let itemsCount = 0;
@@ -684,15 +727,15 @@
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Получатель:</span>
-                                        <span class="info-value">${order.recipient_name || 'Не указан'}</span>
+                                        <span class="info-value">${deliveryInfo.recipient}</span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Телефон:</span>
-                                        <span class="info-value">${order.phone_number || 'Не указан'}</span>
+                                        <span class="info-value">${deliveryInfo.phone}</span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Адрес:</span>
-                                        <span class="info-value" style="font-size: 12px;">${addressText}</span>
+                                        <span class="info-value" style="font-size: 12px;">${deliveryInfo.address}</span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Товаров:</span>
@@ -747,14 +790,8 @@
                         const deliveredDate = order.delivered_at ?
                             new Date(order.delivered_at).toLocaleDateString('ru-RU') : 'Не указана';
 
-                        // Получаем детальную информацию об адресе
-                        let addressText = 'Адрес не указан';
-                        if (order.delivery_address_obj) {
-                            const addr = order.delivery_address_obj;
-                            if (addr.city || addr.street) {
-                                addressText = `${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
-                            }
-                        }
+                        // Извлекаем информацию о доставке
+                        const deliveryInfo = extractDeliveryInfo(order);
 
                         html += `
                             <div class="order-card">
@@ -774,11 +811,15 @@
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Получатель:</span>
-                                        <span class="info-value">${order.recipient_name || 'Не указан'}</span>
+                                        <span class="info-value">${deliveryInfo.recipient}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Телефон:</span>
+                                        <span class="info-value">${deliveryInfo.phone}</span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Адрес:</span>
-                                        <span class="info-value" style="font-size: 12px;">${addressText}</span>
+                                        <span class="info-value" style="font-size: 12px;">${deliveryInfo.address}</span>
                                     </div>
                                 </div>
 
@@ -826,13 +867,14 @@
                         recent.forEach(order => {
                             const date = order.delivered_at ?
                                 new Date(order.delivered_at).toLocaleDateString('ru-RU') : 'Не указана';
+                            const deliveryInfo = extractDeliveryInfo(order);
 
                             html += `
                                 <div class="order-card" style="padding: 15px; margin-bottom: 10px;">
                                     <div style="display: flex; justify-content: space-between;">
                                         <div>
                                             <strong>Заказ #${order.id}</strong><br>
-                                            <small>${order.recipient_name || 'Не указан'} • ${date}</small>
+                                            <small>${deliveryInfo.recipient} • ${date}</small>
                                         </div>
                                         <div style="font-weight: bold;">${order.total_price || 0} ₽</div>
                                     </div>
@@ -873,7 +915,9 @@
                 if (data.success) {
                     const order = data.order;
                     const items = order.items_list || [];
-                    const address = order.delivery_address_obj || {};
+
+                    // Извлекаем информацию о доставке
+                    const deliveryInfo = extractDeliveryInfo(order);
 
                     let html = `
                         <div style="margin-bottom: 20px;">
@@ -894,23 +938,20 @@
                         <div style="margin-bottom: 20px;">
                             <h3 style="margin-bottom: 15px;">👤 Информация о клиенте</h3>
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                                <p><strong>Получатель:</strong> ${order.recipient_name || 'Не указан'}</p>
-                                <p><strong>Телефон:</strong> ${order.phone_number || 'Не указан'}</p>
+                                <p><strong>Получатель:</strong> ${deliveryInfo.recipient}</p>
+                                <p><strong>Телефон:</strong> ${deliveryInfo.phone}</p>
                                 ${order.username ? `<p><strong>Username:</strong> @${order.username}</p>` : ''}
                             </div>
                         </div>
                     `;
 
-                    if (address.city || address.street) {
+                    // Адрес доставки (если есть)
+                    if (deliveryInfo.address && deliveryInfo.address !== 'Адрес не указан') {
                         html += `
                             <div style="margin-bottom: 20px;">
                                 <h3 style="margin-bottom: 15px;">📍 Адрес доставки</h3>
                                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                                    <p><strong>Город:</strong> ${address.city || 'Не указан'}</p>
-                                    <p><strong>Улица:</strong> ${address.street || 'Не указана'} ${address.house || ''}</p>
-                                    ${address.apartment ? `<p><strong>Квартира:</strong> ${address.apartment}</p>` : ''}
-                                    ${address.floor ? `<p><strong>Этаж:</strong> ${address.floor}</p>` : ''}
-                                    ${address.doorcode ? `<p><strong>Домофон:</strong> ${address.doorcode}</p>` : ''}
+                                    <p><strong>Адрес:</strong> ${deliveryInfo.address}</p>
                                 </div>
                             </div>
                         `;
@@ -1015,32 +1056,19 @@
 
                 if (data.success) {
                     const order = data.order;
-                    const address = order.delivery_address_obj || {};
                     const items = order.items_list || [];
 
-                    // Формируем адрес
-                    let addressText = 'Адрес не указан';
-                    if (address.city || address.street) {
-                        addressText = `${address.city || ''}, ${addr.street || ''} ${addr.house || ''}`;
-                        if (addr.apartment) addressText += `, кв. ${addr.apartment}`;
-                    }
-
-                    // Формируем состав заказа
-                    let itemsText = '';
-                    if (items.length > 0) {
-                        items.forEach(item => {
-                            itemsText += `${item.name} × ${item.quantity} = ${item.quantity * item.price} ₽\n`;
-                        });
-                    }
+                    // Извлекаем информацию о доставке
+                    const deliveryInfo = extractDeliveryInfo(order);
 
                     let html = `
                         <div class="photo-upload">
                             <div style="margin-bottom: 20px;">
                                 <h3 style="margin-bottom: 10px;">📦 Информация о заказе #${order.id}</h3>
                                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                                    <p><strong>Получатель:</strong> ${order.recipient_name || 'Не указан'}</p>
-                                    <p><strong>Телефон:</strong> ${order.phone_number || 'Не указан'}</p>
-                                    <p><strong>Адрес:</strong> ${addressText}</p>
+                                    <p><strong>Получатель:</strong> ${deliveryInfo.recipient}</p>
+                                    <p><strong>Телефон:</strong> ${deliveryInfo.phone}</p>
+                                    <p><strong>Адрес:</strong> ${deliveryInfo.address}</p>
                                     <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
                                 </div>
                             </div>
