@@ -378,30 +378,67 @@ class CourierApp {
     }
 
     // Создание карточки заказа
-    createOrderCard(order, isCompleted = false) 
+    createOrderCard(order, isCompleted = false) {
         // 1. Получаем адрес ПРАВИЛЬНО
         let address = "Адрес не указан";
-        if (order.delivery_address) {
-            try {
-                // Если адрес в JSON - парсим
-                if (typeof order.delivery_address === 'string') {
-                    const addrObj = JSON.parse(order.delivery_address);
-                    address = addrObj.full_address || addrObj.address || "Адрес не указан";
-                } else if (order.delivery_address_obj) {
-                    // Если уже распарсено в бэкенде
-                    address = order.delivery_address_obj.full_address ||
-                              order.delivery_address_obj.address ||
-                              "Адрес не указан";
-                }
-            } catch(e) {
-                // Если не JSON, используем как строку
-                address = order.delivery_address;
-            }
-        }
+        let recipient = order.recipient_name || "Не указан";
+        let phone = order.phone_number || "Телефон не указан";
 
-        // 2. Получатель и телефон
-        const recipient = order.recipient_name || order.username || "Не указан";
-        const phone = order.phone_number || "Телефон не указан";
+        console.log('📦 Обработка заказа #' + order.id, order);
+
+        // Пробуем получить данные из разных источников
+        try {
+            // Пробуем из delivery_address_obj (уже распарсено в API)
+            if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
+                const addr = order.delivery_address_obj;
+
+                // Формируем адрес
+                const parts = [];
+                if (addr.city) parts.push(addr.city);
+                if (addr.street) parts.push(`ул. ${addr.street}`);
+                if (addr.house) parts.push(`д. ${addr.house}`);
+                if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
+
+                if (parts.length > 0) address = parts.join(', ');
+
+                // Если нет recipient_name в основном объекте, берем из адреса
+                if (!order.recipient_name && addr.recipient_name) {
+                    recipient = addr.recipient_name;
+                }
+
+                if (!order.phone_number && addr.phone) {
+                    phone = addr.phone;
+                }
+            }
+            // Пробуем распарсить delivery_address как JSON
+            else if (order.delivery_address && typeof order.delivery_address === 'string') {
+                try {
+                    const addr = JSON.parse(order.delivery_address);
+                    if (typeof addr === 'object') {
+                        const parts = [];
+                        if (addr.city) parts.push(addr.city);
+                        if (addr.street) parts.push(`ул. ${addr.street}`);
+                        if (addr.house) parts.push(`д. ${addr.house}`);
+                        if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
+
+                        if (parts.length > 0) address = parts.join(', ');
+
+                        if (!order.recipient_name && addr.recipient_name) {
+                            recipient = addr.recipient_name;
+                        }
+
+                        if (!order.phone_number && addr.phone) {
+                            phone = addr.phone;
+                        }
+                    }
+                } catch (e) {
+                    // Если не JSON, может быть просто строка
+                    address = order.delivery_address;
+                }
+            }
+        } catch (e) {
+            console.error('❌ Ошибка обработки адреса заказа #' + order.id, e);
+        }
 
         // 3. Сумма
         const total = order.total_price || order.sum || 0;
@@ -412,6 +449,44 @@ class CourierApp {
             deliveryDate = new Date(order.delivery_started).toLocaleDateString('ru-RU');
         } else if (order.assigned_at) {
             deliveryDate = new Date(order.assigned_at).toLocaleDateString('ru-RU');
+        }
+
+        // Кнопки действий
+        let actionsHtml = '';
+        if (!isCompleted) {
+            const status = order.assignment_status || order.status;
+
+            if (status === 'assigned') {
+                actionsHtml = `
+                    <div class="order-actions">
+                        <button class="action-btn pickup" data-order-id="${order.id}">
+                            <i class="fas fa-play"></i> Начать доставку
+                        </button>
+                        <button class="action-btn details" data-order-id="${order.id}">
+                            <i class="fas fa-info-circle"></i> Детали
+                        </button>
+                    </div>
+                `;
+            } else if (status === 'picked_up') {
+                actionsHtml = `
+                    <div class="order-actions">
+                        <button class="action-btn deliver" data-order-id="${order.id}">
+                            <i class="fas fa-check"></i> Доставить
+                        </button>
+                        <button class="action-btn details" data-order-id="${order.id}">
+                            <i class="fas fa-info-circle"></i> Детали
+                        </button>
+                    </div>
+                `;
+            }
+        } else {
+            actionsHtml = `
+                <div class="order-actions">
+                    <button class="action-btn details" data-order-id="${order.id}">
+                        <i class="fas fa-info-circle"></i> Детали
+                    </button>
+                </div>
+            `;
         }
 
         return `
@@ -440,16 +515,7 @@ class CourierApp {
                     </div>
                 </div>
 
-                ${!isCompleted ? `
-                    <div class="order-actions">
-                        <button class="btn btn-success" onclick="app.startDelivery(${order.id})">
-                            <i class="fas fa-play"></i> Начать доставку
-                        </button>
-                        <button class="btn btn-danger" onclick="app.cancelOrder(${order.id})">
-                            <i class="fas fa-times"></i> Отменить
-                        </button>
-                    </div>
-                ` : ''}
+                ${actionsHtml}
             </div>
         `;
     }
@@ -466,41 +532,6 @@ class CourierApp {
         document.getElementById('todayDelivered').textContent = todayDelivered;
         document.getElementById('totalDelivered').textContent = data.completed_orders?.length || 0;
     }
-    async function updateOrderStatusWithNotification(orderId, status) {
-        try {
-            const response = await fetch('/api/courier/update-status', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_id: orderId,
-                    courier_id: this.currentCourier.id,
-                    status: status,
-                    send_notification: true  // Флаг для отправки уведомления
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // Показываем уведомление курьеру
-                this.showNotification(`✅ Статус обновлен: ${getStatusText(status)}`, 'success');
-
-                // Обновляем список заказов
-                await this.loadOrders();
-
-                return true;
-            } else {
-                throw new Error(result.error);
-            }
-        } catch (error) {
-            console.error('Ошибка обновления статуса:', error);
-            this.showNotification(`❌ ${error.message}`, 'error');
-            return false;
-        }
-    }
-
 
     // Загрузка профиля
     async loadProfile() {
@@ -567,20 +598,73 @@ class CourierApp {
 
         // Адрес доставки
         let addressHtml = '';
-        if (order.delivery_address_obj) {
-            const addr = order.delivery_address_obj;
-            addressHtml = `
-                <div class="detail-section">
-                    <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
-                    <div class="detail-content">
-                        <p><strong>Город:</strong> ${addr.city || 'Не указан'}</p>
-                        <p><strong>Улица:</strong> ${addr.street || 'Не указана'} ${addr.house || ''}</p>
-                        ${addr.apartment ? `<p><strong>Квартира:</strong> ${addr.apartment}</p>` : ''}
-                        ${addr.floor ? `<p><strong>Этаж:</strong> ${addr.floor}</p>` : ''}
-                        ${addr.doorcode ? `<p><strong>Домофон:</strong> ${addr.doorcode}</p>` : ''}
+        let recipient = order.recipient_name || "Не указан";
+        let phone = order.phone_number || "Телефон не указан";
+
+        try {
+            if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
+                const addr = order.delivery_address_obj;
+
+                addressHtml = `
+                    <div class="detail-section">
+                        <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
+                        <div class="detail-content">
+                            <p><strong>Город:</strong> ${addr.city || 'Не указан'}</p>
+                            <p><strong>Улица:</strong> ${addr.street || 'Не указана'} ${addr.house || ''}</p>
+                            ${addr.apartment ? `<p><strong>Квартира:</strong> ${addr.apartment}</p>` : ''}
+                            ${addr.floor ? `<p><strong>Этаж:</strong> ${addr.floor}</p>` : ''}
+                            ${addr.doorcode ? `<p><strong>Домофон:</strong> ${addr.doorcode}</p>` : ''}
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+
+                // Если нет данных в основном объекте, берем из адреса
+                if (!order.recipient_name && addr.recipient_name) {
+                    recipient = addr.recipient_name;
+                }
+
+                if (!order.phone_number && addr.phone) {
+                    phone = addr.phone;
+                }
+            } else if (order.delivery_address && typeof order.delivery_address === 'string') {
+                try {
+                    const addr = JSON.parse(order.delivery_address);
+                    if (typeof addr === 'object') {
+                        addressHtml = `
+                            <div class="detail-section">
+                                <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
+                                <div class="detail-content">
+                                    <p><strong>Город:</strong> ${addr.city || 'Не указан'}</p>
+                                    <p><strong>Улица:</strong> ${addr.street || 'Не указана'} ${addr.house || ''}</p>
+                                    ${addr.apartment ? `<p><strong>Квартира:</strong> ${addr.apartment}</p>` : ''}
+                                    ${addr.floor ? `<p><strong>Этаж:</strong> ${addr.floor}</p>` : ''}
+                                    ${addr.doorcode ? `<p><strong>Домофон:</strong> ${addr.doorcode}</p>` : ''}
+                                </div>
+                            </div>
+                        `;
+
+                        if (!order.recipient_name && addr.recipient_name) {
+                            recipient = addr.recipient_name;
+                        }
+
+                        if (!order.phone_number && addr.phone) {
+                            phone = addr.phone;
+                        }
+                    }
+                } catch (e) {
+                    // Просто строка
+                    addressHtml = `
+                        <div class="detail-section">
+                            <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
+                            <div class="detail-content">
+                                <p>${order.delivery_address}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        } catch (e) {
+            console.error('Ошибка отображения адреса:', e);
         }
 
         // Товары
@@ -610,8 +694,8 @@ class CourierApp {
             <div class="detail-section">
                 <h4><i class="fas fa-user"></i> Информация о клиенте</h4>
                 <div class="detail-content">
-                    <p><strong>Имя:</strong> ${order.recipient_name || 'Не указано'}</p>
-                    ${order.phone_number ? `<p><strong>Телефон:</strong> ${order.phone_number}</p>` : ''}
+                    <p><strong>Имя:</strong> ${recipient}</p>
+                    ${phone ? `<p><strong>Телефон:</strong> ${phone}</p>` : ''}
                     <p><strong>Способ оплаты:</strong> ${this.getPaymentMethodText(order.payment_method)}</p>
                 </div>
             </div>
@@ -668,7 +752,7 @@ class CourierApp {
         this.showModal('pickupModal');
     }
 
-    async function showDeliveryModal(orderId) {
+    async showDeliveryModal(orderId) {
         this.currentOrderId = orderId;
         this.currentPhoto = null;
 
@@ -680,57 +764,67 @@ class CourierApp {
             if (result.success) {
                 const order = result.order;
 
-                // Заполняем информацию в модальном окне
-                document.getElementById('deliveryOrderId').textContent = `Заказ #${order.id}`;
+                // Получаем данные для отображения
+                let addressText = 'Адрес не указан';
+                let recipient = order.recipient_name || 'Имя не указано';
+                let phone = order.phone_number || 'Телефон не указан';
 
-                // Имя получателя
-                document.getElementById('deliveryCustomerName').textContent =
-                    order.recipient_name || 'Имя не указано';
+                // Обрабатываем адрес
+                try {
+                    if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
+                        const addr = order.delivery_address_obj;
+                        const parts = [];
+                        if (addr.city) parts.push(addr.city);
+                        if (addr.street) parts.push(`ул. ${addr.street}`);
+                        if (addr.house) parts.push(`д. ${addr.house}`);
+                        if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
 
-                // Телефон
-                document.getElementById('deliveryCustomerPhone').textContent =
-                    order.phone_number || 'Телефон не указан';
+                        if (parts.length > 0) addressText = parts.join(', ');
 
-                // Адрес доставки
-                let addressHtml = '';
-                if (order.delivery_address_obj) {
-                    const addr = order.delivery_address_obj;
-                    if (addr.city && addr.street) {
-                        addressHtml = `
-                            <div class="delivery-info">
-                                <p><strong>Адрес доставки:</strong></p>
-                                <p>${addr.city || ''}, ${addr.street || ''} ${addr.house || ''}</p>
-                                ${addr.apartment ? `<p>Квартира: ${addr.apartment}</p>` : ''}
-                                ${addr.floor ? `<p>Этаж: ${addr.floor}</p>` : ''}
-                                ${addr.doorcode ? `<p>Код домофона: ${addr.doorcode}</p>` : ''}
-                            </div>
-                        `;
+                        if (!order.recipient_name && addr.recipient_name) {
+                            recipient = addr.recipient_name;
+                        }
+
+                        if (!order.phone_number && addr.phone) {
+                            phone = addr.phone;
+                        }
+                    } else if (order.delivery_address && typeof order.delivery_address === 'string') {
+                        try {
+                            const addr = JSON.parse(order.delivery_address);
+                            if (typeof addr === 'object') {
+                                const parts = [];
+                                if (addr.city) parts.push(addr.city);
+                                if (addr.street) parts.push(`ул. ${addr.street}`);
+                                if (addr.house) parts.push(`д. ${addr.house}`);
+                                if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
+
+                                if (parts.length > 0) addressText = parts.join(', ');
+
+                                if (!order.recipient_name && addr.recipient_name) {
+                                    recipient = addr.recipient_name;
+                                }
+
+                                if (!order.phone_number && addr.phone) {
+                                    phone = addr.phone;
+                                }
+                            }
+                        } catch (e) {
+                            addressText = order.delivery_address;
+                        }
                     }
-                }
-
-                // Состав заказа
-                let itemsHtml = '';
-                if (order.items_list && Array.isArray(order.items_list)) {
-                    itemsHtml = `
-                        <div class="order-items-info">
-                            <p><strong>Состав заказа:</strong></p>
-                            ${order.items_list.map(item => `
-                                <p>${item.name} × ${item.quantity} = ${item.quantity * item.price} ₽</p>
-                            `).join('')}
-                            <p><strong>Итого: ${order.total_price || 0} ₽</strong></p>
-                        </div>
-                    `;
+                } catch (e) {
+                    console.error('Ошибка обработки адреса:', e);
                 }
 
                 // Обновляем содержимое модального окна
                 document.getElementById('deliveryModalContent').innerHTML = `
                     <div class="delivery-details">
                         <div class="customer-info">
-                            <p><strong>Получатель:</strong> ${order.recipient_name || 'Не указан'}</p>
-                            <p><strong>Телефон:</strong> ${order.phone_number || 'Не указан'}</p>
+                            <p><strong>Получатель:</strong> ${recipient}</p>
+                            <p><strong>Телефон:</strong> ${phone}</p>
+                            <p><strong>Адрес:</strong> ${addressText}</p>
+                            <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
                         </div>
-                        ${addressHtml}
-                        ${itemsHtml}
                     </div>
                 `;
 
@@ -817,7 +911,7 @@ class CourierApp {
                     order_id: this.currentOrderId,
                     courier_id: this.currentCourier.id,
                     status: 'picked_up',
-                    assignment_id: this.currentOrderId // Временно используем order_id как assignment_id
+                    assignment_id: this.currentOrderId
                 })
             });
 
@@ -856,7 +950,7 @@ class CourierApp {
                     order_id: this.currentOrderId,
                     courier_id: this.currentCourier.id,
                     status: 'delivered',
-                    assignment_id: this.currentOrderId, // Временно
+                    assignment_id: this.currentOrderId,
                     photo_data: this.currentPhoto.data,
                     notes: notes
                 })
@@ -883,7 +977,7 @@ class CourierApp {
     getStatusText(status) {
         const statusMap = {
             'assigned': 'Назначен',
-            'picked_up': 'Забран',
+            'picked_up': 'В доставке',
             'delivered': 'Доставлен',
             'cancelled': 'Отменен'
         };
@@ -955,10 +1049,5 @@ class CourierApp {
     }
 }
 
-// Инициализация приложения
-let courierApp;
-
-document.addEventListener('DOMContentLoaded', () => {
-    courierApp = new CourierApp();
-    window.courierApp = courierApp;
-});
+// Экспортируем для глобального доступа
+window.CourierApp = CourierApp;

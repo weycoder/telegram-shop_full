@@ -1323,5 +1323,13 @@
             }
         });
     </script>
+    <script src="/static/js/courier.js"></script>
+    <script>
+        // Инициализация после загрузки DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            window.courierApp = new CourierApp();
+            console.log('✅ CourierApp инициализирован');
+        });
+    </script>
 </body>
 </html>
