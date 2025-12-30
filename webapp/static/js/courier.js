@@ -47,119 +47,95 @@ class CourierApp {
 
 
     showCourierInterface() {
-            const loginEl = document.getElementById('login-screen');
-            const mainEl = document.getElementById('main-screen');
+        const loginEl = document.getElementById('login-screen');
+        const mainEl = document.getElementById('main-screen');
 
-            if (loginEl) loginEl.style.display = 'none';
-            if (mainEl) mainEl.style.display = 'block';
+        if (loginEl) loginEl.style.display = 'none';
+        if (mainEl) mainEl.style.display = 'block';
 
-            // Обновляем данные курьера
-            if (this.currentCourier) {
-                const nameEl = document.getElementById('courier-info');
-                if (nameEl) {
-                    nameEl.textContent = `${this.currentCourier.full_name} • ${this.currentCourier.phone}`;
-                }
+        // Обновляем данные курьера
+        if (this.currentCourier) {
+            // В твоем HTML есть #courier-info?
+            const infoEl = document.getElementById('courier-info');
+            if (infoEl) {
+                infoEl.textContent = `${this.currentCourier.full_name} • ${this.currentCourier.phone}`;
             }
         }
+    }
 
     // Назначение обработчиков событий
+        // Назначение обработчиков событий
     bindEvents() {
-        // Авторизация
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
+        console.log('🔗 Назначаем обработчики событий...');
+
+        // Безопасное назначение обработчиков с проверкой существования элементов
+        this.safeAddEventListener('loginForm', 'submit', (e) => {
             e.preventDefault();
             this.login();
         });
 
-        // Выход
-        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+        this.safeAddEventListener('logoutBtn', 'click', (e) => {
             e.preventDefault();
             this.logout();
         });
 
-        // Боковое меню
-        document.getElementById('menuToggle').addEventListener('click', () => {
-            document.querySelector('.sidebar').classList.toggle('collapsed');
-            document.querySelector('.main-content').classList.toggle('expanded');
+        this.safeAddEventListener('menuToggle', 'click', () => {
+            document.querySelector('.sidebar')?.classList?.toggle('collapsed');
+            document.querySelector('.main-content')?.classList?.toggle('expanded');
         });
 
-        // Навигация по разделам
-        document.querySelectorAll('.menu-item[data-section]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = item.dataset.section;
-                this.switchSection(section);
-
-                // Обновляем активный пункт меню
-                document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-
-                // Обновляем заголовок
-                const titles = {
-                    'active': 'Активные заказы',
-                    'today': 'Заказы на сегодня',
-                    'history': 'История доставок',
-                    'profile': 'Настройки профиля'
-                };
-                document.getElementById('pageTitle').textContent = titles[section];
-            });
-        });
-
-        // Обновление заказов
-        document.getElementById('refreshActive').addEventListener('click', () => {
+        this.safeAddEventListener('refreshActive', 'click', () => {
             this.loadOrders();
         });
 
         // Закрытие модальных окон
-        document.getElementById('closeOrderModal').addEventListener('click', () => {
+        this.safeAddEventListener('closeOrderModal', 'click', () => {
             this.hideModal('orderModal');
         });
 
-        document.getElementById('closeDeliveryModal').addEventListener('click', () => {
+        this.safeAddEventListener('closeDeliveryModal', 'click', () => {
             this.hideModal('deliveryModal');
         });
 
-        document.getElementById('closePickupModal').addEventListener('click', () => {
+        this.safeAddEventListener('closePickupModal', 'click', () => {
             this.hideModal('pickupModal');
         });
 
-        document.getElementById('cancelDeliveryBtn').addEventListener('click', () => {
+        this.safeAddEventListener('cancelDeliveryBtn', 'click', () => {
             this.hideModal('deliveryModal');
         });
 
-        document.getElementById('cancelPickupBtn').addEventListener('click', () => {
+        this.safeAddEventListener('cancelPickupBtn', 'click', () => {
             this.hideModal('pickupModal');
         });
 
-        // Клик по оверлею для закрытия модальных окон
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
-                    overlay.style.display = 'none';
-                }
-            });
-        });
-
-        // Кнопки действий с заказами
+        // Безопасное делегирование для кнопок
         document.addEventListener('click', (e) => {
             // Подробности заказа
             if (e.target.closest('.action-btn.details')) {
                 const orderCard = e.target.closest('.order-card');
-                const orderId = orderCard.dataset.orderId;
-                this.showOrderDetails(orderId);
+                if (orderCard) {
+                    const orderId = orderCard.dataset.orderId;
+                    this.showOrderDetails(orderId);
+                }
             }
 
             // Забрать заказ
             if (e.target.closest('.action-btn.pickup')) {
                 const orderCard = e.target.closest('.order-card');
-                const orderId = orderCard.dataset.orderId;
-                this.showPickupConfirmation(orderId);
+                if (orderCard) {
+                    const orderId = orderCard.dataset.orderId;
+                    this.showPickupConfirmation(orderId);
+                }
             }
 
             // Доставка
             if (e.target.closest('.action-btn.deliver')) {
                 const orderCard = e.target.closest('.order-card');
-                const orderId = orderCard.dataset.orderId;
-                this.showDeliveryModal(orderId);
+                if (orderCard) {
+                    const orderId = orderCard.dataset.orderId;
+                    this.showDeliveryModal(orderId);
+                }
             }
         });
 
@@ -167,32 +143,46 @@ class CourierApp {
         this.bindPhotoEvents();
     }
 
+    // Безопасный метод добавления обработчика
+    safeAddEventListener(elementId, event, handler) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.addEventListener(event, handler);
+        } else {
+            console.warn(`⚠️ Элемент #${elementId} не найден для назначения обработчика ${event}`);
+        }
+    }
+
     // Обработчики для работы с фото
     bindPhotoEvents() {
-        // Сделать фото
-        document.getElementById('takePhotoBtn').addEventListener('click', () => {
-            document.getElementById('cameraInput').click();
-        });
+        // Безопасно добавляем обработчики для фото
+        const photoElements = {
+            'takePhotoBtn': () => document.getElementById('cameraInput')?.click(),
+            'choosePhotoBtn': () => document.getElementById('galleryInput')?.click(),
+            'removePhotoBtn': () => this.removePhoto(),
+            'confirmDeliveryBtn': () => this.confirmDelivery(),
+            'confirmPickupBtn': () => this.confirmPickup()
+        };
 
-        // Выбрать из галереи
-        document.getElementById('choosePhotoBtn').addEventListener('click', () => {
-            document.getElementById('galleryInput').click();
-        });
-
-        // Удалить фото
-        document.getElementById('removePhotoBtn').addEventListener('click', () => {
-            this.removePhoto();
-        });
+        for (const [id, handler] of Object.entries(photoElements)) {
+            this.safeAddEventListener(id, 'click', handler);
+        }
 
         // Обработка выбора файла (камера)
-        document.getElementById('cameraInput').addEventListener('change', (e) => {
-            this.handlePhotoSelection(e.target.files[0]);
-        });
+        const cameraInput = document.getElementById('cameraInput');
+        if (cameraInput) {
+            cameraInput.addEventListener('change', (e) => {
+                this.handlePhotoSelection(e.target.files[0]);
+            });
+        }
 
         // Обработка выбора файла (галерея)
-        document.getElementById('galleryInput').addEventListener('change', (e) => {
-            this.handlePhotoSelection(e.target.files[0]);
-        });
+        const galleryInput = document.getElementById('galleryInput');
+        if (galleryInput) {
+            galleryInput.addEventListener('change', (e) => {
+                this.handlePhotoSelection(e.target.files[0]);
+            });
+        }
 
         // Подтверждение доставки
         document.getElementById('confirmDeliveryBtn').addEventListener('click', () => {
@@ -206,12 +196,22 @@ class CourierApp {
     }
 
     // Авторизация
+    // Авторизация
     async login() {
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
+        // Используем правильные ID из твоего HTML
+        const usernameInput = document.getElementById('login-username');
+        const passwordInput = document.getElementById('login-password');
+
+        if (!usernameInput || !passwordInput) {
+            console.error('Не найдены поля ввода');
+            return;
+        }
+
+        const username = usernameInput.value;
+        const password = passwordInput.value;
 
         if (!username || !password) {
-            this.showNotification('❌ Введите логин и пароль', 'error');
+            alert('❌ Введите логин и пароль');
             return;
         }
 
@@ -240,13 +240,13 @@ class CourierApp {
                 this.showCourierInterface();
                 await this.loadOrders();
 
-                this.showNotification('✅ Успешный вход!', 'success');
+                console.log('✅ Успешный вход!');
             } else {
                 throw new Error(result.error || 'Ошибка авторизации');
             }
         } catch (error) {
             console.error('Ошибка входа:', error);
-            this.showNotification(`❌ ${error.message}`, 'error');
+            alert(`❌ ${error.message}`);
         }
     }
 
