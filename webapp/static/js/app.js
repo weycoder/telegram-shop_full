@@ -1752,8 +1752,11 @@ class TelegramShop {
             console.log('🚚 Данные доставки:', this.deliveryData);
             console.log('🛒 Товары в корзине:', this.cart.length);
 
+            // ========== ИСПРАВЛЕННАЯ ЧАСТЬ ==========
             // Подготавливаем данные о доставке и оплате
             let deliveryDetails = {};
+            let recipient_name = "";
+            let phone_number = "";
 
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
                 if (this.deliveryData.address_id.toString().startsWith('guest_')) {
@@ -1761,15 +1764,40 @@ class TelegramShop {
                     const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
                     const addressIndex = parseInt(this.deliveryData.address_id.split('_')[1]);
                     deliveryDetails = guestAddresses[addressIndex] || {};
+
+                    // Извлекаем имя и телефон из адреса гостя
+                    recipient_name = deliveryDetails.recipient_name || '';
+                    phone_number = deliveryDetails.phone || '';
+
                     console.log('🏠 Адрес гостя:', deliveryDetails);
+                    console.log('📱 Извлеченные данные:', { recipient_name, phone_number });
                 } else {
-                    // Для зарегистрированного - просто ID
-                    deliveryDetails = { address_id: this.deliveryData.address_id };
-                    console.log('👤 Адрес зарегистрированного пользователя ID:', this.deliveryData.address_id);
+                    // Для зарегистрированного - используем address_details
+                    deliveryDetails = this.deliveryData.address_details || {};
+                    recipient_name = deliveryDetails.recipient_name || '';
+                    phone_number = deliveryDetails.phone || deliveryDetails.phone_number || '';
+                    console.log('👤 Адрес пользователя:', deliveryDetails);
+                }
+
+                // Проверка обязательных полей
+                if (!recipient_name || recipient_name.trim() === '') {
+                    this.showNotification('❌ Укажите имя получателя', 'error');
+                    this.showAddressSelection();
+                    return;
+                }
+
+                if (!phone_number || phone_number.trim() === '') {
+                    this.showNotification('❌ Укажите телефон для связи', 'error');
+                    this.showAddressSelection();
+                    return;
                 }
             } else if (this.deliveryData.type === 'pickup' && this.deliveryData.pickup_point) {
                 deliveryDetails = { pickup_point_id: this.deliveryData.pickup_point };
+                // Для самовывоза используем данные пользователя
+                recipient_name = this.username || 'Гость';
+                phone_number = 'Будет указан при получении';
             }
+            // ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
 
             // Формируем items для заказа
             const orderItems = this.cart.map(item => ({
@@ -1789,8 +1817,8 @@ class TelegramShop {
                 delivery_address: JSON.stringify(deliveryDetails),  // ← сохраняем весь объект
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
-                recipient_name: deliveryDetails.recipient_name || '',
-                phone_number: deliveryDetails.phone || ''
+                recipient_name: recipient_name,  // ← Явно передаем имя
+                phone_number: phone_number       // ← Явно передаем телефон
             };
 
             console.log('📤 Отправка заказа на сервер:', orderData);

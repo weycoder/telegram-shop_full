@@ -796,6 +796,8 @@ def api_create_order():
     print(f"📦 items: {len(data.get('items', []))} товаров")
     print(f"💰 total: {data.get('total', 0)} руб.")
     print(f"🚚 delivery_type: {data.get('delivery_type')}")
+    print(f"📞 phone_number (из запроса): {data.get('phone_number')}")
+    print(f"👤 recipient_name (из запроса): {data.get('recipient_name')}")
     print("=" * 50)
 
     db = get_db()
@@ -804,14 +806,51 @@ def api_create_order():
         payment_method = data.get('payment_method', 'cash')
         delivery_address = data.get('delivery_address', '{}')
 
+        # ========== ИСПРАВЛЕННАЯ ЧАСТЬ ==========
+        # Парсим delivery_address если это JSON строка
+        address_obj = {}
+        if isinstance(delivery_address, str):
+            try:
+                if delivery_address and delivery_address != '{}':
+                    address_obj = json.loads(delivery_address)
+            except:
+                print("⚠️ Не удалось распарсить delivery_address")
+                address_obj = {}
+        elif isinstance(delivery_address, dict):
+            address_obj = delivery_address
+
+        # Извлекаем recipient_name и phone_number из разных источников
+        recipient_name = ""
+        phone_number = ""
+
+        # 1. Из объекта адреса (самый приоритет)
+        if isinstance(address_obj, dict):
+            recipient_name = address_obj.get('recipient_name', '')
+            phone_number = address_obj.get('phone', '') or address_obj.get('phone_number', '')
+
+        # 2. Из прямых полей запроса
+        if not recipient_name:
+            recipient_name = data.get('recipient_name', '')
+        if not phone_number:
+            phone_number = data.get('phone_number', '')
+
+        # 3. Из username (если совсем пусто)
+        if not recipient_name:
+            recipient_name = data.get('username', 'Гость')
+        if not phone_number:
+            phone_number = 'Не указан'
+
+        print(f"✅ Извлеченные данные:")
+        print(f"   recipient_name: {recipient_name}")
+        print(f"   phone_number: {phone_number}")
+        print(f"   address_obj: {address_obj}")
+        # ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
+
         if isinstance(delivery_address, str):
             try:
                 delivery_address = json.loads(delivery_address)
             except:
                 delivery_address = {}
-
-        recipient_name = delivery_address.get('recipient_name', data.get('recipient_name', ''))
-        phone_number = delivery_address.get('phone', data.get('phone_number', ''))
 
         # ПОЛУЧАЕМ user_id и username
         user_id = data.get('user_id', 0)
@@ -864,11 +903,11 @@ def api_create_order():
                                 data['total'],
                                 'pending',
                                 delivery_type,
-                                json.dumps(delivery_address, ensure_ascii=False),
+                                json.dumps(address_obj if address_obj else {}, ensure_ascii=False),  # Исправлено
                                 data.get('pickup_point'),
                                 payment_method,
-                                recipient_name,
-                                phone_number
+                                recipient_name,  # Исправлено
+                                phone_number  # Исправлено
                             ))
 
         for item in data['items']:

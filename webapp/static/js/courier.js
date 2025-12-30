@@ -330,63 +330,93 @@ class CourierApp {
     }
 
     createOrderCard(order, isCompleted = false) {
-        // Получаем адрес - УЛУЧШЕННАЯ ВЕРСИЯ
+        // ========== ИСПРАВЛЕННОЕ ИЗВЛЕЧЕНИЕ АДРЕСА И ДАННЫХ ==========
         let address = "Адрес не указан";
-        let recipient = order.recipient_name || "Не указан";
-        let phone = order.phone_number || "Телефон не указан";
+        let recipient = "Не указан";
+        let phone = "Телефон не указан";
 
-        try {
-            // Пытаемся получить данные из разных источников
-            let deliveryData = null;
+        // 1. Проверяем прямые поля заказа (высший приоритет)
+        if (order.recipient_name && order.recipient_name !== 'Гость' && order.recipient_name !== 'Не указан') {
+            recipient = order.recipient_name;
+        }
 
-            // 1. Сначала из delivery_address_obj
-            if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
-                deliveryData = order.delivery_address_obj;
-            }
-            // 2. Затем из delivery_address (как строка JSON)
-            else if (order.delivery_address && typeof order.delivery_address === 'string') {
-                try {
-                    deliveryData = JSON.parse(order.delivery_address);
-                } catch (e) {
-                    // Если не JSON, используем как есть
+        if (order.phone_number && order.phone_number !== 'Телефон не указан') {
+            phone = order.phone_number;
+        }
+
+        // 2. Проверяем delivery_address (JSON строка или объект)
+        let addressData = null;
+
+        if (order.delivery_address) {
+            try {
+                // Пытаемся распарсить JSON
+                if (typeof order.delivery_address === 'string') {
+                    if (order.delivery_address.startsWith('{') || order.delivery_address.startsWith('[')) {
+                        addressData = JSON.parse(order.delivery_address);
+                    } else {
+                        // Если это не JSON, используем как строку адреса
+                        address = order.delivery_address;
+                    }
+                } else {
+                    // Если это уже объект
+                    addressData = order.delivery_address;
+                }
+
+                // Если получили объект адреса
+                if (addressData && typeof addressData === 'object') {
+                    // Формируем читаемый адрес
+                    const parts = [];
+                    if (addressData.city) parts.push(addressData.city);
+                    if (addressData.street) parts.push(`ул. ${addressData.street}`);
+                    if (addressData.house) parts.push(`д. ${addressData.house}`);
+                    if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
+
+                    if (parts.length > 0) {
+                        address = parts.join(', ');
+                    } else if (addressData.address) {
+                        // Если есть поле address
+                        address = addressData.address;
+                    }
+
+                    // Извлекаем получателя и телефон из объекта адреса
+                    // Только если в заказе нет этих данных
+                    if (recipient === "Не указан" && addressData.recipient_name) {
+                        recipient = addressData.recipient_name;
+                    }
+
+                    if (phone === "Телефон не указан") {
+                        phone = addressData.phone || addressData.phone_number || "Телефон не указан";
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Ошибка обработки адреса заказа #' + order.id, e);
+                // Если не удалось распарсить, используем как есть
+                if (typeof order.delivery_address === 'string') {
                     address = order.delivery_address;
                 }
             }
+        }
 
-            // Если нашли данные о доставке
-            if (deliveryData) {
+        // 3. Если все еще нет данных, пробуем username
+        if (recipient === "Не указан" && order.username && order.username !== 'Гость') {
+            recipient = order.username;
+        }
+
+        // 4. Запасной вариант для адреса
+        if (address === "Адрес не указан" && order.delivery_address_obj) {
+            try {
+                const addr = order.delivery_address_obj;
                 const parts = [];
-                if (deliveryData.city) parts.push(deliveryData.city);
-                if (deliveryData.street) parts.push(`ул. ${deliveryData.street}`);
-                if (deliveryData.house) parts.push(`д. ${deliveryData.house}`);
-                if (deliveryData.apartment) parts.push(`кв. ${deliveryData.apartment}`);
-
+                if (addr.city) parts.push(addr.city);
+                if (addr.street) parts.push(`ул. ${addr.street}`);
+                if (addr.house) parts.push(`д. ${addr.house}`);
+                if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
                 if (parts.length > 0) address = parts.join(', ');
-
-                // Получатель и телефон из данных доставки
-                if (!recipient || recipient === "Не указан") {
-                    recipient = deliveryData.recipient_name || "Не указан";
-                }
-                if (!phone || phone === "Телефон не указан") {
-                    phone = deliveryData.phone || "Телефон не указан";
-                }
-            }
-
-            // 3. Проверяем прямые поля заказа
-            if (!recipient || recipient === "Не указан") {
-                recipient = order.recipient_name || "Не указан";
-            }
-            if (!phone || phone === "Телефон не указан") {
-                phone = order.phone_number || "Телефон не указан";
-            }
-
-        } catch (e) {
-            console.error('❌ Ошибка обработки адреса заказа #' + order.id, e);
-            // Используем запасные значения
-            if (order.delivery_address && typeof order.delivery_address === 'string') {
-                address = order.delivery_address;
+            } catch (e) {
+                // Игнорируем ошибку
             }
         }
+        // ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
 
         // Сумма
         const total = order.total_price || order.sum || 0;
@@ -458,15 +488,21 @@ class CourierApp {
                     </div>
                     <div class="info-item">
                         <span class="info-label">Получатель:</span>
-                        <span class="info-value">${recipient}</span>
+                        <span class="info-value" style="${recipient === 'Не указан' ? 'color: #e74c3c; font-weight: bold;' : ''}">
+                            ${recipient}
+                        </span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Телефон:</span>
-                        <span class="info-value">${phone}</span>
+                        <span class="info-value" style="${phone === 'Телефон не указан' ? 'color: #e74c3c; font-weight: bold;' : ''}">
+                            ${phone}
+                        </span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Адрес:</span>
-                        <span class="info-value" style="font-size: 12px;">${address}</span>
+                        <span class="info-value" style="font-size: 12px; ${address === 'Адрес не указан' ? 'color: #e74c3c;' : ''}">
+                            ${address}
+                        </span>
                     </div>
                 </div>
 

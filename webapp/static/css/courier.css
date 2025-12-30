@@ -1110,3 +1110,20 @@ body {
         background: #2d2d2d;
     }
 }
+
+
+/* Добавить в существующий CSS */
+.warning-badge {
+    background: #e74c3c;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: 8px;
+    display: inline-block;
+}
+
+.data-missing {
+    background-color: #fff8f8;
+    border-left: 4px solid #e74c3c !important;
+}
