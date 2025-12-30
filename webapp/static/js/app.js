@@ -1244,8 +1244,8 @@ class TelegramShop {
                     </div>
 
                     <div class="delivery-actions">
-                        <button class="btn btn-primary" onclick="shop.saveAddress(${this.userId})">
-                            <i class="fas fa-save"></i> Сохранить адрес
+                        <button class="btn btn-primary" onclick="shop.showAddressForm(${userId})">
+                            <i class="fas fa-plus"></i> Добавить новый адрес
                         </button>
                         <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
                             <i class="fas fa-arrow-left"></i> Назад
@@ -1392,10 +1392,10 @@ class TelegramShop {
         this.showNotification('Возвращено в корзину', 'info');
     }
 
-    async saveAddress(userId) {
+    async saveAddress() {
         try {
             const addressData = {
-                user_id: userId,
+                user_id: this.userId,
                 city: document.getElementById('city').value,
                 street: document.getElementById('street').value,
                 house: document.getElementById('house').value,
@@ -1406,8 +1406,6 @@ class TelegramShop {
                 phone: document.getElementById('recipientPhone').value
             };
 
-            console.log('💾 Сохранение адреса:', addressData);
-
             // Проверка обязательных полей
             if (!addressData.city || !addressData.street || !addressData.house || !addressData.recipient_name) {
                 this.showNotification('❌ Заполните обязательные поля', 'error');
@@ -1416,10 +1414,9 @@ class TelegramShop {
 
             let result;
 
-            if (userId === 0) {
+            if (this.userId === 0) {
                 // Для гостя сохраняем в localStorage
                 result = this.saveGuestAddress(addressData);
-                console.log('💾 Адрес гостя сохранен:', result);
             } else {
                 // Для зарегистрированных пользователей - на сервер
                 const response = await fetch('/api/user/addresses', {
@@ -1430,18 +1427,15 @@ class TelegramShop {
                     body: JSON.stringify(addressData)
                 });
                 result = await response.json();
-                console.log('💾 Адрес сохранен на сервере:', result);
             }
 
             if (result.success) {
-                this.deliveryData.address_id = userId === 0 ? `guest_${result.id - 1}` : result.id;
-                this.deliveryData.address_details = addressData;
-
+                this.deliveryData.address_id = result.id;
                 this.showNotification('✅ Адрес сохранен', 'success');
 
-                // Показываем выбор оплаты
+                // ВМЕСТО confirmOrder() -> возвращаем к выбору адреса
                 setTimeout(() => {
-                    this.showPaymentSelection();
+                    this.showAddressSelection();
                 }, 1000);
 
             } else {
