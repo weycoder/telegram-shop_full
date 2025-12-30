@@ -1,14 +1,41 @@
 // Telegram Shop - Полная версия с всеми функциями
 console.log('🟢 app.js начал загружаться');
 
-// Функция для получения параметров из URL (вынесена из класса)
 function getTelegramParams() {
     try {
         const urlParams = new URLSearchParams(window.location.search);
-        const userId = parseInt(urlParams.get('user_id')) || 0;
-        const username = urlParams.get('username') || 'Гость';
 
-        console.log('✅ Параметры из Telegram:', { userId, username });
+        // 1. Пробуем получить из URL
+        let userId = parseInt(urlParams.get('user_id')) || 0;
+        let username = urlParams.get('username') || 'Гость';
+
+        console.log('🔗 Параметры из URL:', { userId, username });
+
+        // 2. Если userId = 0, пробуем получить из localStorage
+        if (userId === 0) {
+            const savedId = localStorage.getItem('telegram_user_id');
+            const savedUsername = localStorage.getItem('telegram_username');
+
+            if (savedId && savedId !== '0') {
+                userId = parseInt(savedId);
+                username = savedUsername || 'Пользователь';
+                console.log('💾 Восстановлено из localStorage:', { userId, username });
+            }
+        }
+
+        // 3. Если все еще 0, но есть Telegram Web App данные
+        if (userId === 0 && window.Telegram?.WebApp?.initDataUnsafe?.user) {
+            const tgUser = Telegram.WebApp.initDataUnsafe.user;
+            userId = tgUser.id || 0;
+            username = tgUser.username || tgUser.first_name || 'Telegram User';
+            console.log('🤖 Получено из Telegram WebApp:', { userId, username });
+
+            // Сохраняем в localStorage
+            localStorage.setItem('telegram_user_id', userId);
+            localStorage.setItem('telegram_username', username);
+        }
+
+        console.log('✅ Итоговые параметры пользователя:', { userId, username });
 
         return {
             userId: userId,
@@ -31,7 +58,7 @@ class TelegramShop {
         this.categories = [];
         this.isInitialized = false;
         this.deliveryData = {
-            type: null, // 'courier' или 'pickup'
+            type: null,
             address_id: null,
             pickup_point: null,
             address_details: null
@@ -42,8 +69,12 @@ class TelegramShop {
         this.userId = params.userId;
         this.username = params.username;
 
+        // ⚠️ ВАЖНО: Сохраняем в localStorage для перезагрузки страницы
+        this.saveUserToLocalStorage();
+
         console.log('🛍️ Telegram Shop создан для пользователя:', this.username, 'ID:', this.userId);
     }
+
 
     async init() {
         if (this.isInitialized) return;
@@ -70,11 +101,49 @@ class TelegramShop {
         console.log('✅ Магазин инициализирован');
     }
 
-    // Метод createOrder как часть класса
+    // ДОБАВЬ ЭТИ МЕТОДЫ В КЛАСС:
+    saveUserToLocalStorage() {
+        if (this.userId && this.userId !== 0) {
+            localStorage.setItem('telegram_user_id', this.userId);
+            localStorage.setItem('telegram_username', this.username);
+            console.log('💾 Пользователь сохранен в localStorage:', { id: this.userId, username: this.username });
+        }
+    }
+
+    loadUserFromLocalStorage() {
+        const savedId = localStorage.getItem('telegram_user_id');
+        const savedUsername = localStorage.getItem('telegram_username');
+
+        if (savedId && savedId !== '0') {
+            this.userId = parseInt(savedId);
+            this.username = savedUsername || 'Пользователь';
+            console.log('🔍 Пользователь восстановлен из localStorage:', { id: this.userId, username: this.username });
+            return true;
+        }
+        return false;
+    }
+
     async createOrder(orderData) {
-        // Добавляем данные из Telegram
-        orderData.user_id = this.userId;
-        orderData.username = this.username;
+        // ⚠️ ВАЖНО: Перед отправкой проверяем и сохраняем user_id в localStorage
+        if (this.userId && this.userId !== 0) {
+            localStorage.setItem('telegram_user_id', this.userId);
+            localStorage.setItem('telegram_username', this.username || 'Пользователь');
+            console.log('💾 Пользователь сохранен в localStorage:', { id: this.userId, username: this.username });
+        } else {
+            // Если userId = 0, пробуем получить из localStorage
+            const savedId = localStorage.getItem('telegram_user_id');
+            const savedUsername = localStorage.getItem('telegram_username');
+
+            if (savedId && savedId !== '0') {
+                this.userId = parseInt(savedId);
+                this.username = savedUsername || 'Пользователь';
+                console.log('🔍 Восстановлен пользователь из localStorage:', { id: this.userId, username: this.username });
+            }
+        }
+
+        // Добавляем данные из Telegram (используем актуальные значения)
+        orderData.user_id = parseInt(this.userId) || 0;
+        orderData.username = this.username || 'Гость';
 
         console.log('📦 Создание заказа с данными:', orderData);
 
