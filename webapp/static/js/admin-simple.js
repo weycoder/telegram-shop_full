@@ -35,6 +35,31 @@ class AdminPanel {
                 this.showPage(pageId);
             });
         });
+
+            // Клик по строке заказа
+        document.addEventListener('click', (e) => {
+            const orderRow = e.target.closest('.order-row');
+            if (orderRow) {
+                const orderId = orderRow.dataset.orderId;
+                this.showOrderDetails(orderId);
+            }
+        });
+
+        // Закрытие модального окна
+        document.getElementById('orderDetailsModal')?.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal-overlay') || e.target.closest('.close-modal')) {
+                this.closeOrderDetails();
+            }
+        });
+
+        // Escape для закрытия
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeOrderDetails();
+            }
+        });
+
+
         document.querySelectorAll('.toggle-option input[type="radio"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 this.imageSourceType = e.target.value;
@@ -156,6 +181,258 @@ class AdminPanel {
             this.products = [];
             this.renderProducts();
         }
+    }
+
+
+
+    async showOrderDetails(orderId) {
+        try {
+            console.log(`📋 Загрузка деталей заказа #${orderId}...`);
+
+            const response = await fetch(`/api/admin/orders/${orderId}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const order = await response.json();
+            this.renderOrderDetails(order);
+
+        } catch (error) {
+            console.error('Ошибка загрузки деталей заказа:', error);
+            this.showAlert('❌ Ошибка загрузки деталей заказа', 'error');
+        }
+    }
+
+        // Метод для изменения статуса заказа
+    async changeOrderStatus(orderId, newStatus) {
+        if (!confirm(`Изменить статус заказа #${orderId} на "${newStatus}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/admin/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert(`✅ Статус заказа обновлен на "${newStatus}"`, 'success');
+                this.closeOrderDetails();
+
+                // Перезагружаем заказы
+                await this.loadOrders();
+            } else {
+                this.showAlert(`❌ Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
+            }
+
+        } catch (error) {
+            console.error('Ошибка изменения статуса:', error);
+            this.showAlert('❌ Ошибка изменения статуса', 'error');
+        }
+    }
+
+    // Метод для отмены заказа
+    async cancelOrder(orderId) {
+        if (!confirm(`Отменить заказ #${orderId}? Это действие нельзя отменить.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/admin/orders/${orderId}/cancel`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert('✅ Заказ отменен', 'success');
+                this.closeOrderDetails();
+
+                // Перезагружаем заказы
+                await this.loadOrders();
+            } else {
+                this.showAlert(`❌ Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
+            }
+
+        } catch (error) {
+            console.error('Ошибка отмены заказа:', error);
+            this.showAlert('❌ Ошибка отмены заказа', 'error');
+        }
+    }
+
+    // Метод для закрытия модального окна
+    closeOrderDetails() {
+        const modal = document.getElementById('orderDetailsModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+
+        // Метод для рендеринга деталей заказа
+    renderOrderDetails(order) {
+        const modal = document.getElementById('orderDetailsModal');
+        const content = document.getElementById('orderDetailsContent');
+
+        if (!modal || !content) return;
+
+        // Парсим данные
+        const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items || [];
+        const deliveryAddress = typeof order.delivery_address === 'string'
+            ? JSON.parse(order.delivery_address)
+            : order.delivery_address || {};
+
+        const paymentMethods = {
+            'cash': 'Наличные',
+            'transfer': 'Перевод курьеру',
+            'terminal': 'Терминал'
+        };
+
+        const statusTexts = {
+            'pending': 'Ожидает обработки',
+            'processing': 'В обработке',
+            'delivering': 'Доставляется',
+            'completed': 'Завершен',
+            'cancelled': 'Отменен'
+        };
+
+        const deliveryTypes = {
+            'courier': 'Доставка курьером',
+            'pickup': 'Самовывоз'
+        };
+
+        // Рассчитываем общую сумму
+        const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        // Генерируем HTML для товаров
+        let itemsHTML = '';
+        items.forEach(item => {
+            itemsHTML += `
+                <div class="order-item">
+                    <div class="item-name">${item.name}</div>
+                    <div class="item-quantity">${item.quantity} × ${this.formatPrice(item.price)} ₽</div>
+                    <div class="item-total">${this.formatPrice(item.price * item.quantity)} ₽</div>
+                </div>
+            `;
+        });
+
+        // Генерируем HTML для адреса
+        let addressHTML = '';
+        if (order.delivery_type === 'courier' && deliveryAddress) {
+            addressHTML = `
+                <div class="address-section">
+                    <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
+                    <div class="address-details">
+                        ${deliveryAddress.city ? `<p><strong>Город:</strong> ${deliveryAddress.city}</p>` : ''}
+                        ${deliveryAddress.street ? `<p><strong>Улица:</strong> ${deliveryAddress.street}, ${deliveryAddress.house || ''}</p>` : ''}
+                        ${deliveryAddress.apartment ? `<p><strong>Квартира:</strong> ${deliveryAddress.apartment}</p>` : ''}
+                        ${deliveryAddress.floor ? `<p><strong>Этаж:</strong> ${deliveryAddress.floor}</p>` : ''}
+                        ${deliveryAddress.doorcode ? `<p><strong>Домофон:</strong> ${deliveryAddress.doorcode}</p>` : ''}
+                        ${deliveryAddress.recipient_name ? `<p><strong>Получатель:</strong> ${deliveryAddress.recipient_name}</p>` : ''}
+                        ${deliveryAddress.phone ? `<p><strong>Телефон:</strong> ${deliveryAddress.phone}</p>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        content.innerHTML = `
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-list"></i> Заказ #${order.id}</h2>
+                <button class="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Основная информация -->
+                <div class="order-info-grid">
+                    <div class="info-card">
+                        <h4><i class="fas fa-user"></i> Информация о клиенте</h4>
+                        <p><strong>Имя:</strong> ${order.username || `Пользователь ${order.user_id}`}</p>
+                        <p><strong>Telegram ID:</strong> ${order.user_id || 'Не указан'}</p>
+                        ${order.phone_number ? `<p><strong>Телефон:</strong> ${order.phone_number}</p>` : ''}
+                    </div>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-truck"></i> Доставка и оплата</h4>
+                        <p><strong>Способ:</strong> ${deliveryTypes[order.delivery_type] || order.delivery_type}</p>
+                        <p><strong>Оплата:</strong> ${paymentMethods[order.payment_method] || order.payment_method}</p>
+                    </div>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-history"></i> Статус и даты</h4>
+                        <p><strong>Статус:</strong>
+                            <span class="status-badge status-${order.status}">
+                                ${statusTexts[order.status] || order.status}
+                            </span>
+                        </p>
+                        <p><strong>Создан:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
+                        ${order.updated_at ? `<p><strong>Обновлен:</strong> ${new Date(order.updated_at).toLocaleString('ru-RU')}</p>` : ''}
+                    </div>
+                </div>
+
+                <!-- Адрес доставки -->
+                ${addressHTML}
+
+                <!-- Список товаров -->
+                <div class="items-section">
+                    <h4><i class="fas fa-shopping-cart"></i> Состав заказа</h4>
+                    <div class="items-list">
+                        ${itemsHTML}
+                    </div>
+                    <div class="items-total">
+                        <div class="total-row">
+                            <span>Товары:</span>
+                            <span>${this.formatPrice(totalAmount)} ₽</span>
+                        </div>
+                        ${order.delivery_type === 'courier' && totalAmount < 1000 ? `
+                            <div class="total-row">
+                                <span>Доставка:</span>
+                                <span>100 ₽</span>
+                            </div>
+                        ` : ''}
+                        <div class="total-row grand-total">
+                            <span><strong>Итого к оплате:</strong></span>
+                            <span><strong>${this.formatPrice(order.total_price || totalAmount + (totalAmount < 1000 && order.delivery_type === 'courier' ? 100 : 0))} ₽</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Действия с заказом -->
+                <div class="order-actions">
+                    <h4><i class="fas fa-cogs"></i> Управление заказом</h4>
+                    <div class="action-buttons">
+                        <button class="btn-action btn-status ${order.status === 'pending' ? 'active' : ''}"
+                                onclick="admin.changeOrderStatus(${order.id}, 'processing')">
+                            <i class="fas fa-play"></i> В обработку
+                        </button>
+                        <button class="btn-action btn-status ${order.status === 'processing' ? 'active' : ''}"
+                                onclick="admin.changeOrderStatus(${order.id}, 'delivering')">
+                            <i class="fas fa-truck"></i> В доставку
+                        </button>
+                        <button class="btn-action btn-status ${order.status === 'delivering' ? 'active' : ''}"
+                                onclick="admin.changeOrderStatus(${order.id}, 'completed')">
+                            <i class="fas fa-check"></i> Завершить
+                        </button>
+                        <button class="btn-action btn-danger"
+                                onclick="admin.cancelOrder(${order.id})">
+                            <i class="fas fa-times"></i> Отменить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.style.display = 'flex';
     }
 
     renderProducts() {
@@ -297,7 +574,7 @@ class AdminPanel {
             const statusInfo = statusColors[status] || statusColors.pending;
 
             html += `
-                <tr>
+                <tr class="order-row" data-order-id="${order.id}" style="cursor: pointer;">
                     <td style="font-weight: 600; color: #2c3e50;">#${order.id}</td>
                     <td>
                         <div style="font-weight: 600; color: #2c3e50;">${order.username || `Пользователь ${order.user_id}`}</div>

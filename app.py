@@ -526,7 +526,7 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
             },
             'picked_up': {
                 'title': '📦 Товар у курьера!',
-                'message': f'Курьер забрал заказ #{order_id} и уже мчтится к вам!'
+                'message': f'Курьер забрал заказ #{order_id} и уже мчится к вам!'
             },
             'on_the_way': {
                 'title': '🚗 Курьер едет к вам!',
@@ -1279,6 +1279,110 @@ def update_delivery_status():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
+
+@app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
+def admin_get_order_details(order_id):
+    """Получить детали заказа для админки"""
+    db = get_db()
+    try:
+        order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if not order:
+            db.close()
+            return jsonify({'error': 'Заказ не найден'}), 404
+
+        order_dict = dict(order)
+
+        # Парсим JSON поля
+        if order_dict.get('items'):
+            try:
+                order_dict['items'] = json.loads(order_dict['items'])
+            except:
+                order_dict['items'] = []
+
+        if order_dict.get('delivery_address'):
+            try:
+                order_dict['delivery_address'] = json.loads(order_dict['delivery_address'])
+            except:
+                order_dict['delivery_address'] = {}
+
+        # Добавляем поле updated_at для совместимости
+        if 'updated_at' not in order_dict:
+            order_dict['updated_at'] = order_dict['created_at']
+
+        db.close()
+        return jsonify(order_dict)
+
+    except Exception as e:
+        if db:
+            db.close()
+        print(f"❌ Ошибка получения деталей заказа #{order_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
+def admin_update_order_status(order_id):
+    """Изменить статус заказа в админке"""
+    db = get_db()
+    try:
+        data = request.get_json()
+        new_status = data.get('status')
+
+        if new_status not in ['pending', 'processing', 'delivering', 'completed', 'cancelled']:
+            db.close()
+            return jsonify({'error': 'Некорректный статус'}), 400
+
+        # Обновляем статус заказа
+        db.execute('UPDATE orders SET status = ? WHERE id = ?',
+                   (new_status, order_id))
+        db.commit()
+        db.close()
+
+        # Отправляем уведомление
+        send_order_notification(order_id, new_status)
+
+        return jsonify({'success': True, 'status': new_status})
+
+    except Exception as e:
+        if db:
+            db.close()
+        print(f"❌ Ошибка обновления статуса заказа #{order_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/orders/<int:order_id>/cancel', methods=['PUT'])
+def admin_cancel_order(order_id):
+    """Отменить заказ в админке"""
+    db = get_db()
+    try:
+        # Получаем текущий статус
+        order = db.execute('SELECT status FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if not order:
+            db.close()
+            return jsonify({'error': 'Заказ не найден'}), 404
+
+        if order['status'] == 'completed':
+            db.close()
+            return jsonify({'error': 'Нельзя отменить завершенный заказ'}), 400
+
+        # Обновляем статус
+        db.execute('UPDATE orders SET status = "cancelled" WHERE id = ?',
+                   (order_id,))
+        db.commit()
+        db.close()
+
+        # Отправляем уведомление
+        send_order_notification(order_id, 'cancelled')
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        if db:
+            db.close()
+        print(f"❌ Ошибка отмены заказа #{order_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/courier/order/<int:order_id>', methods=['GET'])
 def get_order_details(order_id):
     """Получить детали заказа для курьера"""
@@ -1452,7 +1556,6 @@ def assign_courier():
     except Exception as e:
         print(f"❌ Ошибка назначения курьера: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 
 # ========== API ДЛЯ АДМИНА ==========
