@@ -210,6 +210,7 @@ def init_db():
                        )
                        ''')
 
+        # ========== ИСПРАВЛЕННАЯ ТАБЛИЦА ORDERS ==========
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS orders
                        (
@@ -232,6 +233,10 @@ def init_db():
                            REAL
                            NOT
                            NULL,
+                           delivery_cost
+                           REAL
+                           DEFAULT
+                           0,
                            status
                            TEXT
                            DEFAULT
