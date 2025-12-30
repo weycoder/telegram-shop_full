@@ -1342,100 +1342,118 @@ class TelegramShop {
 
         cartOverlay.innerHTML = `
             <div class="cart-modal" style="padding: 0;">
-                <div class="cart-header" style="background: var(--primary-gradient); color: white;">
-                    <h2><i class="fas fa-shipping-fast"></i> Способ получения</h2>
-                    <button class="close-cart" id="closeDeliverySelection" style="color: white;">
+                <div class="cart-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C); color: white; border: none;">
+                    <h2><i class="fas fa-truck"></i> Способ доставки</h2>
+                    <button class="close-cart" id="closeDeliverySelection" style="color: white; background: rgba(255,255,255,0.2);">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
 
-                <!-- Основной контент -->
-                <div class="delivery-selection-content">
-                    <!-- Доставка курьером -->
-                    <div class="delivery-option-compact" id="courierOption">
-                        <div class="delivery-option-left">
-                            <div class="delivery-icon" style="background: #4CAF50;">
-                                <i class="fas fa-truck"></i>
-                            </div>
-                            <div class="delivery-info">
-                                <h3>🚗 Доставка курьером</h3>
-                                <p>Привезем прямо к вашей двери</p>
-                            </div>
+                <div class="delivery-content" style="padding: 20px; max-height: calc(100vh - 180px); overflow-y: auto;">
+                    <!-- Способ 1: Курьер -->
+                    <div class="delivery-method active" id="courierOption">
+                        <div class="method-check">
+                            <i class="fas fa-check-circle"></i>
                         </div>
-                        <div class="delivery-option-right">
-                            <span class="delivery-price ${itemsTotal >= 1000 ? 'free' : 'paid'}">
+                        <div class="method-icon" style="background: #4CAF50;">
+                            <i class="fas fa-truck fa-lg"></i>
+                        </div>
+                        <div class="method-info">
+                            <h3>Доставка курьером</h3>
+                            <p>Привезем прямо к вашей двери</p>
+                            <div class="method-price ${itemsTotal >= 1000 ? 'price-free' : 'price-paid'}">
+                                <i class="fas ${itemsTotal >= 1000 ? 'fa-gift' : 'fa-tag'}"></i>
                                 ${itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
-                            </span>
-                            <i class="fas fa-chevron-right"></i>
-                        </div>
-                    </div>
-
-                    <!-- Самовывоз -->
-                    <div class="delivery-option-compact" id="pickupOption">
-                        <div class="delivery-option-left">
-                            <div class="delivery-icon" style="background: #FF9800;">
-                                <i class="fas fa-store"></i>
-                            </div>
-                            <div class="delivery-info">
-                                <h3>🏪 Самовывоз</h3>
-                                <p>Заберите из ближайшей точки</p>
                             </div>
                         </div>
-                        <div class="delivery-option-right">
-                            <span class="delivery-price free">Бесплатно</span>
-                            <i class="fas fa-chevron-right"></i>
-                        </div>
+                        <i class="fas fa-chevron-right method-arrow"></i>
                     </div>
 
-                    <!-- Информация о доставке (компактно) -->
-                    <div class="delivery-summary-compact">
+                    <!-- Способ 2: Самовывоз -->
+                    <div class="delivery-method" id="pickupOption">
+                        <div class="method-check">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="method-icon" style="background: #FF9800;">
+                            <i class="fas fa-store fa-lg"></i>
+                        </div>
+                        <div class="method-info">
+                            <h3>Самовывоз</h3>
+                            <p>Заберите из ближайшей точки</p>
+                            <div class="method-price price-free">
+                                <i class="fas fa-gift"></i>
+                                Бесплатно
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-right method-arrow"></i>
+                    </div>
+
+                    <!-- Информация о заказе (компактная) -->
+                    <div class="order-summary-card">
                         <div class="summary-header">
-                            <i class="fas fa-info-circle"></i>
-                            <h4>Информация о доставке</h4>
+                            <i class="fas fa-receipt"></i>
+                            <h4>Сумма заказа</h4>
                         </div>
-                        <div class="summary-details">
-                            <div class="summary-row">
-                                <span>Сумма заказа:</span>
-                                <span class="summary-value">${this.formatPrice(itemsTotal)} ₽</span>
+                        <div class="summary-items">
+                            <div class="summary-item">
+                                <span>Товары:</span>
+                                <span class="item-value">${this.formatPrice(itemsTotal)} ₽</span>
                             </div>
-                            <div class="summary-row">
+                            <div class="summary-item">
                                 <span>Доставка:</span>
-                                <span class="summary-value ${itemsTotal >= 1000 ? 'free' : ''}">
+                                <span class="item-value ${itemsTotal >= 1000 ? 'value-free' : ''}">
                                     ${itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
                                 </span>
                             </div>
-                            <div class="summary-total">
-                                <span>Итого к оплате:</span>
-                                <span class="total-value">${this.formatPrice(itemsTotal + deliveryCost)} ₽</span>
-                            </div>
                         </div>
-                    </div>
+                        <div class="summary-total">
+                            <span>Итого:</span>
+                            <span class="total-value">${this.formatPrice(itemsTotal + deliveryCost)} ₽</span>
+                        </div>
 
-                    <!-- Сообщение о скидке (только если доставка платная) -->
-                    ${itemsTotal < 1000 ? `
-                        <div class="discount-notice">
-                            <i class="fas fa-gift"></i>
-                            <div class="discount-text">
-                                <strong>Получите бесплатную доставку!</strong>
-                                <span>Добавьте товаров ещё на ${this.formatPrice(1000 - itemsTotal)} ₽</span>
+                        ${itemsTotal < 1000 ? `
+                            <div class="free-shipping-hint">
+                                <i class="fas fa-info-circle"></i>
+                                Добавьте товаров на ${this.formatPrice(1000 - itemsTotal)} ₽ для бесплатной доставки
                             </div>
-                        </div>
-                    ` : ''}
+                        ` : `
+                            <div class="free-shipping-badge">
+                                <i class="fas fa-check-circle"></i>
+                                Ура! Доставка бесплатная
+                            </div>
+                        `}
+                    </div>
                 </div>
 
-                <!-- Кнопка назад -->
-                <div class="delivery-actions-compact">
-                    <button class="btn-back-to-cart" onclick="shop.returnToCartFromDelivery()">
+                <div class="delivery-footer">
+                    <button class="btn-back" onclick="shop.returnToCartFromDelivery()">
                         <i class="fas fa-arrow-left"></i> Назад в корзину
                     </button>
                 </div>
             </div>
         `;
 
-        // Назначаем обработчики
-        document.getElementById('courierOption').addEventListener('click', () => this.selectDeliveryType('courier'));
-        document.getElementById('pickupOption').addEventListener('click', () => this.selectDeliveryType('pickup'));
+                // Назначаем обработчики событий
+        document.getElementById('courierOption').addEventListener('click', () => {
+            // Добавляем класс active
+            document.querySelectorAll('.delivery-method').forEach(m => m.classList.remove('active'));
+            document.getElementById('courierOption').classList.add('active');
+
+            // Вызываем метод выбора доставки через 100мс
+            setTimeout(() => this.selectDeliveryType('courier'), 100);
+        });
+
+        document.getElementById('pickupOption').addEventListener('click', () => {
+            // Добавляем класс active
+            document.querySelectorAll('.delivery-method').forEach(m => m.classList.remove('active'));
+            document.getElementById('pickupOption').classList.add('active');
+
+            // Вызываем метод выбора доставки через 100мс
+            setTimeout(() => this.selectDeliveryType('pickup'), 100);
+        });
+
         document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
+
     }
 
     async selectDeliveryType(type) {

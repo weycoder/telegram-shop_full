@@ -2562,19 +2562,112 @@ html {
     font-size: 14px;
 }
 
-/* Компактная информация о доставке */
-.delivery-summary-compact {
-    background: linear-gradient(135deg, #f8fdf8, #f0f9f0);
-    border-radius: 12px;
+/* ========== КОМПАКТНЫЙ И КРАСИВЫЙ ВЫБОР ДОСТАВКИ ========== */
+
+.delivery-method {
+    display: flex;
+    align-items: center;
     padding: 16px;
-    margin: 16px 0;
+    background: white;
+    border-radius: 16px;
+    margin-bottom: 12px;
+    border: 2px solid #E8F5E9;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.delivery-method:hover {
+    border-color: #4CAF50;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.15);
+}
+
+.delivery-method.active {
+    border-color: #4CAF50;
+    background: #F9FBE7;
+}
+
+.method-check {
+    margin-right: 12px;
+    color: #4CAF50;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.delivery-method.active .method-check {
+    opacity: 1;
+}
+
+.method-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin-right: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.method-info {
+    flex: 1;
+}
+
+.method-info h3 {
+    margin: 0 0 6px 0;
+    font-size: 17px;
+    color: #2E7D32;
+    font-weight: 700;
+}
+
+.method-info p {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #78909C;
+}
+
+.method-price {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.method-price.price-free {
+    background: rgba(76, 175, 80, 0.1);
+    color: #2E7D32;
+}
+
+.method-price.price-paid {
+    background: rgba(255, 152, 0, 0.1);
+    color: #FF9800;
+}
+
+.method-arrow {
+    color: #81C784;
+    font-size: 16px;
+}
+
+/* Карточка с суммой заказа */
+.order-summary-card {
+    background: linear-gradient(135deg, #F8FDF8, #F0F9F0);
+    border-radius: 16px;
+    padding: 20px;
+    margin-top: 16px;
     border: 2px solid #C8E6C9;
+    box-shadow: 0 4px 15px rgba(129, 199, 132, 0.1);
 }
 
 .summary-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     margin-bottom: 16px;
     padding-bottom: 12px;
     border-bottom: 2px solid #E8F5E9;
@@ -2582,36 +2675,37 @@ html {
 
 .summary-header i {
     color: #4CAF50;
-    font-size: 18px;
+    font-size: 20px;
 }
 
 .summary-header h4 {
     margin: 0;
-    font-size: 16px;
+    font-size: 17px;
     color: #2E7D32;
     font-weight: 700;
 }
 
-.summary-details {
+.summary-items {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    margin-bottom: 16px;
 }
 
-.summary-row {
+.summary-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 14px;
+    font-size: 15px;
     color: #546E7A;
 }
 
-.summary-value {
+.item-value {
     font-weight: 600;
     color: #2E7D32;
 }
 
-.summary-value.free {
+.item-value.value-free {
     color: #4CAF50;
     font-weight: 700;
 }
@@ -2620,66 +2714,68 @@ html {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 2px dashed #C8E6C9;
-    font-size: 15px;
+    padding-top: 16px;
+    border-top: 2px solid #C8E6C9;
+    font-size: 18px;
     font-weight: 700;
     color: #2E7D32;
 }
 
 .total-value {
-    font-size: 20px;
+    font-size: 24px;
     color: #2E7D32;
     font-weight: 800;
 }
 
-/* Сообщение о скидке */
-.discount-notice {
+/* Подсказка о бесплатной доставке */
+.free-shipping-hint {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px;
-    background: linear-gradient(135deg, #FFF8E1, #FFECB3);
+    gap: 10px;
+    padding: 12px;
+    margin-top: 16px;
+    background: rgba(255, 152, 0, 0.1);
     border-radius: 12px;
-    border: 2px solid #FFD54F;
-    margin-top: 12px;
-}
-
-.discount-notice i {
+    border-left: 4px solid #FF9800;
     color: #FF9800;
-    font-size: 20px;
-    background: white;
-    padding: 8px;
-    border-radius: 50%;
-}
-
-.discount-text {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.discount-text strong {
     font-size: 14px;
-    color: #FF8F00;
+    font-weight: 600;
 }
 
-.discount-text span {
-    font-size: 13px;
-    color: #F57C00;
+.free-shipping-hint i {
+    font-size: 16px;
 }
 
-/* Компактные кнопки действий */
-.delivery-actions-compact {
-    padding: 16px;
+/* Бейдж бесплатной доставки */
+.free-shipping-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    margin-top: 16px;
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 12px;
+    border-left: 4px solid #4CAF50;
+    color: #2E7D32;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.free-shipping-badge i {
+    color: #4CAF50;
+    font-size: 16px;
+}
+
+/* Футер с кнопкой */
+.delivery-footer {
+    padding: 20px;
     border-top: 2px solid #E8F5E9;
     background: white;
 }
 
-.btn-back-to-cart {
+.btn-back {
     width: 100%;
-    padding: 14px;
+    padding: 16px;
     background: white;
     color: #2E7D32;
     border: 2px solid #4CAF50;
@@ -2690,47 +2786,46 @@ html {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
     transition: all 0.3s;
 }
 
-.btn-back-to-cart:hover {
+.btn-back:hover {
     background: #4CAF50;
     color: white;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
 }
 
 /* Темная тема */
-.dark-mode .delivery-option-compact {
+.dark-mode .delivery-method {
     background: #2D2D2D;
     border-color: #388E3C;
 }
 
-.dark-mode .delivery-option-compact:hover {
-    border-color: #4CAF50;
+.dark-mode .delivery-method:hover {
     background: #3D3D3D;
+    border-color: #4CAF50;
 }
 
-.dark-mode .delivery-info h3 {
+.dark-mode .delivery-method.active {
+    background: #1B5E20;
+}
+
+.dark-mode .method-info h3 {
     color: #A5D6A7;
 }
 
-.dark-mode .delivery-info p {
+.dark-mode .method-info p {
     color: #B0BEC5;
 }
 
-.dark-mode .delivery-price.free {
+.dark-mode .method-price.price-free {
     background: rgba(76, 175, 80, 0.2);
     color: #A5D6A7;
 }
 
-.dark-mode .delivery-price.paid {
-    background: rgba(255, 152, 0, 0.2);
-    color: #FFCC80;
-}
-
-.dark-mode .delivery-summary-compact {
+.dark-mode .order-summary-card {
     background: linear-gradient(135deg, #1B5E20, #2E7D32);
     border-color: #4CAF50;
 }
@@ -2739,20 +2834,12 @@ html {
     color: #E8F5E9;
 }
 
-.dark-mode .summary-header i {
-    color: #8BC34A;
-}
-
-.dark-mode .summary-row {
+.dark-mode .summary-item {
     color: #C8E6C9;
 }
 
-.dark-mode .summary-value {
+.dark-mode .item-value {
     color: #A5D6A7;
-}
-
-.dark-mode .summary-value.free {
-    color: #8BC34A;
 }
 
 .dark-mode .summary-total {
@@ -2764,36 +2851,30 @@ html {
     color: #C8E6C9;
 }
 
-.dark-mode .discount-notice {
-    background: linear-gradient(135deg, #5D4037, #8D6E63);
-    border-color: #FFB74D;
-}
-
-.dark-mode .discount-notice i {
-    color: #FFB74D;
-    background: #5D4037;
-}
-
-.dark-mode .discount-text strong {
-    color: #FFD54F;
-}
-
-.dark-mode .discount-text span {
+.dark-mode .free-shipping-hint {
+    background: rgba(255, 152, 0, 0.2);
     color: #FFCC80;
+    border-left-color: #FF9800;
 }
 
-.dark-mode .delivery-actions-compact {
+.dark-mode .free-shipping-badge {
+    background: rgba(76, 175, 80, 0.2);
+    color: #C8E6C9;
+    border-left-color: #4CAF50;
+}
+
+.dark-mode .delivery-footer {
     background: #2D2D2D;
     border-top-color: #388E3C;
 }
 
-.dark-mode .btn-back-to-cart {
+.dark-mode .btn-back {
     background: #2D2D2D;
     color: #8BC34A;
     border-color: #4CAF50;
 }
 
-.dark-mode .btn-back-to-cart:hover {
+.dark-mode .btn-back:hover {
     background: #4CAF50;
     color: #2D2D2D;
 }
