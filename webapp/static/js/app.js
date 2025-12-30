@@ -1244,7 +1244,7 @@ class TelegramShop {
                     </div>
 
                     <div class="delivery-actions">
-                        <button class="btn btn-primary" onclick="shop.showAddressForm(${userId})">
+                        <button class="btn btn-primary" onclick="shop.showAddressForm(${this.userId})">
                             <i class="fas fa-plus"></i> Добавить новый адрес
                         </button>
                         <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
