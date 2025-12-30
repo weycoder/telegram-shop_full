@@ -1349,36 +1349,48 @@ class TelegramShop {
                     </button>
                 </div>
 
-                <!-- Информация о доставке -->
-                <div class="delivery-info" style="
-                    background: #f8f9fa;
-                    border-radius: 10px;
-                    padding: 15px;
-                    margin: 0 20px 20px 20px;
-                    border-left: 4px solid #3498db;
-                ">
-                    <h3 style="margin: 0 0 10px 0; color: #2c3e50;">
-                        <i class="fas fa-info-circle"></i> Информация о доставке
-                    </h3>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                        <span>Сумма заказа:</span>
-                        <span><strong>${this.formatPrice(itemsTotal)} ₽</strong></span>
+                <!-- НОВЫЙ КРАСИВЫЙ БЛОК ИНФОРМАЦИИ О ДОСТАВКЕ -->
+                <div class="delivery-info-section">
+                    <div class="delivery-info-header">
+                        <i class="fas fa-shipping-fast"></i>
+                        <h3>Информация о доставке</h3>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                        <span>Стоимость доставки:</span>
-                        <span style="${itemsTotal >= 1000 ? 'color: #27ae60; font-weight: bold;' : ''}">
-                            ${itemsTotal >= 1000 ? 'Бесплатно 🎉' : '100 ₽'}
+
+                    <div class="delivery-price-row">
+                        <span class="delivery-label">
+                            <i class="fas fa-shopping-cart"></i>
+                            Сумма заказа:
+                        </span>
+                        <span class="delivery-value">${this.formatPrice(itemsTotal)} ₽</span>
+                    </div>
+
+                    <div class="delivery-price-row">
+                        <span class="delivery-label">
+                            <i class="fas fa-truck"></i>
+                            Стоимость доставки:
+                        </span>
+                        <span class="delivery-value ${itemsTotal >= 1000 ? 'free' : ''}">
+                            ${itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
                         </span>
                     </div>
-                    ${itemsTotal < 1000 ? `
-                        <div style="font-size: 12px; color: #e74c3c; margin-top: 5px;">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            Добавьте товаров ещё на ${1000 - itemsTotal} ₽ для бесплатной доставки!
-                        </div>
-                    ` : `
-                        <div style="font-size: 12px; color: #27ae60; margin-top: 5px;">
+
+                    <div class="delivery-total">
+                        <span class="delivery-label">
+                            <i class="fas fa-receipt"></i>
+                            Итого к оплате:
+                        </span>
+                        <span class="delivery-value">${this.formatPrice(itemsTotal + deliveryCost)} ₽</span>
+                    </div>
+
+                    ${itemsTotal >= 1000 ? `
+                        <div class="delivery-hint free">
                             <i class="fas fa-check-circle"></i>
                             Ура! Ваша доставка бесплатная!
+                        </div>
+                    ` : `
+                        <div class="delivery-hint paid">
+                            <i class="fas fa-gift"></i>
+                            Добавьте товаров ещё на ${this.formatPrice(1000 - itemsTotal)} ₽ для бесплатной доставки!
                         </div>
                     `}
                 </div>
@@ -1416,23 +1428,11 @@ class TelegramShop {
 
                 <!-- Информация о скидке -->
                 ${itemsTotal < 1000 ? `
-                    <div class="upsell-notice" style="
-                        background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
-                        border-radius: 10px;
-                        padding: 15px;
-                        margin: 20px;
-                        text-align: center;
-                        border: 2px dashed #e74c3c;
-                    ">
-                        <h3 style="margin: 0 0 10px 0; color: #d35400;">
-                            <i class="fas fa-gift"></i> Получите бесплатную доставку!
-                        </h3>
-                        <p style="margin: 0; color: #7f8c8d;">
-                            Добавьте товаров ещё на <strong>${1000 - itemsTotal} ₽</strong>
-                            и доставка будет бесплатной!
-                        </p>
-                        <button class="btn btn-outline" onclick="shop.closeCart();"
-                                style="margin-top: 10px; background: white; color: #d35400; border-color: #d35400;">
+                    <div class="upsell-notice">
+                        <h3><i class="fas fa-gift"></i> Получите бесплатную доставку!</h3>
+                        <p>Добавьте товаров ещё на <strong>${this.formatPrice(1000 - itemsTotal)} ₽</strong>
+                        и доставка будет бесплатной!</p>
+                        <button class="btn btn-outline" onclick="shop.closeCart();">
                             <i class="fas fa-shopping-cart"></i> Добавить товары
                         </button>
                     </div>

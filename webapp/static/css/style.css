@@ -2106,3 +2106,286 @@ html {
     margin: 15px 0 !important;
     font-size: 14px !important;
 }
+
+
+/* ========== КРАСИВЫЙ БЛОК ИНФОРМАЦИИ О ДОСТАВКЕ ========== */
+
+.delivery-info-section {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fdf8 100%);
+    border-radius: 16px;
+    padding: 20px;
+    margin: 0 20px 20px 20px;
+    border: 2px solid #e8f5e9;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+.delivery-info-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(to bottom, #4CAF50, #8BC34A);
+}
+
+.delivery-info-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f0f9f1;
+}
+
+.delivery-info-header h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #2E7D32;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.delivery-info-header i {
+    color: #4CAF50;
+    font-size: 18px;
+    background: rgba(76, 175, 80, 0.1);
+    padding: 8px;
+    border-radius: 50%;
+}
+
+.delivery-price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px dashed #e8f5e9;
+}
+
+.delivery-price-row:last-child {
+    border-bottom: none;
+}
+
+.delivery-label {
+    font-size: 14px;
+    color: #546e7a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.delivery-label i {
+    color: #78909C;
+    font-size: 14px;
+}
+
+.delivery-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: #2E7D32;
+}
+
+.delivery-value.free {
+    color: #4CAF50;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.delivery-value.free::after {
+    content: '🎉';
+    font-size: 16px;
+}
+
+.delivery-total {
+    background: linear-gradient(135deg, #f1f8e9 0%, #e8f5e9 100%);
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 15px;
+    border: 2px solid #c8e6c9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.delivery-total .delivery-label {
+    color: #388E3C;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.delivery-total .delivery-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: #2E7D32;
+    background: linear-gradient(45deg, #4CAF50, #8BC34A);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
+}
+
+.delivery-hint {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: pulseHint 2s infinite;
+}
+
+.delivery-hint.free {
+    background: rgba(139, 195, 74, 0.1);
+    color: #388E3C;
+    border-left: 3px solid #8BC34A;
+}
+
+.delivery-hint.paid {
+    background: rgba(255, 152, 0, 0.1);
+    color: #F57C00;
+    border-left: 3px solid #FF9800;
+}
+
+.delivery-hint i {
+    font-size: 14px;
+}
+
+@keyframes pulseHint {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+/* Стили для сообщения о скидке */
+.upsell-notice {
+    background: linear-gradient(135deg, #fff8e1 0%, #ffeaa7 100%);
+    border-radius: 14px;
+    padding: 18px;
+    margin: 20px;
+    border: 2px solid #FFD54F;
+    position: relative;
+    overflow: hidden;
+}
+
+.upsell-notice::before {
+    content: '🎁';
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    font-size: 40px;
+    opacity: 0.2;
+    transform: rotate(15deg);
+}
+
+.upsell-notice h3 {
+    color: #FF8F00;
+    margin: 0 0 10px 0;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.upsell-notice p {
+    color: #F57C00;
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.upsell-notice strong {
+    color: #E65100;
+}
+
+.upsell-notice .btn-outline {
+    background: white;
+    color: #FF8F00;
+    border: 2px solid #FFB300;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 10px;
+    transition: all 0.3s;
+}
+
+.upsell-notice .btn-outline:hover {
+    background: #FFB300;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 179, 0, 0.3);
+}
+
+/* Темная тема */
+.dark-mode .delivery-info-section {
+    background: linear-gradient(135deg, #2D2D2D 0%, #1E2929 100%);
+    border: 2px solid #388E3C;
+}
+
+.dark-mode .delivery-info-header h3 {
+    color: #8BC34A;
+}
+
+.dark-mode .delivery-info-header i {
+    color: #8BC34A;
+    background: rgba(139, 195, 74, 0.2);
+}
+
+.dark-mode .delivery-price-row {
+    border-bottom-color: #388E3C;
+}
+
+.dark-mode .delivery-label {
+    color: #B0BEC5;
+}
+
+.dark-mode .delivery-label i {
+    color: #8BC34A;
+}
+
+.dark-mode .delivery-total {
+    background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+    border-color: #4CAF50;
+}
+
+.dark-mode .delivery-total .delivery-label {
+    color: #C5E1A5;
+}
+
+.dark-mode .delivery-hint.free {
+    background: rgba(139, 195, 74, 0.2);
+    color: #C5E1A5;
+    border-left-color: #8BC34A;
+}
+
+.dark-mode .delivery-hint.paid {
+    background: rgba(255, 152, 0, 0.2);
+    color: #FFCC80;
+    border-left-color: #FF9800;
+}
+
+.dark-mode .upsell-notice {
+    background: linear-gradient(135deg, #5D4037 0%, #8D6E63 100%);
+    border-color: #FFB74D;
+}
+
+.dark-mode .upsell-notice h3 {
+    color: #FFD54F;
+}
+
+.dark-mode .upsell-notice p {
+    color: #FFCC80;
+}
+
+.dark-mode .upsell-notice .btn-outline {
+    background: #5D4037;
+    color: #FFD54F;
+    border-color: #FFB74D;
+}
+
+.dark-mode .upsell-notice .btn-outline:hover {
+    background: #FFB74D;
+    color: #3E2723;
+}
