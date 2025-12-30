@@ -10,7 +10,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQuer
 from dotenv import load_dotenv
 import threading
 import queue
-
+import json
 # Загружаем переменные окружения
 load_dotenv()
 
@@ -358,12 +358,10 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             query = None
         elif update.callback_query:
             query = update.callback_query
-            user = query.from_user  # Используем from_user для CallbackQuery
+            user = query.from_user
             chat_id = query.message.chat_id if query.message else user.id
             message_id = query.message.message_id if query.message else None
             is_callback = True
-
-            # Отвечаем на callback запрос
             await query.answer()
         else:
             logger.error("❌ Неизвестный тип обновления")
@@ -382,46 +380,26 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             cursor = conn.cursor()
 
-            # Получаем user_id из таблицы users
-            cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (user.id,))
-            user_record = cursor.fetchone()
-
-            if not user_record:
-                response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
-                keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин",
-                                          web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))]]
-
-                if is_callback:
-                    # Уже ответили выше, теперь редактируем сообщение
-                    await query.edit_message_text(
-                        response,
-                        parse_mode='Markdown',
-                        reply_markup=InlineKeyboardMarkup(keyboard)
-                    )
-                else:
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=response,
-                        parse_mode='Markdown',
-                        reply_markup=InlineKeyboardMarkup(keyboard)
-                    )
-                return
-
-            user_id = user_record['id']
-
-            # Получаем заказы пользователя
+            # ВАЖНО: Ищем заказы напрямую по telegram_id в таблице orders
+            # user_id в orders = telegram_id пользователя
             cursor.execute('''
                            SELECT o.id,
                                   o.total_price,
                                   o.status,
                                   o.created_at,
                                   o.delivery_type,
-                                  o.recipient_name
+                                  o.recipient_name,
+                                  o.phone_number,
+                                  o.delivery_address,
+                                  a.status    as delivery_status,
+                                  c.full_name as courier_name,
+                                  c.phone     as courier_phone
                            FROM orders o
-                           WHERE o.user_id = ?
+                                    LEFT JOIN order_assignments a ON o.id = a.order_id
+                                    LEFT JOIN couriers c ON a.courier_id = c.id
+                           WHERE o.user_id = ? -- здесь user_id = telegram_id
                            ORDER BY o.created_at DESC LIMIT 10
-                           ''', (user_id,))
+                           ''', (user.id,))  # передаем telegram_id напрямую
 
             orders = cursor.fetchall()
 
@@ -432,11 +410,19 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                           web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))]]
 
                 if is_callback:
-                    await query.edit_message_text(
-                        response,
-                        parse_mode='Markdown',
-                        reply_markup=InlineKeyboardMarkup(keyboard)
-                    )
+                    try:
+                        await query.edit_message_text(
+                            response,
+                            parse_mode='Markdown',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                    except Exception as e:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=response,
+                            parse_mode='Markdown',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
                 else:
                     await context.bot.send_message(
                         chat_id=chat_id,
@@ -450,15 +436,51 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             orders_text = "📋 *Ваши заказы:*\n\n"
 
             for order in orders:
-                order = dict(order)
+                order_dict = dict(order)
 
-                # Используем простой текст
-                orders_text += f"📦 Заказ #{order['id']}\n"
-                orders_text += f"💵 Сумма: {order['total_price']} ₽\n"
-                orders_text += f"📊 Статус: {get_order_status_text(order['status'])}\n"
-                orders_text += f"👤 Получатель: {order['recipient_name']}\n"
-                orders_text += f"📅 Дата: {order['created_at'][:10]}\n"
-                orders_text += f"🚚 Тип: {'Курьер' if order.get('delivery_type') == 'courier' else 'Самовывоз'}\n\n"
+                # Форматируем адрес
+                address = "Адрес не указан"
+                recipient = order_dict.get('recipient_name') or "Не указан"
+                phone = order_dict.get('phone_number') or "Телефон не указан"
+
+                if order_dict.get('delivery_address'):
+                    try:
+                        addr_data = json.loads(order_dict['delivery_address'])
+                        if isinstance(addr_data, dict):
+                            addr_parts = []
+                            if addr_data.get('city'):
+                                addr_parts.append(str(addr_data['city']))
+                            if addr_data.get('street'):
+                                addr_parts.append(f"ул. {addr_data['street']}")
+                            if addr_data.get('house'):
+                                addr_parts.append(f"д. {addr_data['house']}")
+                            if addr_data.get('apartment'):
+                                addr_parts.append(f"кв. {addr_data['apartment']}")
+                            address = ', '.join(addr_parts) if addr_parts else "Адрес не указан"
+                        else:
+                            address = str(addr_data)
+                    except Exception as e:
+                        address = str(order_dict.get('delivery_address', 'Адрес не указан'))
+
+                # Информация о курьере
+                courier_info = ""
+                if order_dict.get('courier_name'):
+                    courier_info = f"\n🚚 Курьер: {order_dict['courier_name']}"
+                    if order_dict.get('courier_phone'):
+                        courier_info += f" (📞 {order_dict['courier_phone']})"
+
+                # Статус доставки
+                delivery_status = ""
+                if order_dict.get('delivery_status'):
+                    delivery_status = f"\n📍 Доставка: {get_delivery_status_text(order_dict['delivery_status'])}"
+
+                orders_text += f"📦 *Заказ #{order_dict['id']}*\n"
+                orders_text += f"💵 Сумма: {order_dict['total_price']} ₽\n"
+                orders_text += f"📊 Статус: {get_order_status_text(order_dict['status'])}{delivery_status}\n"
+                orders_text += f"👤 Получатель: {recipient}\n"
+                orders_text += f"📞 Телефон: {phone}\n"
+                orders_text += f"📍 Адрес: {address}\n"
+                orders_text += f"📅 Дата: {order_dict['created_at'][:10]}{courier_info}\n\n"
 
             # Клавиатура
             keyboard = [

@@ -378,7 +378,7 @@ class CourierApp {
     }
 
     // Создание карточки заказа
-    createOrderCard(order, isCompleted = false) {
+    createOrderCard(order, isCompleted = false) 
         // 1. Получаем адрес ПРАВИЛЬНО
         let address = "Адрес не указан";
         if (order.delivery_address) {
