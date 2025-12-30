@@ -1,2011 +1,1360 @@
-// Telegram Shop - Полная версия с всеми функциями
-console.log('🟢 app.js начал загружаться');
-
-function getTelegramParams() {
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-
-        // 1. Пробуем получить из URL
-        let userId = parseInt(urlParams.get('user_id')) || 0;
-        let username = urlParams.get('username') || 'Гость';
-
-        console.log('🔗 Параметры из URL:', { userId, username });
-
-        // 2. Если userId = 0, пробуем получить из localStorage
-        if (userId === 0) {
-            const savedId = localStorage.getItem('telegram_user_id');
-            const savedUsername = localStorage.getItem('telegram_username');
-
-            if (savedId && savedId !== '0') {
-                userId = parseInt(savedId);
-                username = savedUsername || 'Пользователь';
-                console.log('💾 Восстановлено из localStorage:', { userId, username });
-            }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Курьерская панель</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
 
-        // 3. Если все еще 0, но есть Telegram Web App данные
-        if (userId === 0 && window.Telegram?.WebApp?.initDataUnsafe?.user) {
-            const tgUser = Telegram.WebApp.initDataUnsafe.user;
-            userId = tgUser.id || 0;
-            username = tgUser.username || tgUser.first_name || 'Telegram User';
-            console.log('🤖 Получено из Telegram WebApp:', { userId, username });
-
-            // Сохраняем в localStorage
-            localStorage.setItem('telegram_user_id', userId);
-            localStorage.setItem('telegram_username', username);
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
         }
 
-        console.log('✅ Итоговые параметры пользователя:', { userId, username });
-
-        return {
-            userId: userId,
-            username: username
-        };
-    } catch (error) {
-        console.error('❌ Ошибка получения параметров Telegram:', error);
-        return {
-            userId: 0,
-            username: 'Гость'
-        };
-    }
-}
-
-class TelegramShop {
-    constructor() {
-        this.cart = this.loadCart();
-        this.currentProduct = null;
-        this.products = [];
-        this.categories = [];
-        this.isInitialized = false;
-        this.deliveryData = {
-            type: null,
-            address_id: null,
-            pickup_point: null,
-            address_details: null
-        };
-
-        // Получаем параметры Telegram при создании
-        const params = getTelegramParams();
-        this.userId = params.userId;
-        this.username = params.username;
-
-        // ⚠️ ВАЖНО: Сохраняем в localStorage для перезагрузки страницы
-        this.saveUserToLocalStorage();
-
-        console.log('🛍️ Telegram Shop создан для пользователя:', this.username, 'ID:', this.userId);
-    }
-
-
-    async init() {
-        if (this.isInitialized) return;
-
-        console.log('🚀 Инициализация магазина...');
-
-        this.addStyles();
-        this.bindEvents();
-
-        // Загружаем данные параллельно
-        await Promise.all([
-            this.loadProducts(),
-            this.loadCategories()
-        ]);
-
-        this.updateCartCount();
-
-        // Telegram Web App интеграция
-        if (window.Telegram && Telegram.WebApp) {
-            this.initTelegramWebApp();
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
 
-        this.isInitialized = true;
-        console.log('✅ Магазин инициализирован');
-    }
-
-    // ДОБАВЬ ЭТИ МЕТОДЫ В КЛАСС:
-    saveUserToLocalStorage() {
-        if (this.userId && this.userId !== 0) {
-            localStorage.setItem('telegram_user_id', this.userId);
-            localStorage.setItem('telegram_username', this.username);
-            console.log('💾 Пользователь сохранен в localStorage:', { id: this.userId, username: this.username });
-        }
-    }
-
-    loadUserFromLocalStorage() {
-        const savedId = localStorage.getItem('telegram_user_id');
-        const savedUsername = localStorage.getItem('telegram_username');
-
-        if (savedId && savedId !== '0') {
-            this.userId = parseInt(savedId);
-            this.username = savedUsername || 'Пользователь';
-            console.log('🔍 Пользователь восстановлен из localStorage:', { id: this.userId, username: this.username });
-            return true;
-        }
-        return false;
-    }
-
-    async createOrder(orderData) {
-        // ⚠️ ВАЖНО: Перед отправкой проверяем и сохраняем user_id в localStorage
-        if (this.userId && this.userId !== 0) {
-            localStorage.setItem('telegram_user_id', this.userId);
-            localStorage.setItem('telegram_username', this.username || 'Пользователь');
-            console.log('💾 Пользователь сохранен в localStorage:', { id: this.userId, username: this.username });
-        } else {
-            // Если userId = 0, пробуем получить из localStorage
-            const savedId = localStorage.getItem('telegram_user_id');
-            const savedUsername = localStorage.getItem('telegram_username');
-
-            if (savedId && savedId !== '0') {
-                this.userId = parseInt(savedId);
-                this.username = savedUsername || 'Пользователь';
-                console.log('🔍 Восстановлен пользователь из localStorage:', { id: this.userId, username: this.username });
-            }
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
         }
 
-        // Добавляем данные из Telegram (используем актуальные значения)
-        orderData.user_id = parseInt(this.userId) || 0;
-        orderData.username = this.username || 'Гость';
-
-        console.log('📦 Создание заказа с данными:', orderData);
-
-        try {
-            const response = await fetch('/api/create-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(orderData)
-            });
-
-            return await response.json();
-        } catch (error) {
-            console.error('❌ Ошибка создания заказа:', error);
-            throw error;
-        }
-    }
-
-    // Обновленный bindEvents
-    bindEvents() {
-        console.log('🔗 Назначаем обработчики событий...');
-
-        // Корзина
-        this.bindEvent('cartBtn', 'click', () => this.toggleCart());
-        this.bindEvent('closeCart', 'click', () => this.closeCart());
-        this.bindEvent('clearCart', 'click', () => this.clearCart());
-        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-
-        // Модальное окно товара
-        this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
-
-        // Закрытие по клику на оверлей
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('cart-overlay')) this.closeCart();
-            if (e.target.classList.contains('product-modal-overlay')) this.closeProductModal();
-        });
-
-        // Показываем приветствие
-        if (this.userId && this.userId !== 0) {
-            const welcomeElement = document.getElementById('welcome-text');
-            if (welcomeElement) {
-                welcomeElement.innerText = `👋 Привет, ${this.username}!`;
-            }
+        .header p {
+            color: #666;
+            font-size: 16px;
         }
 
-        // Escape для закрытия
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeCart();
-                this.closeProductModal();
-            }
-        });
-
-        // Категории (делегирование)
-        const categoriesContainer = document.getElementById('categories');
-        if (categoriesContainer) {
-            categoriesContainer.addEventListener('click', (e) => {
-                const categoryBtn = e.target.closest('.category-btn');
-                if (categoryBtn) {
-                    e.preventDefault();
-                    this.filterByCategory(categoryBtn);
-                }
-            });
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
-        // ДЕЛЕГИРОВАНИЕ ДЛЯ КНОПОК "ПОДРОБНЕЕ"
-        document.addEventListener('click', (e) => {
-            const btn = e.target.closest('.btn-block');
-            if (btn && btn.textContent.includes('Подробнее')) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                // Получаем productId из атрибута onclick
-                const onclickAttr = btn.getAttribute('onclick');
-                if (onclickAttr && onclickAttr.includes('shop.viewProduct')) {
-                    const match = onclickAttr.match(/shop\.viewProduct\((\d+)\)/);
-                    if (match && match[1]) {
-                        const productId = parseInt(match[1]);
-                        console.log('🖱️ Нажата кнопка "Подробнее" для товара ID:', productId);
-                        this.viewProduct(productId);
-                    }
-                }
-            }
-        });
-
-        console.log('✅ Все обработчики назначены');
-    }
-
-    bindEvent(id, event, handler) {
-        const element = document.getElementById(id);
-        if (element) {
-            element.addEventListener(event, handler);
-        }
-    }
-
-    initTelegramWebApp() {
-        try {
-            // Проверяем, что Telegram Web App действительно существует
-            if (window.Telegram && Telegram.WebApp) {
-                console.log('✅ Telegram Web App доступен');
-
-                // Расширяем на весь экран
-                if (Telegram.WebApp.expand) Telegram.WebApp.expand();
-
-                // Настраиваем цвета
-                if (Telegram.WebApp.setHeaderColor) Telegram.WebApp.setHeaderColor('#667eea');
-                if (Telegram.WebApp.setBackgroundColor) Telegram.WebApp.setBackgroundColor('#f5f7fa');
-
-                // Включаем подтверждение закрытия
-                if (Telegram.WebApp.enableClosingConfirmation) Telegram.WebApp.enableClosingConfirmation();
-
-                // Проверяем BackButton
-                if (Telegram.WebApp.BackButton) {
-                    // Скрываем кнопку "Назад" по умолчанию
-                    if (Telegram.WebApp.BackButton.hide) Telegram.WebApp.BackButton.hide();
-
-                    // Добавляем обработчик
-                    Telegram.WebApp.BackButton.onClick(() => {
-                        console.log('🔙 Нажата кнопка "Назад"');
-                        if (this.isCartOpen()) {
-                            this.closeCart();
-                        } else if (this.isProductModalOpen()) {
-                            this.closeProductModal();
-                        } else {
-                            if (Telegram.WebApp.close) Telegram.WebApp.close();
-                        }
-                    });
-                } else {
-                    console.warn('⚠️ Telegram.WebApp.BackButton недоступен');
-                }
-
-            } else {
-                console.log('ℹ️ Telegram Web App недоступен, работаем в браузере');
-                // Создаем заглушку для отладки в браузере
-                this.createWebAppStub();
-            }
-        } catch (error) {
-            console.warn('⚠️ Ошибка инициализации Telegram Web App:', error);
-            this.createWebAppStub();
-        }
-    }
-
-    createWebAppStub() {
-        // Создаем заглушку для работы в браузере
-        if (!window.Telegram) window.Telegram = {};
-        if (!window.Telegram.WebApp) {
-            window.Telegram.WebApp = {
-                expand: function () { console.log('[Stub] WebApp расширен'); },
-                setHeaderColor: function () { console.log('[Stub] Цвет заголовка изменен'); },
-                setBackgroundColor: function () { console.log('[Stub] Фон изменен'); },
-                enableClosingConfirmation: function () { console.log('[Stub] Подтверждение закрытия включено'); },
-                close: function () {
-                    console.log('[Stub] Закрытие WebApp');
-                    if (confirm('Закрыть приложение?')) {
-                        window.close();
-                    }
-                },
-                BackButton: {
-                    isVisible: false,
-                    show: function () {
-                        console.log('[Stub] Кнопка "Назад" показана');
-                        this.isVisible = true;
-                    },
-                    hide: function () {
-                        console.log('[Stub] Кнопка "Назад" скрыта');
-                        this.isVisible = false;
-                    },
-                    onClick: function (callback) {
-                        console.log('[Stub] Обработчик кнопки "Назад" установлен');
-                        this.callback = callback;
-                    }
-                },
-                colorScheme: 'light'
-            };
-        }
-    }
-
-    updateBackButton() {
-        if (window.Telegram?.WebApp?.BackButton) {
-            try {
-                if (this.isCartOpen() || this.isProductModalOpen()) {
-                    if (Telegram.WebApp.BackButton.show) Telegram.WebApp.BackButton.show();
-                } else {
-                    if (Telegram.WebApp.BackButton.hide) Telegram.WebApp.BackButton.hide();
-                }
-            } catch (error) {
-                console.warn('⚠️ Ошибка обновления BackButton:', error);
-            }
-        }
-    }
-
-    isCartOpen() {
-        const cart = document.getElementById('cartOverlay');
-        return cart && cart.style.display === 'flex';
-    }
-
-    isProductModalOpen() {
-        const modal = document.getElementById('productModal');
-        return modal && modal.style.display === 'flex';
-    }
-
-    // ========== ПРОДУКТЫ И КАТЕГОРИИ ==========
-    async loadProducts(category = 'all') {
-        try {
-            console.log(`📥 Загрузка товаров${category !== 'all' ? ` категории "${category}"` : ''}...`);
-
-            this.showLoading(true);
-
-            const url = category !== 'all'
-                ? `/api/products?category=${encodeURIComponent(category)}`
-                : '/api/products';
-
-            const response = await fetch(url);
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            this.products = await response.json();
-            console.log(`✅ Загружено ${this.products.length} товаров`);
-
-            this.renderProducts();
-
-        } catch (error) {
-            console.error('❌ Ошибка загрузки товаров:', error);
-            this.showNotification('❌ Не удалось загрузить товары', 'error');
-            this.products = [];
-            this.renderProducts();
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    // Добавьте эту функцию в класс TelegramShop
-    forceCartRefresh() {
-        console.log('🔄 Принудительное обновление корзины');
-        this.updateCartDisplay();
-
-        // Также обновляем счетчик
-        this.updateCartCount();
-
-        // Проверяем состояние
-        console.log(`Состояние корзины: ${this.cart.length} товаров`);
-        console.log('Содержимое корзины:', this.cart);
-    }
-
-    async loadCategories() {
-        try {
-            console.log('📂 Загрузка категорий...');
-
-            const response = await fetch('/api/categories');
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            this.categories = await response.json();
-            console.log(`✅ Загружено ${this.categories.length} категорий`);
-
-            this.renderCategories();
-
-        } catch (error) {
-            console.error('❌ Ошибка загрузки категорий:', error);
-            this.categories = [];
-        }
-    }
-
-    renderProducts() {
-        const productsGrid = document.getElementById('products');
-        if (!productsGrid) {
-            console.error('❌ Контейнер товаров не найден');
-            return;
+        .tab {
+            flex: 1;
+            padding: 18px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
         }
 
-        if (this.products.length === 0) {
-            productsGrid.innerHTML = `
-                <div class="no-products" style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray-color);">
-                    <i class="fas fa-box-open" style="font-size: 48px; opacity: 0.3; margin-bottom: 16px;"></i>
-                    <h3 style="margin: 0 0 8px 0;">Товары не найдены</h3>
-                    <p style="margin: 0;">Попробуйте выбрать другую категорию</p>
-                </div>
-            `;
-            return;
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: #f8f9ff;
         }
 
-        // Используем сетку 2 в ряд
-        let html = '';
-        this.products.forEach(product => {
-            html += this.createProductCard(product);
-        });
+        .tab:hover {
+            background: #f5f5f5;
+        }
 
-        productsGrid.innerHTML = html;
-    }
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
 
-    createProductCard(product) {
-        const inStock = product.stock > 0;
-        return `
-            <div class="product-card">
-                <div class="product-image-container">
-                    <img src="${product.image_url || 'https://via.placeholder.com/300x200'}"
-                         alt="${product.name}"
-                         class="product-image"
-                         onerror="this.src='https://via.placeholder.com/300x200'">
-                    ${!inStock ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
-                </div>
-                <div class="product-info">
-                    <h3 class="product-title">${product.name}</h3>
-                    <div class="product-price">${this.formatPrice(product.price)} ₽</div>
-                    <div class="product-stock ${inStock ? '' : 'stock-unavailable'}">
-                        <i class="fas ${inStock ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                        ${inStock ? `В наличии: ${product.stock} шт.` : 'Нет в наличии'}
-                    </div>
-                    <button class="btn-block" onclick="shop.viewProduct(${product.id})"
-                            ${!inStock ? 'disabled' : ''}>
-                        <i class="fas fa-eye"></i> Подробнее
-                    </button>
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-form {
+            max-width: 400px;
+            margin: 50px auto;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .login-form h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px;
+            width: 100%;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .order-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .order-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .order-id {
+            font-weight: bold;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .order-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status-assigned { background: #fff3cd; color: #856404; }
+        .status-picked_up { background: #d1ecf1; color: #0c5460; }
+        .status-delivered { background: #d4edda; color: #155724; }
+
+        .order-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .order-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-pickup {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-deliver {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-details {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-action:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .photo-upload {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px dashed #dee2e6;
+            text-align: center;
+        }
+
+        .photo-preview {
+            max-width: 300px;
+            margin: 15px auto;
+            display: none;
+        }
+
+        .photo-preview img {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .profile-form {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .profile-info {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .logout-btn {
+            background: #dc3545;
+            margin-top: 20px;
+        }
+
+        .loader {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 10px; }
+            .header { padding: 20px; }
+            .tab-content { padding: 20px; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .order-info { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="app">
+        <!-- Форма входа -->
+        <div id="login-screen" class="login-form">
+            <h2>🚚 Вход для курьера</h2>
+            <div id="login-error" class="error-message" style="display: none;"></div>
+
+            <div class="form-group">
+                <label>Логин:</label>
+                <input type="text" id="login-username" placeholder="Введите логин">
+            </div>
+
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="password" id="login-password" placeholder="Введите пароль">
+            </div>
+
+            <button class="btn" onclick="login()">Войти</button>
+
+            <div style="margin-top: 20px; text-align: center; color: #666;">
+                <p>Тестовые данные:</p>
+                <p><strong>courier1</strong> / <strong>123456</strong></p>
+                <p><strong>courier2</strong> / <strong>123456</strong></p>
+                <p><strong>courier3</strong> / <strong>123456</strong></p>
+            </div>
+        </div>
+
+        <!-- Основной интерфейс -->
+        <div id="main-screen" style="display: none;">
+            <div class="header">
+                <h1>🚚 Курьерская панель</h1>
+                <p id="courier-info">Загрузка...</p>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('orders')">📦 Активные заказы</div>
+                <div class="tab" onclick="showTab('completed')">✅ Выполненные</div>
+                <div class="tab" onclick="showTab('stats')">📊 Статистика</div>
+                <div class="tab" onclick="showTab('settings')">⚙️ Настройки</div>
+            </div>
+
+            <!-- Активные заказы -->
+            <div id="tab-orders" class="tab-content active">
+                <h2 style="margin-bottom: 20px;">📦 Активные заказы</h2>
+                <div id="active-orders-list" class="loader">
+                    Загрузка заказов...
                 </div>
             </div>
-        `;
-    }
 
-    renderCategories() {
-        const container = document.getElementById('categories');
-        if (!container) return;
-
-        // Находим кнопку "Все товары"
-        const allButton = container.querySelector('.category-btn[data-category="all"]');
-        const buttons = allButton ? [allButton.outerHTML] : [];
-
-        // Добавляем остальные категории
-        this.categories.forEach(category => {
-            buttons.push(`
-                <button class="category-btn" data-category="${category}">
-                    <i class="fas fa-tag"></i> ${category}
-                </button>
-            `);
-        });
-
-        container.innerHTML = buttons.join('');
-    }
-
-    filterByCategory(categoryBtn) {
-        const category = categoryBtn.dataset.category;
-
-        // Обновляем активную кнопку
-        document.querySelectorAll('.category-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        categoryBtn.classList.add('active');
-
-        // Загружаем товары выбранной категории
-        this.loadProducts(category);
-    }
-
-    async viewProduct(productId) {
-        try {
-            console.log(`👁️ Загрузка товара #${productId}...`);
-
-            // Показываем загрузку в модальном окне
-            this.openProductModalLoading();
-
-            const response = await fetch(`/api/products/${productId}`);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Сервер вернул:', response.status, errorText);
-
-                if (response.status === 404) {
-                    console.log('🛠️ Проверяем доступность API...');
-                }
-
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const product = await response.json();
-
-            if (product.error) {
-                throw new Error(product.error);
-            }
-
-            console.log('✅ Товар загружен:', product);
-            this.currentProduct = product;
-
-            // ВЫЗЫВАЕМ метод рендеринга модального окна
-            this.renderProductModal(product);
-
-        } catch (error) {
-            console.error('❌ Ошибка загрузки товара:', error);
-            this.showNotification('❌ Не удалось загрузить товар', 'error');
-            this.closeProductModal();
-        }
-    }
-
-    async testAllEndpoints() {
-        const endpoints = [
-            '/api/products',
-            '/api/products/1',
-            '/api/products/2',
-            '/api/products/3',
-            '/api/products/4',
-            '/api/products/5',
-            '/api/products/6',
-            '/api/categories',
-            '/api/test'
-        ];
-
-        for (let endpoint of endpoints) {
-            try {
-                const response = await fetch(endpoint);
-                console.log(`${endpoint}: ${response.status} ${response.ok ? '✅' : '❌'}`);
-            } catch (e) {
-                console.log(`${endpoint}: ❌ Ошибка ${e.message}`);
-            }
-        }
-    }
-
-    openProductModalLoading() {
-        const modal = document.getElementById('productModal');
-        if (!modal) return;
-
-        modal.innerHTML = `
-            <div class="product-modal">
-                <div class="modal-content">
-                    <div class="loading-modal">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>Загрузка товара...</p>
-                    </div>
+            <!-- Выполненные заказы -->
+            <div id="tab-completed" class="tab-content">
+                <h2 style="margin-bottom: 20px;">✅ Выполненные заказы</h2>
+                <div id="completed-orders-list" class="loader">
+                    Загрузка заказов...
                 </div>
             </div>
-        `;
-        modal.style.display = 'flex';
-    }
 
-    renderProductModal(product) {
-        console.log('🎨 Рендерим модальное окно товара:', product.name);
-
-        const modal = document.getElementById('productModal');
-        if (!modal) {
-            console.error('❌ Модальное окно не найдено');
-            return;
-        }
-
-        modal.innerHTML = `
-            <div class="product-modal">
-                <button class="close-product-modal" id="closeProductModal">
-                    <i class="fas fa-times"></i>
-                </button>
-                <div class="product-modal-content">
-                    <div class="product-modal-image-container">
-                        <img src="${product.image_url || 'https://via.placeholder.com/400x300'}"
-                             alt="${product.name}"
-                             class="product-modal-image"
-                             onerror="this.src='https://via.placeholder.com/400x300'">
+            <!-- Статистика -->
+            <div id="tab-stats" class="tab-content">
+                <h2 style="margin-bottom: 20px;">📊 Статистика</h2>
+                <div class="stats-grid" id="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-today">0</div>
+                        <div class="stat-label">Заказов сегодня</div>
                     </div>
-                    <div class="product-modal-info">
-                        <h3 class="product-modal-title">${product.name}</h3>
-                        <div class="product-modal-price">${this.formatPrice(product.price)} ₽</div>
-
-                        <div class="product-modal-description">
-                            <h4><i class="fas fa-info-circle"></i> Описание:</h4>
-                            <p>${product.description || 'Описание отсутствует'}</p>
-                        </div>
-
-                        <div class="product-modal-stock ${product.stock > 0 ? 'in-stock' : 'out-of-stock'}">
-                            <i class="fas ${product.stock > 0 ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                            ${product.stock > 0 ? `В наличии: ${product.stock} шт.` : 'Нет в наличии'}
-                        </div>
-
-                        ${product.stock > 0 ? `
-                            <div class="product-modal-actions">
-                                <div class="quantity-selector">
-                                    <h4><i class="fas fa-sort-amount-up"></i> Количество:</h4>
-                                    <button class="qty-btn minus" id="qtyMinus">
-                                        <i class="fas fa-minus"></i>
-                                    </button>
-                                    <input type="number"
-                                           id="quantity"
-                                           value="1"
-                                           min="1"
-                                           max="${product.stock}"
-                                           onchange="shop.validateQuantity(${product.stock})">
-                                    <button class="qty-btn plus" id="qtyPlus">
-                                        <i class="fas fa-plus"></i>
-                                    </button>
-                                </div>
-
-                                <button class="btn btn-primary" id="addToCartModal">
-                                    <i class="fas fa-cart-plus"></i> Добавить в корзину
-                                </button>
-                            </div>
-                        ` : `
-                            <button class="btn btn-secondary" disabled>
-                                <i class="fas fa-times-circle"></i> Товар закончился
-                            </button>
-                        `}
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-active">0</div>
+                        <div class="stat-label">Активные заказы</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-completed">0</div>
+                        <div class="stat-label">Всего выполнено</div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 30px 0 15px 0;">Последние доставки</h3>
+                <div id="recent-deliveries" class="loader">
+                    Загрузка данных...
                 </div>
             </div>
-        `;
 
-        modal.style.display = 'flex';
+            <!-- Настройки -->
+            <div id="tab-settings" class="tab-content">
+                <h2 style="margin-bottom: 20px;">⚙️ Настройки профиля</h2>
 
-        // Назначаем обработчики событий
-        this.bindModalEvents(product);
-        this.updateBackButton();
-    }
+                <div id="settings-message"></div>
 
-    bindModalEvents(product) {
-        // Закрытие модального окна
-        this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
-
-        // Кнопки +/-
-        this.bindEvent('qtyMinus', 'click', () => this.changeQuantity(-1));
-        this.bindEvent('qtyPlus', 'click', () => this.changeQuantity(1));
-
-        // Добавление в корзину
-        this.bindEvent('addToCartModal', 'click', () => {
-            const quantityInput = document.getElementById('quantity');
-            const quantity = quantityInput ? parseInt(quantityInput.value) || 1 : 1;
-            this.addToCartFromModal(product, quantity);
-        });
-
-        // Валидация количества при прямом вводе
-        const quantityInput = document.getElementById('quantity');
-        if (quantityInput) {
-            quantityInput.addEventListener('input', () => {
-                this.validateQuantity(product.stock);
-            });
-        }
-    }
-
-    validateQuantity(maxStock) {
-        const input = document.getElementById('quantity');
-        if (!input) return;
-
-        let value = parseInt(input.value) || 1;
-
-        if (value < 1) value = 1;
-        if (value > maxStock) value = maxStock;
-
-        input.value = value;
-    }
-
-    changeQuantity(delta) {
-        const input = document.getElementById('quantity');
-        if (!input) return;
-
-        let currentValue = parseInt(input.value) || 1;
-        let newValue = currentValue + delta;
-
-        // Проверяем минимальное и максимальное значение
-        const max = parseInt(input.max) || 100;
-        const min = parseInt(input.min) || 1;
-
-        if (newValue < min) newValue = min;
-        if (newValue > max) newValue = max;
-
-        input.value = newValue;
-    }
-
-    addToCartFromModal(product, quantity) {
-        if (!product || quantity < 1) {
-            this.showNotification('❌ Неверное количество', 'error');
-            return;
-        }
-
-        if (quantity > product.stock) {
-            this.showNotification(`❌ Доступно только ${product.stock} шт.`, 'error');
-            return;
-        }
-
-        this.addToCart(
-            product.id,
-            product.name,
-            product.price,
-            quantity,
-            product.image_url
-        );
-
-        this.closeProductModal();
-    }
-
-    closeProductModal() {
-        const modal = document.getElementById('productModal');
-        if (modal) {
-            modal.style.display = 'none';
-            modal.innerHTML = '';
-        }
-        this.currentProduct = null;
-        this.updateBackButton();
-    }
-
-    // ========== КОРЗИНА ==========
-    addToCart(productId, name, price, quantity = 1, image = null) {
-        // Ищем товар в корзине
-        const existingIndex = this.cart.findIndex(item => item.id === productId);
-
-        if (existingIndex !== -1) {
-            // Обновляем количество существующего товара
-            this.cart[existingIndex].quantity += quantity;
-        } else {
-            // Добавляем новый товар
-            this.cart.push({
-                id: productId,
-                name: name,
-                price: price,
-                quantity: quantity,
-                image: image || 'https://via.placeholder.com/100',
-                addedAt: new Date().toISOString()
-            });
-        }
-
-        this.saveCart();
-        this.updateCartCount();
-
-        // ОБНОВЛЯЕМ отображение корзины, если она открыта
-        if (this.isCartOpen()) {
-            this.updateCartDisplay();
-        }
-
-        // Показываем уведомление с кнопкой перехода в корзину
-        this.showCartNotification(name, quantity);
-    }
-
-    showCartNotification(name, quantity) {
-        const notification = document.createElement('div');
-        notification.className = 'cart-notification';
-        notification.innerHTML = `
-            <div class="notification-content">
-                <div class="notification-message">
-                    <i class="fas fa-check-circle"></i>
-                    <span>${name} × ${quantity} добавлен в корзину!</span>
-                </div>
-                <button class="notification-action" onclick="shop.toggleCart()">
-                    <i class="fas fa-shopping-cart"></i> Перейти в корзину
-                </button>
-            </div>
-        `;
-
-        document.body.appendChild(notification);
-
-        // Анимация появления
-        setTimeout(() => notification.classList.add('show'), 10);
-
-        // Автоматическое скрытие через 5 секунд
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 5000);
-    }
-
-    removeFromCart(productId) {
-        console.log('🗑️ Удаление товара ID:', productId);
-
-        // Удаляем товар
-        this.cart = this.cart.filter(item => item.id != productId);
-
-        // Сохраняем
-        localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
-
-        // Обновляем счетчик
-        this.updateCartCount();
-
-        // Всегда обновляем отображение корзины
-        this.updateCartDisplay();
-
-        // Показываем уведомление
-        this.showNotification('🗑️ Товар удален из корзины', 'info');
-
-        // Если корзина стала пустой, дополнительное сообщение
-        if (this.cart.length === 0) {
-            setTimeout(() => {
-                this.showNotification('🛒 Корзина пуста', 'info');
-            }, 300);
-        }
-    }
-
-    updateCartItem(productId, quantity) {
-        const itemIndex = this.cart.findIndex(item => item.id === productId);
-
-        if (itemIndex !== -1) {
-            if (quantity < 1) {
-                this.removeFromCart(productId);
-            } else {
-                this.cart[itemIndex].quantity = quantity;
-                this.saveCart();
-                this.updateCartCount();
-
-                // СРАЗУ обновляем отображение корзины
-                this.updateCartDisplay();
-            }
-        }
-    }
-
-    updateCartItemQuantity(productId, quantity) {
-        const itemIndex = this.cart.findIndex(item => item.id.toString() === productId.toString());
-
-        if (itemIndex !== -1) {
-            if (quantity < 1) {
-                this.removeFromCart(productId);
-            } else {
-                this.cart[itemIndex].quantity = quantity;
-                this.saveCart();
-                this.updateCartCount();
-
-                // Обновляем отображение
-                if (this.isCartOpen()) {
-                    this.updateCartDisplay();
-                }
-            }
-        }
-    }
-
-    // ОСТАЛЬНЫЕ ФУНКЦИИ КОРЗИНЫ ОСТАВЛЯЕМ КАК БЫЛИ
-    clearCart() {
-        if (this.cart.length === 0) {
-            this.showNotification('Корзина уже пуста', 'info');
-            return;
-        }
-
-        if (confirm('Вы уверены, что хотите очистить корзину?')) {
-            this.cart = [];
-            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
-            this.updateCartCount();
-            this.updateCartDisplay();
-            this.showNotification('🗑️ Корзина очищена', 'info');
-        }
-    }
-
-    saveCart() {
-        try {
-            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
-        } catch (error) {
-            console.error('❌ Ошибка сохранения корзины:', error);
-        }
-    }
-
-    loadCart() {
-        try {
-            const cartData = localStorage.getItem('telegram_shop_cart');
-            return cartData ? JSON.parse(cartData) : [];
-        } catch (error) {
-            console.error('❌ Ошибка загрузки корзины:', error);
-            return [];
-        }
-    }
-
-    updateCartCount() {
-        const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
-        const cartCount = document.getElementById('cartCount');
-
-        if (cartCount) {
-            cartCount.textContent = totalItems;
-            cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
-        }
-    }
-
-    updateCartDisplay() {
-        console.log('🔄 Обновление корзины...');
-
-        const cartItems = document.getElementById('cartItems');
-        const cartTotal = document.getElementById('cartTotal');
-
-        if (!cartItems || !cartTotal) {
-            console.error('❌ Элементы корзины не найдены!');
-            return;
-        }
-
-        // ЕСЛИ КОРЗИНА ПУСТА
-        if (this.cart.length === 0) {
-            console.log('🛒 Корзина пуста - показываем сообщение');
-
-            // Просто показываем сообщение прямо в cartItems
-            cartItems.innerHTML = `
-                <div class="empty-cart">
-                    <i class="fas fa-shopping-cart"></i>
-                    <p>Корзина пуста</p>
-                    <p>Добавьте товары из каталога</p>
-                </div>
-            `;
-
-            // Обнуляем сумму
-            cartTotal.textContent = '0 ₽';
-
-            return;
-        }
-
-        // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
-        console.log(`📦 В корзине ${this.cart.length} товаров`);
-
-        // Генерируем HTML для товаров
-        let itemsHTML = '';
-
-        this.cart.forEach(item => {
-            itemsHTML += `
-                <div class="cart-item" data-id="${item.id}">
-                    <img src="${item.image || 'https://via.placeholder.com/80'}"
-                         alt="${item.name}"
-                         class="cart-item-image">
-                    <div class="cart-item-info">
-                        <div class="cart-item-header">
-                            <h4 class="cart-item-name">${item.name}</h4>
-                            <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                        <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
-                        <div class="cart-item-controls">
-                            <div class="quantity-selector small">
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
-                                        ${item.quantity <= 1 ? 'disabled' : ''}>
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                            <div class="cart-item-total">
-                                ${this.formatPrice(item.price * item.quantity)} ₽
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-
-        // Вставляем HTML
-        cartItems.innerHTML = itemsHTML;
-
-        // Обновляем сумму
-        const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        cartTotal.textContent = `${this.formatPrice(total)} ₽`;
-
-        console.log('✅ Корзина обновлена');
-    }
-
-    // Добавьте эту вспомогательную функцию для очистки уведомлений
-    clearCartNotifications() {
-        const notifications = document.querySelectorAll('.notification');
-        notifications.forEach(notification => {
-            const text = notification.textContent || '';
-            if (text.includes('Корзина уже пуста') || text.includes('Товар удален')) {
-                notification.remove();
-            }
-        });
-    }
-
-    // Добавить в класс TelegramShop
-    resetCartInterface() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        // Сбрасываем к стандартному виду корзины
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
-                    <button class="close-cart" id="closeCart" title="Закрыть">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="cart-items" id="cartItems">
-                    <!-- Товары будут здесь -->
-                </div>
-
-                <div class="cart-footer">
-                    <div class="cart-summary">
-                        <div class="cart-total">
-                            <span>Итого:</span>
-                            <span class="total-price" id="cartTotal">0 ₽</span>
-                        </div>
-                        <div class="cart-actions">
-                            <button class="btn btn-outline" id="clearCart">
-                                <i class="fas fa-trash"></i> Очистить
-                            </button>
-                            <button class="btn btn-primary" id="checkoutBtn">
-                                <i class="fas fa-paper-plane"></i> Купить
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Назначаем обработчики
-        this.bindEvent('closeCart', 'click', () => this.closeCart());
-        this.bindEvent('clearCart', 'click', () => this.clearCart());
-        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-    }
-
-    toggleCart() {
-        // ОЧИЩАЕМ все данные о доставке и предыдущих состояниях
-        this.deliveryData = {
-            type: null,
-            address_id: null,
-            pickup_point: null,
-            address_details: null
-        };
-
-        // ВСЕГДА показываем обычную корзину, а не окно подтверждения
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        // Сбрасываем содержимое корзины к стандартному виду
-        this.updateCartDisplay();
-
-        // Устанавливаем стандартный HTML для корзины
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
-                    <button class="close-cart" id="closeCart" title="Закрыть">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="cart-items" id="cartItems">
-                    <!-- Товары будут загружены через updateCartDisplay() -->
-                </div>
-
-                <div class="cart-footer">
-                    <div class="cart-summary">
-                        <div class="cart-total">
-                            <span>Итого:</span>
-                            <span class="total-price" id="cartTotal">0 ₽</span>
-                        </div>
-                        <div class="cart-actions">
-                            <button class="btn btn-outline" id="clearCart">
-                                <i class="fas fa-trash"></i> Очистить
-                            </button>
-                            <button class="btn btn-primary" id="checkoutBtn">
-                                <i class="fas fa-paper-plane"></i> Купить
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Обновляем отображение товаров
-        this.updateCartDisplay();
-
-        // Назначаем обработчики
-        this.bindEvent('closeCart', 'click', () => this.closeCart());
-        this.bindEvent('clearCart', 'click', () => this.clearCart());
-        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-
-        // Показываем корзину
-        cartOverlay.style.display = 'flex';
-        this.updateBackButton();
-    }
-
-    closeCart() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (cartOverlay) {
-            cartOverlay.style.display = 'none';
-            this.updateBackButton();
-        }
-    }
-
-    async checkout() {
-        if (this.cart.length === 0) {
-            this.showNotification('❌ Корзина пуста!', 'error');
-            return;
-        }
-
-        // Проверяем наличие товаров (оставляем старую проверку)
-        const unavailableItems = [];
-        for (const item of this.cart) {
-            try {
-                const response = await fetch(`/api/products/${item.id}`);
-                if (response.ok) {
-                    const product = await response.json();
-                    if (product.stock < item.quantity) {
-                        unavailableItems.push({
-                            name: item.name,
-                            available: product.stock,
-                            requested: item.quantity
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error(`Ошибка проверки товара ${item.id}:`, error);
-            }
-        }
-
-        if (unavailableItems.length > 0) {
-            let message = 'Некоторые товары недоступны в запрошенном количестве:\n';
-            unavailableItems.forEach(item => {
-                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
-            });
-            this.showNotification(message, 'error');
-            return;
-        }
-
-        // ЕСЛИ ВСЕ ТОВАРЫ ДОСТУПНЫ - ПОКАЗЫВАЕМ ВЫБОР ДОСТАВКИ
-        await this.showDeliverySelection();
-    }
-
-    async showDeliverySelection() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-shipping-fast"></i> Способ получения</h2>
-                    <button class="close-cart" id="closeDeliverySelection">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="delivery-options">
-                    <button class="delivery-option" id="courierOption">
-                        <div class="option-icon">
-                            <i class="fas fa-truck"></i>
-                        </div>
-                        <div class="option-info">
-                            <h3>🚗 Доставка курьером</h3>
-                            <p>Привезем прямо к вашей двери</p>
-                        </div>
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-
-                    <button class="delivery-option" id="pickupOption">
-                        <div class="option-icon">
-                            <i class="fas fa-store"></i>
-                        </div>
-                        <div class="option-info">
-                            <h3>🏪 Самовывоз</h3>
-                            <p>Заберите из ближайшей точки</p>
-                        </div>
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-                <div class="delivery-actions">
-                    <!-- ИЗМЕНЕНИЕ ЗДЕСЬ: вызываем returnToCartFromDelivery() -->
-                    <button class="btn btn-outline" onclick="shop.returnToCartFromDelivery()">
-                        <i class="fas fa-arrow-left"></i> Назад
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Назначаем обработчики
-        document.getElementById('courierOption').addEventListener('click', () => this.selectDeliveryType('courier'));
-        document.getElementById('pickupOption').addEventListener('click', () => this.selectDeliveryType('pickup'));
-        document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
-    }
-
-    async selectDeliveryType(type) {
-        this.deliveryData.type = type;
-
-        if (type === 'courier') {
-            await this.showAddressSelection();
-        } else if (type === 'pickup') {
-            await this.showPickupPoints();
-        }
-    }
-
-    returnToCartFromDelivery() {
-        console.log('🔙 Возврат в корзину из выбора доставки');
-
-        // Сбрасываем данные доставки
-        this.deliveryData = {
-            type: null,
-            address_id: null,
-            pickup_point: null,
-            address_details: null
-        };
-
-        // Закрываем текущее окно выбора доставки
-        this.closeCart();
-
-        // Даём время на анимацию закрытия (300ms)
-        setTimeout(() => {
-            // Восстанавливаем обычный интерфейс корзины
-            this.resetCartInterface();
-
-            // Обновляем отображение товаров
-            this.updateCartDisplay();
-
-            // ОТКРЫВАЕМ корзину снова
-            const cartOverlay = document.getElementById('cartOverlay');
-            if (cartOverlay) {
-                cartOverlay.style.display = 'flex';
-                this.updateBackButton();
-            }
-        }, 300);
-    }
-
-    async showAddressSelection() {
-        try {
-            // Используем this.userId из конструктора
-            const userId = this.userId;
-
-            // ЕСЛИ userId = 0 (гость), все равно проверяем localStorage
-            let addresses = [];
-
-            if (userId !== 0) {
-                // Загружаем с сервера для зарегистрированных
-                const response = await fetch(`/api/user/addresses?user_id=${userId}`);
-                if (response.ok) {
-                    addresses = await response.json();
-                }
-            } else {
-                // Для гостей пробуем получить из localStorage
-                const guestAddresses = localStorage.getItem('guest_addresses');
-                if (guestAddresses) {
-                    addresses = JSON.parse(guestAddresses);
-                }
-            }
-
-            const cartOverlay = document.getElementById('cartOverlay');
-            if (!cartOverlay) return;
-
-            let addressesHTML = '';
-            let hasAddresses = addresses.length > 0;
-
-            if (hasAddresses) {
-                addresses.forEach((addr, index) => {
-                    addressesHTML += `
-                        <div class="address-card" onclick="shop.selectAddress(${userId === 0 ? index : addr.id})">
-                            <div class="address-header">
-                                <h3>${addr.recipient_name || 'Адрес'}</h3>
-                                ${addr.is_default ? '<span class="default-badge">По умолчанию</span>' : ''}
-                            </div>
-                            <div class="address-details">
-                                <p><i class="fas fa-city"></i> ${addr.city}</p>
-                                <p><i class="fas fa-road"></i> ${addr.street}, ${addr.house}</p>
-                                ${addr.apartment ? `<p><i class="fas fa-door-closed"></i> Кв. ${addr.apartment}</p>` : ''}
-                                ${addr.phone ? `<p><i class="fas fa-phone"></i> ${addr.phone}</p>` : ''}
-                            </div>
-                            ${userId === 0 ? `
-                                <div class="address-actions">
-                                    <button class="btn-small" onclick="event.stopPropagation(); shop.removeGuestAddress(${index})">
-                                        Удалить
-                                    </button>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                });
-            }
-
-            cartOverlay.innerHTML = `
-                <div class="cart-modal">
-                    <div class="cart-header">
-                        <h2><i class="fas fa-map-marker-alt"></i> Выберите адрес</h2>
-                        <button class="close-cart" onclick="shop.closeCart()">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-
-                    <div class="addresses-list">
-                        ${hasAddresses ? addressesHTML : `
-                            <div class="no-addresses">
-                                <i class="fas fa-map-marker-slash"></i>
-                                <h3>Нет сохраненных адресов</h3>
-                                <p>Добавьте адрес для доставки</p>
-                            </div>
-                        `}
-                    </div>
-
-                    <div class="delivery-actions">
-                        <button class="btn btn-primary" onclick="shop.showAddressForm(${this.userId})">
-                            <i class="fas fa-plus"></i> Добавить новый адрес
-                        </button>
-                        <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
-                            <i class="fas fa-arrow-left"></i> Назад
-                        </button>
-                    </div>
-                </div>
-            `;
-
-        } catch (error) {
-            console.error('❌ Ошибка загрузки адресов:', error);
-            // Показываем форму для ввода адреса
-            await this.showAddressForm(this.userId);
-        }
-    }
-
-    // Добавить в класс TelegramShop
-    saveGuestAddress(addressData) {
-        try {
-            // Получаем текущие адреса гостя
-            const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-
-            // Добавляем новый адрес
-            guestAddresses.push({
-                ...addressData,
-                id: guestAddresses.length + 1,
-                is_default: guestAddresses.length === 0 // Первый адрес по умолчанию
-            });
-
-            // Сохраняем в localStorage
-            localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
-
-            return { success: true, id: guestAddresses.length };
-        } catch (error) {
-            console.error('Ошибка сохранения адреса гостя:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    removeGuestAddress(index) {
-        try {
-            const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-
-            if (index >= 0 && index < guestAddresses.length) {
-                guestAddresses.splice(index, 1);
-                localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
-
-                // Обновляем отображение
-                this.showAddressSelection();
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('Ошибка удаления адреса гостя:', error);
-            return false;
-        }
-    }
-
-    async showAddressForm() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-address-card"></i> Новый адрес</h2>
-                    <button class="close-cart" onclick="shop.closeCart()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="address-form">
-                    <div class="form-group">
-                        <label><i class="fas fa-user"></i> Имя получателя *</label>
-                        <input type="text" id="recipientName" placeholder="Иван Иванов" required>
+                <div class="profile-form">
+                    <div class="profile-info">
+                        <p><strong>Логин:</strong> <span id="profile-username">-</span></p>
+                        <p><strong>ID:</strong> <span id="profile-id">-</span></p>
+                        <p><strong>Дата регистрации:</strong> <span id="profile-created">-</span></p>
                     </div>
 
                     <div class="form-group">
-                        <label><i class="fas fa-phone"></i> Телефон</label>
-                        <input type="tel" id="recipientPhone" placeholder="+7 (999) 123-45-67">
+                        <label>Полное имя:</label>
+                        <input type="text" id="profile-fullname" placeholder="Иванов Иван Иванович">
                     </div>
 
                     <div class="form-group">
-                        <label><i class="fas fa-city"></i> Город *</label>
-                        <input type="text" id="city" placeholder="Москва" required>
+                        <label>Телефон:</label>
+                        <input type="tel" id="profile-phone" placeholder="+7 (999) 123-45-67">
                     </div>
 
                     <div class="form-group">
-                        <label><i class="fas fa-road"></i> Улица *</label>
-                        <input type="text" id="street" placeholder="Ленина" required>
+                        <label>Тип транспорта:</label>
+                        <select id="profile-vehicle">
+                            <option value="car">🚗 Автомобиль</option>
+                            <option value="bike">🚲 Велосипед</option>
+                            <option value="foot">🚶 Пешком</option>
+                            <option value="motorcycle">🏍️ Мотоцикл</option>
+                        </select>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label><i class="fas fa-home"></i> Дом *</label>
-                            <input type="text" id="house" placeholder="15" required>
-                        </div>
+                    <button class="btn" onclick="saveProfile()">💾 Сохранить профиль</button>
 
-                        <div class="form-group">
-                            <label><i class="fas fa-door-closed"></i> Квартира</label>
-                            <input type="text" id="apartment" placeholder="24">
-                        </div>
+                    <hr style="margin: 30px 0; border: none; border-top: 2px solid #eee;">
+
+                    <h3 style="margin-bottom: 20px;">🔒 Смена пароля</h3>
+
+                    <div class="form-group">
+                        <label>Текущий пароль:</label>
+                        <input type="password" id="current-password" placeholder="Введите текущий пароль">
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label><i class="fas fa-stairs"></i> Этаж</label>
-                            <input type="text" id="floor" placeholder="2">
-                        </div>
-
-                        <div class="form-group">
-                            <label><i class="fas fa-key"></i> Домофон</label>
-                            <input type="text" id="doorcode" placeholder="123">
-                        </div>
+                    <div class="form-group">
+                        <label>Новый пароль:</label>
+                        <input type="password" id="new-password" placeholder="Введите новый пароль (мин. 6 символов)">
                     </div>
-                </div>
-                <div class="delivery-actions">
-                    <button class="btn btn-primary" onclick="shop.saveAddress()">
-                        <i class="fas fa-save"></i> Сохранить адрес
-                    </button>
-                    <!-- ТОЛЬКО НАЗАД -->
-                    <button class="btn btn-outline" onclick="shop.showAddressSelection()">
-                        <i class="fas fa-arrow-left"></i> Назад
-                    </button>
+
+                    <div class="form-group">
+                        <label>Повторите новый пароль:</label>
+                        <input type="password" id="confirm-password" placeholder="Повторите новый пароль">
+                    </div>
+
+                    <button class="btn" onclick="changePassword()">🔐 Сменить пароль</button>
+
+                    <button class="btn logout-btn" onclick="logout()">🚪 Выйти</button>
                 </div>
             </div>
-        `;
-    }
+        </div>
+    </div>
 
-    returnToCart() {
-        console.log('↩️ Возврат в корзину');
+    <!-- Модальное окно для деталей заказа -->
+    <div id="order-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 15px; padding: 30px; max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">📦 Детали заказа #<span id="modal-order-id"></span></h2>
+                <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">×</button>
+            </div>
 
-        // Очищаем данные о доставке
-        this.deliveryData = {
-            type: null,
-            address_id: null,
-            pickup_point: null,
-            address_details: null
-        };
+            <div id="modal-content">
+                Загрузка...
+            </div>
+        </div>
+    </div>
 
-        // Обновляем отображение корзины
-        this.updateCartDisplay();
+    <!-- Подключаем courier.js -->
+    <script src="/static/js/courier.js"></script>
 
-        // Показываем уведомление (опционально)
-        this.showNotification('Возвращено в корзину', 'info');
-    }
+    <script>
+        let currentCourier = null;
+        let currentToken = null;
+        let currentOrderId = null;
+        let currentPhoto = null;
 
-    async saveAddress() {
-        try {
-            const addressData = {
-                user_id: this.userId,
-                city: document.getElementById('city').value,
-                street: document.getElementById('street').value,
-                house: document.getElementById('house').value,
-                apartment: document.getElementById('apartment').value,
-                floor: document.getElementById('floor').value,
-                doorcode: document.getElementById('doorcode').value,
-                recipient_name: document.getElementById('recipientName').value,
-                phone: document.getElementById('recipientPhone').value
-            };
+        // Функция входа
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
 
-            // Проверка обязательных полей
-            if (!addressData.city || !addressData.street || !addressData.house || !addressData.recipient_name) {
-                this.showNotification('❌ Заполните обязательные поля', 'error');
+            if (!username || !password) {
+                errorDiv.textContent = 'Введите логин и пароль';
+                errorDiv.style.display = 'block';
                 return;
             }
 
-            let result;
-
-            if (this.userId === 0) {
-                // Для гостя сохраняем в localStorage
-                result = this.saveGuestAddress(addressData);
-            } else {
-                // Для зарегистрированных пользователей - на сервер
-                const response = await fetch('/api/user/addresses', {
+            try {
+                const response = await fetch('/api/courier/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(addressData)
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
                 });
-                result = await response.json();
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentCourier = data.courier;
+                    currentToken = data.token;
+
+                    // Сохраняем в localStorage
+                    localStorage.setItem('courier_data', JSON.stringify({
+                        courier: currentCourier,
+                        token: currentToken
+                    }));
+
+                    // Показываем основной интерфейс
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('main-screen').style.display = 'block';
+
+                    // Обновляем информацию
+                    updateCourierInfo();
+                    loadActiveOrders();
+                    loadStatistics();
+
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка входа';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка соединения с сервером';
+                errorDiv.style.display = 'block';
+                console.error('Login error:', error);
             }
-
-            if (result.success) {
-                this.deliveryData.address_id = result.id;
-                this.showNotification('✅ Адрес сохранен', 'success');
-
-                // ВМЕСТО confirmOrder() -> возвращаем к выбору адреса
-                setTimeout(() => {
-                    this.showAddressSelection();
-                }, 1000);
-
-            } else {
-                throw new Error(result.error || 'Ошибка сохранения');
-            }
-
-        } catch (error) {
-            console.error('Ошибка сохранения адреса:', error);
-            this.showNotification(`❌ ${error.message}`, 'error');
         }
-    }
 
-    async showPickupPoints() {
-        try {
-            const response = await fetch('/api/pickup-points');
-            const points = await response.json();
+        // Проверяем сохраненные данные при загрузке
+        window.addEventListener('load', function() {
+            const savedData = localStorage.getItem('courier_data');
+            if (savedData) {
+                try {
+                    const data = JSON.parse(savedData);
+                    currentCourier = data.courier;
+                    currentToken = data.token;
 
-            const cartOverlay = document.getElementById('cartOverlay');
-            if (!cartOverlay) return;
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('main-screen').style.display = 'block';
 
-            let pointsHTML = '';
-
-            points.forEach(point => {
-                pointsHTML += `
-                    <div class="pickup-card" onclick="shop.selectPickupPoint(${point.id})">
-                        <div class="pickup-header">
-                            <h3>${point.name}</h3>
-                            <span class="pickup-status">🟢 Открыто</span>
-                        </div>
-                        <div class="pickup-details">
-                            <p><i class="fas fa-map-marker-alt"></i> ${point.address}</p>
-                            <p><i class="fas fa-clock"></i> ${point.working_hours || 'Ежедневно 10:00-22:00'}</p>
-                            ${point.phone ? `<p><i class="fas fa-phone"></i> ${point.phone}</p>` : ''}
-                        </div>
-                    </div>
-                `;
-            });
-
-            cartOverlay.innerHTML = `
-                <div class="cart-modal">
-                    <div class="cart-header">
-                        <h2><i class="fas fa-store"></i> Выберите точку самовывоза</h2>
-                        <button class="close-cart" onclick="shop.closeCart()">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-
-                    <div class="pickup-list">
-                        ${pointsHTML}
-                    </div>
-
-                    <div class="delivery-actions">
-                        <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
-                            <i class="fas fa-arrow-left"></i> Назад
-                        </button>
-                    </div>
-                </div>
-            `;
-
-        } catch (error) {
-            console.error('Ошибка загрузки точек:', error);
-            this.showNotification('❌ Ошибка загрузки точек самовывоза', 'error');
-        }
-    }
-
-    async selectPickupPoint(pointId) {
-        this.deliveryData.pickup_point = pointId;
-        await this.showPaymentSelection();
-    }
-
-    async showPaymentSelection() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-credit-card"></i> Способ оплаты</h2>
-                    <button class="close-cart" id="closePaymentSelection">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="order-summary">
-                    <h3><i class="fas fa-receipt"></i> Сумма к оплате:</h3>
-                    <div class="total-amount">${this.formatPrice(totalAmount)} ₽</div>
-                </div>
-
-                <div class="payment-options">
-                    <button class="payment-option" id="cashOption">
-                        <div class="payment-icon">
-                            <i class="fas fa-money-bill-wave"></i>
-                        </div>
-                        <div class="payment-info">
-                            <h3>Наличные</h3>
-                            <p>Оплата наличными при получении</p>
-                        </div>
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-
-                    <button class="payment-option" id="transferOption">
-                        <div class="payment-icon">
-                            <i class="fas fa-mobile-alt"></i>
-                        </div>
-                        <div class="payment-info">
-                            <h3>Перевод курьеру</h3>
-                            <p>Перевод на карту курьеру</p>
-                        </div>
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-
-                    <button class="payment-option" id="terminalOption">
-                        <div class="payment-icon">
-                            <i class="fas fa-credit-card"></i>
-                        </div>
-                        <div class="payment-info">
-                            <h3>Терминал</h3>
-                            <p>Оплата картой через терминал</p>
-                        </div>
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-
-                <div class="payment-actions">
-                    <button class="btn btn-outline" id="backToAddressBtn">
-                        <i class="fas fa-arrow-left"></i> Назад
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Назначаем обработчики
-        document.getElementById('cashOption').addEventListener('click', () => this.selectPaymentMethod('cash'));
-        document.getElementById('transferOption').addEventListener('click', () => this.selectPaymentMethod('transfer'));
-        document.getElementById('terminalOption').addEventListener('click', () => this.selectPaymentMethod('terminal'));
-
-        document.getElementById('backToAddressBtn').addEventListener('click', () => {
-            // Возвращаемся к выбору адреса или точки самовывоза
-            if (this.deliveryData.type === 'courier') {
-                this.showAddressSelection();
-            } else {
-                this.showPickupPoints();
+                    updateCourierInfo();
+                    loadActiveOrders();
+                    loadStatistics();
+                } catch (e) {
+                    localStorage.removeItem('courier_data');
+                }
             }
         });
 
-        document.getElementById('closePaymentSelection').addEventListener('click', () => this.closeCart());
-    }
+        // Обновить информацию о курьере
+        function updateCourierInfo() {
+            if (currentCourier) {
+                document.getElementById('courier-info').textContent =
+                    `${currentCourier.full_name} • ${currentCourier.phone}`;
 
-    selectPaymentMethod(method) {
-        this.deliveryData.payment_method = method;
+                // Заполняем настройки профиля
+                document.getElementById('profile-username').textContent = currentCourier.username;
+                document.getElementById('profile-id').textContent = currentCourier.id;
+                document.getElementById('profile-created').textContent =
+                    new Date(currentCourier.created_at).toLocaleDateString('ru-RU');
+                document.getElementById('profile-fullname').value = currentCourier.full_name || '';
+                document.getElementById('profile-phone').value = currentCourier.phone || '';
+                document.getElementById('profile-vehicle').value = currentCourier.vehicle_type || 'car';
+            }
+        }
 
-        // Показываем уведомление о выборе
-        const methodNames = {
-            'cash': 'Наличные',
-            'transfer': 'Перевод курьеру',
-            'terminal': 'Терминал'
-        };
+        // Показать вкладку
+        function showTab(tabName) {
+            // Убираем активный класс у всех вкладок и контента
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-        this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
+            // Активируем выбранную вкладку
+            document.querySelector(`.tab[onclick*="${tabName}"]`).classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
 
-        // Переходим к оформлению заказа
-        this.confirmOrder();
-    }
+            // Загружаем данные для вкладки
+            switch(tabName) {
+                case 'orders':
+                    loadActiveOrders();
+                    break;
+                case 'completed':
+                    loadCompletedOrders();
+                    break;
+                case 'stats':
+                    loadStatistics();
+                    break;
+                case 'settings':
+                    loadProfile();
+                    break;
+            }
+        }
 
-    async selectAddress(addressId) {
-        try {
-            console.log('📍 Выбран адрес ID:', addressId, 'для пользователя ID:', this.userId);
+        // Функция для извлечения данных о доставке из заказа
+        function extractDeliveryInfo(order) {
+            let addressText = 'Адрес не указан';
+            let recipientName = order.recipient_name || 'Не указан';
+            let phoneNumber = order.phone_number || 'Не указан';
 
-            if (this.userId === 0) {
-                // Для гостя
-                this.deliveryData.address_id = `guest_${addressId}`;
+            // Пробуем разные источники данных
+            let deliveryData = null;
 
-                // Получаем полные данные адреса
-                const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-                const addressIndex = addressId; // addressId уже индекс для гостей
-                this.deliveryData.address_details = guestAddresses[addressIndex] || null;
-
-                console.log('🏠 Адресные данные гостя:', this.deliveryData.address_details);
-            } else {
-                // Для зарегистрированного пользователя
-                this.deliveryData.address_id = addressId;
-
-                // Загружаем полные данные адреса с сервера
+            // 1. Из delivery_address_obj (если уже распарсено сервером)
+            if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
+                deliveryData = order.delivery_address_obj;
+            }
+            // 2. Из delivery_address (строка JSON)
+            else if (order.delivery_address && typeof order.delivery_address === 'string') {
                 try {
-                    const response = await fetch(`/api/user/addresses?user_id=${this.userId}`);
-                    if (response.ok) {
-                        const addresses = await response.json();
-                        const selectedAddress = addresses.find(addr => addr.id === addressId);
-                        this.deliveryData.address_details = selectedAddress || null;
-                        console.log('👤 Адресные данные с сервера:', this.deliveryData.address_details);
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Не удалось загрузить детали адреса:', error);
+                    deliveryData = JSON.parse(order.delivery_address);
+                } catch (e) {
+                    // Если не JSON, используем как текст адреса
+                    addressText = order.delivery_address;
                 }
             }
 
-            // ВМЕСТО confirmOrder() -> показываем выбор оплаты
-            await this.showPaymentSelection();
-
-        } catch (error) {
-            console.error('❌ Ошибка выбора адреса:', error);
-            this.showNotification('❌ Ошибка выбора адреса', 'error');
-        }
-    }
-
-    // ========== НОВЫЕ ФУНКЦИИ ДЛЯ БОТА И УВЕДОМЛЕНИЙ ==========
-
-    async notifyBotAboutOrder(orderId, status) {
-        // Отправить уведомление боту о статусе заказа
-        try {
-            const response = await fetch('/api/notify-bot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_id: orderId,
-                    status: status,
-                    user_id: this.userId
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                console.log(`📢 Уведомление для заказа #${orderId} отправлено в бот (статус: ${status})`);
-            } else {
-                console.warn(`⚠️ Ошибка отправки уведомления: ${result.error}`);
-            }
-
-            return result.success;
-
-        } catch (error) {
-            console.error('❌ Ошибка связи с ботом:', error);
-            return false;
-        }
-    }
-
-    async confirmOrder() {
-        try {
-            console.log('🔍 Начинаем оформление заказа...');
-            console.log('📊 Данные пользователя:', { userId: this.userId, username: this.username });
-            console.log('🚚 Данные доставки:', this.deliveryData);
-            console.log('🛒 Товары в корзине:', this.cart.length);
-
-            // Подготавливаем данные о доставке и оплате
-            let deliveryDetails = {};
-
-            if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
-                if (this.deliveryData.address_id.toString().startsWith('guest_')) {
-                    // Для гостя - достаем адрес из localStorage
-                    const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-                    const addressIndex = parseInt(this.deliveryData.address_id.split('_')[1]);
-                    deliveryDetails = guestAddresses[addressIndex] || {};
-                    console.log('🏠 Адрес гостя:', deliveryDetails);
-                } else {
-                    // Для зарегистрированного - просто ID
-                    deliveryDetails = { address_id: this.deliveryData.address_id };
-                    console.log('👤 Адрес зарегистрированного пользователя ID:', this.deliveryData.address_id);
+            // Если нашли данные о доставке
+            if (deliveryData) {
+                // Извлекаем адрес
+                const parts = [];
+                if (deliveryData.city) parts.push(deliveryData.city);
+                if (deliveryData.street) parts.push(deliveryData.street);
+                if (deliveryData.house) parts.push(deliveryData.house);
+                
+                if (parts.length > 0) {
+                    addressText = parts.join(', ');
+                    if (deliveryData.apartment) addressText += `, кв. ${deliveryData.apartment}`;
+                } else if (deliveryData.address) {
+                    addressText = deliveryData.address;
                 }
-            } else if (this.deliveryData.type === 'pickup' && this.deliveryData.pickup_point) {
-                deliveryDetails = { pickup_point_id: this.deliveryData.pickup_point };
+
+                // Извлекаем получателя и телефон
+                if (deliveryData.recipient_name) {
+                    recipientName = deliveryData.recipient_name;
+                }
+                if (deliveryData.phone) {
+                    phoneNumber = deliveryData.phone;
+                }
+                if (deliveryData.phone_number) {
+                    phoneNumber = deliveryData.phone_number;
+                }
+                if (deliveryData.recipient) {
+                    recipientName = deliveryData.recipient;
+                }
             }
 
-            // Формируем items для заказа
-            const orderItems = this.cart.map(item => ({
-                id: item.id,
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity
-            }));
-
-            // Подготавливаем данные заказа
-            const orderData = {
-                user_id: parseInt(this.userId) || 0,  // ← ВАЖНО: преобразуем в int
-                username: this.username || 'Гость',
-                items: orderItems,
-                total: this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-                delivery_type: this.deliveryData.type,
-                delivery_address: JSON.stringify(deliveryDetails),  // ← сохраняем весь объект
-                pickup_point: this.deliveryData.pickup_point,
-                payment_method: this.deliveryData.payment_method || 'cash',
-                recipient_name: deliveryDetails.recipient_name || '',
-                phone_number: deliveryDetails.phone || ''
+            return {
+                address: addressText,
+                recipient: recipientName,
+                phone: phoneNumber
             };
+        }
 
-            console.log('📤 Отправка заказа на сервер:', orderData);
+        // Загрузить активные заказы
+        async function loadActiveOrders() {
+            const container = document.getElementById('active-orders-list');
+            container.innerHTML = '<div class="loader">Загрузка заказов...</div>';
 
-            // Используем метод createOrder класса
-            const result = await this.createOrder(orderData);
-            console.log('📥 Ответ сервера:', result);
+            try {
+                const response = await fetch(`/api/courier/orders?courier_id=${currentCourier.id}`);
+                const data = await response.json();
 
-            if (result.success) {
-                // Отправляем уведомление боту
-                await this.notifyBotAboutOrder(result.order_id, 'created');
+                if (data.success && data.active_orders.length > 0) {
+                    let html = '';
 
-                // Показываем подтверждение
-                await this.showOrderConfirmation(result.order_id);
+                    data.active_orders.forEach(order => {
+                        const assignment = order.assignment_status || 'assigned';
 
-                // Очищаем корзину ПОСЛЕ показа подтверждения
-                this.cart = [];
-                this.saveCart();
-                this.updateCartCount();
+                        // Извлекаем информацию о доставке
+                        const deliveryInfo = extractDeliveryInfo(order);
 
-                // Очищаем данные доставки
-                this.deliveryData = {
-                    type: null,
-                    address_id: null,
-                    pickup_point: null,
-                    address_details: null
+                        // Получаем товары
+                        let itemsCount = 0;
+                        if (order.items_list && Array.isArray(order.items_list)) {
+                            itemsCount = order.items_list.length;
+                        } else if (order.items) {
+                            try {
+                                const items = JSON.parse(order.items);
+                                itemsCount = items.length;
+                            } catch (e) {
+                                itemsCount = 0;
+                            }
+                        }
+
+                        html += `
+                            <div class="order-card">
+                                <div class="order-header">
+                                    <div class="order-id">Заказ #${order.id}</div>
+                                    <div class="order-status status-${assignment}">
+                                        ${getStatusText(assignment)}
+                                    </div>
+                                </div>
+
+                                <div class="order-info">
+                                    <div class="info-item">
+                                        <span class="info-label">Сумма:</span>
+                                        <span class="info-value">${order.total_price || 0} ₽</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Получатель:</span>
+                                        <span class="info-value">${deliveryInfo.recipient}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Телефон:</span>
+                                        <span class="info-value">${deliveryInfo.phone}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Адрес:</span>
+                                        <span class="info-value" style="font-size: 12px;">${deliveryInfo.address}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Товаров:</span>
+                                        <span class="info-value">${itemsCount} шт.</span>
+                                    </div>
+                                </div>
+
+                                <div class="order-actions">
+                                    <button class="btn-action btn-details" onclick="showOrderDetails(${order.id})">
+                                        📋 Детали
+                                    </button>
+
+                                    ${assignment === 'assigned' ? `
+                                        <button class="btn-action btn-pickup" onclick="updateOrderStatus(${order.id}, 'picked_up')">
+                                            🚚 Взять в доставку
+                                        </button>
+                                    ` : ''}
+
+                                    ${assignment === 'picked_up' ? `
+                                        <button class="btn-action btn-deliver" onclick="showDeliveryForm(${order.id})">
+                                            ✅ Доставить
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="loader">Нет активных заказов</div>';
+                }
+            } catch (error) {
+                container.innerHTML = '<div class="error-message">Ошибка загрузки заказов</div>';
+                console.error('Error loading orders:', error);
+            }
+        }
+
+        // Загрузить выполненные заказы
+        async function loadCompletedOrders() {
+            const container = document.getElementById('completed-orders-list');
+            container.innerHTML = '<div class="loader">Загрузка заказов...</div>';
+
+            try {
+                const response = await fetch(`/api/courier/orders?courier_id=${currentCourier.id}`);
+                const data = await response.json();
+
+                if (data.success && data.completed_orders.length > 0) {
+                    let html = '';
+
+                    data.completed_orders.forEach(order => {
+                        const deliveredDate = order.delivered_at ?
+                            new Date(order.delivered_at).toLocaleDateString('ru-RU') : 'Не указана';
+
+                        // Извлекаем информацию о доставке
+                        const deliveryInfo = extractDeliveryInfo(order);
+
+                        html += `
+                            <div class="order-card">
+                                <div class="order-header">
+                                    <div class="order-id">Заказ #${order.id}</div>
+                                    <div class="order-status status-delivered">Доставлен</div>
+                                </div>
+
+                                <div class="order-info">
+                                    <div class="info-item">
+                                        <span class="info-label">Сумма:</span>
+                                        <span class="info-value">${order.total_price || 0} ₽</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Дата доставки:</span>
+                                        <span class="info-value">${deliveredDate}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Получатель:</span>
+                                        <span class="info-value">${deliveryInfo.recipient}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Телефон:</span>
+                                        <span class="info-value">${deliveryInfo.phone}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Адрес:</span>
+                                        <span class="info-value" style="font-size: 12px;">${deliveryInfo.address}</span>
+                                    </div>
+                                </div>
+
+                                <div class="order-actions">
+                                    <button class="btn-action btn-details" onclick="showOrderDetails(${order.id})">
+                                        📋 Детали заказа
+                                    </button>
+                                    ${order.photo_proof ? `
+                                        <button class="btn-action" onclick="window.open('${order.photo_proof}', '_blank')">
+                                            📷 Фото
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="loader">Нет выполненных заказов</div>';
+                }
+            } catch (error) {
+                container.innerHTML = '<div class="error-message">Ошибка загрузки заказов</div>';
+                console.error('Error loading completed orders:', error);
+            }
+        }
+
+        // Загрузить статистику
+        async function loadStatistics() {
+            try {
+                const response = await fetch(`/api/courier/orders?courier_id=${currentCourier.id}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('stat-active').textContent = data.active_orders?.length || 0;
+                    document.getElementById('stat-completed').textContent = data.completed_orders?.length || 0;
+                    document.getElementById('stat-today').textContent = data.today_orders?.length || 0;
+
+                    // Показываем последние доставки
+                    const recentDiv = document.getElementById('recent-deliveries');
+                    if (data.completed_orders && data.completed_orders.length > 0) {
+                        let html = '';
+                        const recent = data.completed_orders.slice(0, 5);
+
+                        recent.forEach(order => {
+                            const date = order.delivered_at ?
+                                new Date(order.delivered_at).toLocaleDateString('ru-RU') : 'Не указана';
+                            const deliveryInfo = extractDeliveryInfo(order);
+
+                            html += `
+                                <div class="order-card" style="padding: 15px; margin-bottom: 10px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <div>
+                                            <strong>Заказ #${order.id}</strong><br>
+                                            <small>${deliveryInfo.recipient} • ${date}</small>
+                                        </div>
+                                        <div style="font-weight: bold;">${order.total_price || 0} ₽</div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        recentDiv.innerHTML = html;
+                    } else {
+                        recentDiv.innerHTML = '<div class="loader">Нет данных о доставках</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        // Загрузить профиль
+        async function loadProfile() {
+            try {
+                const response = await fetch(`/api/courier/profile?courier_id=${currentCourier.id}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    // Профиль уже заполнен при входе
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        }
+
+        // Показать детали заказа
+        async function showOrderDetails(orderId) {
+            try {
+                const response = await fetch(`/api/courier/order/${orderId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const order = data.order;
+                    const items = order.items_list || [];
+                    
+                    // Извлекаем информацию о доставке
+                    const deliveryInfo = extractDeliveryInfo(order);
+
+                    let html = `
+                        <div style="margin-bottom: 20px;">
+                            <h3 style="margin-bottom: 15px;">📋 Информация о заказе</h3>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <p><strong>Номер заказа:</strong> #${order.id}</p>
+                                <p><strong>Статус заказа:</strong> ${getStatusText(order.status || order.assignment_status)}</p>
+                                <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
+                                <p><strong>Тип доставки:</strong> ${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</p>
+                                <p><strong>Способ оплата:</strong> ${order.payment_method === 'cash' ? 'Наличные' : 'Перевод'}</p>
+                                <p><strong>Дата создания:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
+                            </div>
+                        </div>
+                    `;
+
+                    // Информация о клиенте
+                    html += `
+                        <div style="margin-bottom: 20px;">
+                            <h3 style="margin-bottom: 15px;">👤 Информация о клиенте</h3>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                <p><strong>Получатель:</strong> ${deliveryInfo.recipient}</p>
+                                <p><strong>Телефон:</strong> ${deliveryInfo.phone}</p>
+                                ${order.username ? `<p><strong>Username:</strong> @${order.username}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+
+                    // Адрес доставки (если есть)
+                    if (deliveryInfo.address && deliveryInfo.address !== 'Адрес не указан') {
+                        html += `
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 15px;">📍 Адрес доставки</h3>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    <p><strong>Адрес:</strong> ${deliveryInfo.address}</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    if (items.length > 0) {
+                        html += `
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 15px;">🛍️ Состав заказа</h3>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    ${items.map(item => `
+                                        <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6;">
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <div>
+                                                    <strong>${item.name}</strong><br>
+                                                    <small>${item.quantity} × ${item.price} ₽</small>
+                                                </div>
+                                                <div style="font-weight: bold;">${item.quantity * item.price} ₽</div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                    <div style="margin-top: 10px; padding-top: 10px; border-top: 2px solid #ddd;">
+                                        <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                                            <div>Итого:</div>
+                                            <div>${order.total_price || 0} ₽</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    if (order.delivery_notes) {
+                        html += `
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 15px;">📝 Примечания курьера</h3>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    <p>${order.delivery_notes}</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    if (order.photo_proof) {
+                        html += `
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 15px;">📷 Фото подтверждения</h3>
+                                <div style="text-align: center;">
+                                    <img src="${order.photo_proof}" alt="Фото доставки" style="max-width: 100%; border-radius: 8px; border: 1px solid #ddd;">
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('modal-order-id').textContent = orderId;
+                    document.getElementById('modal-content').innerHTML = html;
+                    document.getElementById('order-modal').style.display = 'flex';
+                }
+            } catch (error) {
+                console.error('Error loading order details:', error);
+                alert('Ошибка загрузки деталей заказа');
+            }
+        }
+
+        // Обновить статус заказа
+        async function updateOrderStatus(orderId, status) {
+            try {
+                const response = await fetch('/api/courier/update-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        order_id: orderId,
+                        courier_id: currentCourier.id,
+                        status: status
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`Статус заказа #${orderId} обновлен`);
+                    loadActiveOrders();
+                    loadStatistics();
+                } else {
+                    alert(data.error || 'Ошибка обновления статуса');
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Ошибка обновления статуса');
+            }
+        }
+
+        // Показать форму доставки с фото
+        async function showDeliveryForm(orderId) {
+            currentOrderId = orderId;
+            currentPhoto = null;
+
+            // Загружаем информацию о заказе
+            try {
+                const response = await fetch(`/api/courier/order/${orderId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const order = data.order;
+                    const items = order.items_list || [];
+                    
+                    // Извлекаем информацию о доставке
+                    const deliveryInfo = extractDeliveryInfo(order);
+
+                    let html = `
+                        <div class="photo-upload">
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 10px;">📦 Информация о заказе #${order.id}</h3>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    <p><strong>Получатель:</strong> ${deliveryInfo.recipient}</p>
+                                    <p><strong>Телефон:</strong> ${deliveryInfo.phone}</p>
+                                    <p><strong>Адрес:</strong> ${deliveryInfo.address}</p>
+                                    <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
+                                </div>
+                            </div>
+
+                            <h4 style="margin-bottom: 15px;">📸 Подтверждение доставки</h4>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px;">Примечания к доставке:</label>
+                                <textarea id="delivery-notes" style="width: 100%; padding: 10px; border-radius: 6px; border: 2px solid #e0e0e0;" rows="3" placeholder="Клиент был дома, передал лично..."></textarea>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 8px;">Фото подтверждения (обязательно):</label>
+                                <div style="display: flex; gap: 10px;">
+                                    <button class="btn-action" onclick="document.getElementById('cameraInput').click()" style="flex: 1;">
+                                        📷 Сделать фото
+                                    </button>
+                                    <button class="btn-action" onclick="document.getElementById('galleryInput').click()" style="flex: 1;">
+                                        🖼️ Выбрать из галереи
+                                    </button>
+                                </div>
+                                <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+                                <input type="file" id="galleryInput" accept="image/*" style="display: none;">
+                            </div>
+
+                            <div id="photo-preview" class="photo-preview"></div>
+
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button class="btn-action btn-deliver" onclick="completeDelivery()" id="confirmDeliveryBtn" disabled>
+                                    ✅ Подтвердить доставку
+                                </button>
+                                <button class="btn-action" onclick="closeModal()">
+                                    ❌ Отмена
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    document.getElementById('modal-order-id').textContent = orderId;
+                    document.getElementById('modal-content').innerHTML = html;
+                    document.getElementById('order-modal').style.display = 'flex';
+
+                    // Добавляем обработчики для фото
+                    document.getElementById('cameraInput').addEventListener('change', handlePhotoSelection);
+                    document.getElementById('galleryInput').addEventListener('change', handlePhotoSelection);
+                }
+            } catch (error) {
+                console.error('Error loading order for delivery:', error);
+                alert('Ошибка загрузки информации о заказе');
+            }
+        }
+
+        // Обработка выбора фото
+        function handlePhotoSelection(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Проверяем тип файла
+            if (!file.type.startsWith('image/')) {
+                alert('❌ Выберите изображение');
+                return;
+            }
+
+            // Проверяем размер (макс 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('❌ Файл слишком большой (макс 5MB)');
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                currentPhoto = {
+                    data: e.target.result,
+                    file: file
                 };
 
-            } else {
-                throw new Error(result.error || 'Неизвестная ошибка сервера');
+                // Показываем превью
+                const preview = document.getElementById('photo-preview');
+                preview.innerHTML = `<img src="${e.target.result}" alt="Выбранное фото">`;
+                preview.style.display = 'block';
+
+                // Активируем кнопку подтверждения
+                document.getElementById('confirmDeliveryBtn').disabled = false;
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // Завершить доставку
+        async function completeDelivery() {
+            const notes = document.getElementById('delivery-notes').value;
+
+            if (!currentPhoto) {
+                alert('❌ Сначала добавьте фото подтверждения доставки');
+                return;
             }
 
-        } catch (error) {
-            console.error('❌ Ошибка оформления заказа:', error);
-            this.showNotification(`❌ Ошибка: ${error.message}`, 'error');
-            // Возвращаем к выбору оплаты
-            this.showPaymentSelection();
-        }
-    }
+            try {
+                const response = await fetch('/api/courier/update-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        order_id: currentOrderId,
+                        courier_id: currentCourier.id,
+                        status: 'delivered',
+                        photo_data: currentPhoto.data,
+                        notes: notes
+                    })
+                });
 
-    showOrderConfirmation(orderId) {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
+                const data = await response.json();
 
-        const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                if (data.success) {
+                    alert(`✅ Заказ #${currentOrderId} успешно доставлен!`);
+                    closeModal();
+                    loadActiveOrders();
+                    loadCompletedOrders();
+                    loadStatistics();
 
-        const deliveryText = this.deliveryData.type === 'courier'
-            ? 'Доставка курьером'
-            : 'Самовывоз';
-
-        // Названия способов оплаты
-        const paymentMethods = {
-            'cash': 'Наличные',
-            'transfer': 'Перевод курьеру',
-            'terminal': 'Терминал'
-        };
-
-        const paymentText = paymentMethods[this.deliveryData.payment_method] || 'Наличные';
-
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="order-confirmation">
-                    <div class="confirmation-icon processing">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <h2>Заказ принят!</h2>
-                    <div class="order-details">
-                        <p><strong>Номер заказа:</strong> #${orderId}</p>
-                        <p><strong>Способ получения:</strong> ${deliveryText}</p>
-                        <p><strong>Способ оплаты:</strong> ${paymentText}</p>
-                        <p><strong>Сумма:</strong> ${this.formatPrice(totalAmount)} ₽</p>
-                        <p><strong>Статус:</strong> <span class="status-processing">Ожидает обработки</span></p>
-                    </div>
-                    <div class="confirmation-message processing">
-                        <p><i class="fas fa-info-circle"></i> Заказ передан на обработку</p>
-                        <p>Наш менеджер свяжется с вами в ближайшее время для подтверждения заказа</p>
-                        <p><strong>📱 Вы получите уведомления в Telegram боте о статусе доставки!</strong></p>
-                    </div>
-                    <button class="btn btn-primary" id="closeCartAndReturn">
-                        <i class="fas fa-home"></i> Вернуться в магазин
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Обработчик кнопки
-        document.getElementById('closeCartAndReturn').addEventListener('click', () => {
-            this.cart = [];
-            this.saveCart();
-            this.updateCartCount();
-            this.closeCart();
-            setTimeout(() => {
-                this.resetCartInterface();
-            }, 300);
-        });
-    }
-
-    // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-    formatPrice(price) {
-        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
-    }
-
-    showLoading(show) {
-        const loading = document.getElementById('loading');
-        if (loading) {
-            loading.style.display = show ? 'block' : 'none';
-        }
-    }
-
-    showNotification(message, type = 'info') {
-        console.log(`💬 [${type.toUpperCase()}] ${message}`);
-
-        // Создаем контейнер для уведомлений если его нет
-        let container = document.getElementById('notifications');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'notifications';
-            document.body.appendChild(container);
-        }
-
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.innerHTML = `
-            <div class="notification-icon">
-                <i class="fas fa-${type === 'success' ? 'check-circle' :
-                                 type === 'error' ? 'exclamation-circle' :
-                                 type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
-            </div>
-            <div class="notification-content">${message}</div>
-        `;
-
-        container.appendChild(notification);
-
-        // Анимация появления
-        setTimeout(() => notification.classList.add('show'), 10);
-
-        // Автоматическое скрытие
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
+                    // Сбрасываем фото
+                    currentPhoto = null;
+                    currentOrderId = null;
+                } else {
+                    alert(data.error || 'Ошибка подтверждения доставки');
                 }
-            }, 300);
-        }, type === 'error' ? 5000 : 3000);
-    }
-
-    // ========== СТИЛИ ==========
-    addStyles() {
-        // Стили уже в style.css, ничего не добавляем
-        console.log('🎨 Стили уже подключены через style.css');
-    }
-}
-
-// Автоматическая инициализация при загрузке страницы
-let shopInstance = null;
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('📋 DOM загружен, запускаем магазин...');
-
-    try {
-        shopInstance = new TelegramShop();
-        window.shop = shopInstance;
-
-        await shopInstance.init();
-
-        console.log('🚀 Telegram Shop готов к работе!');
-
-        // Проверяем, есть ли пользователь Telegram
-        if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-            const user = Telegram.WebApp.initDataUnsafe.user;
-            console.log(`👤 Пользователь Telegram: ${user.first_name} (ID: ${user.id})`);
-            console.log('📱 Пользователь будет получать уведомления о статусе заказа в боте');
+            } catch (error) {
+                console.error('Error completing delivery:', error);
+                alert('Ошибка подтверждения доставки');
+            }
         }
 
-    } catch (error) {
-        console.error('❌ Ошибка инициализации магазина:', error);
+        // Сохранить профиль
+        async function saveProfile() {
+            const fullName = document.getElementById('profile-fullname').value;
+            const phone = document.getElementById('profile-phone').value;
+            const vehicle = document.getElementById('profile-vehicle').value;
 
-        // Показываем сообщение об ошибке пользователю
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            padding: 20px;
-            text-align: center;
-        `;
-        errorDiv.innerHTML = `
-            <i class="fas fa-exclamation-triangle" style="font-size: 60px; color: #e74c3c; margin-bottom: 20px;"></i>
-            <h2 style="color: #2c3e50; margin-bottom: 10px;">Ошибка загрузки магазина</h2>
-            <p style="color: #7f8c8d; margin-bottom: 20px;">Пожалуйста, обновите страницу или попробуйте позже</p>
-            <button onclick="location.reload()" style="
-                background: #667eea;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
-                font-size: 16px;
-                cursor: pointer;
-            ">
-                <i class="fas fa-redo"></i> Обновить страницу
-            </button>
-        `;
-        document.body.appendChild(errorDiv);
-    }
-});
+            if (!fullName || !phone) {
+                showMessage('Заполните все поля', 'error');
+                return;
+            }
 
-console.log('✅ app.js полностью загружен, класс TelegramShop определен');
+            try {
+                const response = await fetch('/api/courier/profile', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        courier_id: currentCourier.id,
+                        full_name: fullName,
+                        phone: phone,
+                        vehicle_type: vehicle
+                    })
+                });
 
-window.TelegramShop = TelegramShop;
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('✅ Профиль успешно сохранен', 'success');
+                    // Обновляем данные в интерфейсе
+                    currentCourier = data.profile;
+                    updateCourierInfo();
+                } else {
+                    showMessage(data.error || 'Ошибка сохранения профиля', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving profile:', error);
+                showMessage('Ошибка сохранения профиля', 'error');
+            }
+        }
+
+        // Сменить пароль
+        async function changePassword() {
+            const currentPass = document.getElementById('current-password').value;
+            const newPass = document.getElementById('new-password').value;
+            const confirmPass = document.getElementById('confirm-password').value;
+
+            if (!currentPass || !newPass || !confirmPass) {
+                showMessage('Заполните все поля', 'error');
+                return;
+            }
+
+            if (newPass.length < 6) {
+                showMessage('Новый пароль должен быть не менее 6 символов', 'error');
+                return;
+            }
+
+            if (newPass !== confirmPass) {
+                showMessage('Пароли не совпадают', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/courier/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        courier_id: currentCourier.id,
+                        old_password: currentPass,
+                        new_password: newPass
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('✅ Пароль успешно изменен', 'success');
+                    // Очищаем поля
+                    document.getElementById('current-password').value = '';
+                    document.getElementById('new-password').value = '';
+                    document.getElementById('confirm-password').value = '';
+                } else {
+                    showMessage(data.error || 'Ошибка смены пароля', 'error');
+                }
+            } catch (error) {
+                console.error('Error changing password:', error);
+                showMessage('Ошибка смены пароля', 'error');
+            }
+        }
+
+        // Показать сообщение
+        function showMessage(text, type) {
+            const div = document.getElementById('settings-message');
+            div.textContent = text;
+            div.className = type + '-message';
+            div.style.display = 'block';
+
+            setTimeout(() => {
+                div.style.display = 'none';
+            }, 5000);
+        }
+
+        // Выйти
+        function logout() {
+            if (confirm('Вы действительно хотите выйти?')) {
+                localStorage.removeItem('courier_data');
+                currentCourier = null;
+                currentToken = null;
+
+                document.getElementById('main-screen').style.display = 'none';
+                document.getElementById('login-screen').style.display = 'block';
+
+                // Очищаем поля входа
+                document.getElementById('login-username').value = '';
+                document.getElementById('login-password').value = '';
+            }
+        }
+
+        // Закрыть модальное окно
+        function closeModal() {
+            document.getElementById('order-modal').style.display = 'none';
+            // Сбрасываем фото при закрытии
+            currentPhoto = null;
+            currentOrderId = null;
+        }
+
+        // Получить текст статуса
+        function getStatusText(status) {
+            const statuses = {
+                'assigned': 'Назначен',
+                'picked_up': 'В доставке',
+                'delivered': 'Доставлен',
+                'pending': 'Ожидает',
+                'processing': 'В обработке'
+            };
+            return statuses[status] || status;
+        }
+
+        // Добавляем обработчик закрытия модального окна по клику вне его
+        document.getElementById('order-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Добавляем обработчик ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+
+    <!-- Убираем дублирующую инициализацию -->
+</body>
+</html>
