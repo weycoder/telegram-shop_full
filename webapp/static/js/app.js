@@ -1349,90 +1349,92 @@ class TelegramShop {
                     </button>
                 </div>
 
-                <!-- КРАСИВАЯ ЗЕЛЕНАЯ КАРТОЧКА -->
-                <div class="delivery-info-card">
-                    <div class="delivery-card-header">
+        <!-- НОВЫЙ БЛОК ИНФОРМАЦИИ О ДОСТАВКЕ -->
+                <div class="delivery-info-section">
+                    <div class="delivery-info-header">
                         <i class="fas fa-shipping-fast"></i>
                         <h3>Информация о доставке</h3>
                     </div>
 
-                    <div class="delivery-info-row">
-                        <span class="delivery-info-label">
+                    <div class="delivery-price-row">
+                        <span class="delivery-label">
                             <i class="fas fa-shopping-cart"></i>
                             Сумма заказа:
                         </span>
-                        <span class="delivery-info-value">${this.formatPrice(itemsTotal)} ₽</span>
+                        <span class="delivery-value">${this.formatPrice(itemsTotal)} ₽</span>
                     </div>
 
-                    <div class="delivery-info-row">
-                        <span class="delivery-info-label">
+                    <div class="delivery-price-row">
+                        <span class="delivery-label">
                             <i class="fas fa-truck"></i>
                             Стоимость доставки:
                         </span>
-                        <span class="delivery-info-value ${itemsTotal >= 1000 ? 'free' : ''}">
+                        <span class="delivery-value ${itemsTotal >= 1000 ? 'free' : ''}">
                             ${itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
-                            ${itemsTotal >= 1000 ? '<i class="fas fa-check-circle"></i>' : ''}
                         </span>
                     </div>
 
-                    <div class="delivery-total-section">
-                        <span class="delivery-total-label">
+                    <div class="delivery-total">
+                        <span class="delivery-label">
                             <i class="fas fa-receipt"></i>
                             Итого к оплате:
                         </span>
-                        <span class="delivery-total-value">${this.formatPrice(itemsTotal + deliveryCost)} ₽</span>
+                        <span class="delivery-value">${this.formatPrice(itemsTotal + deliveryCost)} ₽</span>
                     </div>
 
                     ${itemsTotal >= 1000 ? `
-                        <div class="free-delivery-badge">
-                            <i class="fas fa-gift"></i>
+                        <div class="delivery-hint free">
+                            <i class="fas fa-check-circle"></i>
                             Ура! Ваша доставка бесплатная!
                         </div>
-                    ` : ''}
+                    ` : `
+                        <div class="delivery-hint paid">
+                            <i class="fas fa-gift"></i>
+                            Добавьте товаров ещё на ${this.formatPrice(1000 - itemsTotal)} ₽ для бесплатной доставки!
+                        </div>
+                    `}
                 </div>
+                <!-- КОНЕЦ НОВОГО БЛОКА -->
 
-                                <div class="delivery-options">
-                    <button class="delivery-option-card" id="courierOption">
-                        <div class="delivery-option-icon">
+                <div class="delivery-options">
+                    <button class="delivery-option" id="courierOption">
+                        <div class="option-icon">
                             <i class="fas fa-truck"></i>
                         </div>
-                        <div class="delivery-option-content">
-                            <h3 class="delivery-option-title">🚗 Доставка курьером</h3>
-                            <p class="delivery-option-description">Привезем прямо к вашей двери</p>
-                            <div class="delivery-option-price ${itemsTotal >= 1000 ? 'free' : 'paid'}">
+                        <div class="option-info">
+                            <h3>🚗 Доставка курьером</h3>
+                            <p>Привезем прямо к вашей двери</p>
+                            <p style="font-size: 12px; color: ${itemsTotal >= 1000 ? '#27ae60' : '#666'}; margin-top: 5px;">
                                 <i class="fas ${itemsTotal >= 1000 ? 'fa-check-circle' : 'fa-info-circle'}"></i>
                                 ${itemsTotal >= 1000 ? 'Доставка бесплатная!' : 'Доставка 100 ₽'}
-                            </div>
+                            </p>
                         </div>
-                        <i class="fas fa-chevron-right delivery-option-arrow"></i>
+                        <i class="fas fa-chevron-right"></i>
                     </button>
 
-                    <button class="delivery-option-card" id="pickupOption">
-                        <div class="delivery-option-icon">
+                    <button class="delivery-option" id="pickupOption">
+                        <div class="option-icon">
                             <i class="fas fa-store"></i>
                         </div>
-                        <div class="delivery-option-content">
-                            <h3 class="delivery-option-title">🏪 Самовывоз</h3>
-                            <p class="delivery-option-description">Заберите из ближайшей точки</p>
-                            <div class="delivery-option-price free">
+                        <div class="option-info">
+                            <h3>🏪 Самовывоз</h3>
+                            <p>Заберите из ближайшей точки</p>
+                            <p style="font-size: 12px; color: #666; margin-top: 5px;">
                                 <i class="fas fa-check-circle"></i> Всегда бесплатно
-                            </div>
+                            </p>
                         </div>
-                        <i class="fas fa-chevron-right delivery-option-arrow"></i>
+                        <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
 
-                <!-- ИНФОРМАЦИЯ О СКИДКЕ -->
+                <!-- Информация о скидке -->
                 ${itemsTotal < 1000 ? `
-                    <div class="delivery-upsell-message">
-                        <h3 class="delivery-upsell-title">
-                            <i class="fas fa-gift"></i> Получите бесплатную доставку!
-                        </h3>
-                        <p class="delivery-upsell-text">
-                            Добавьте товаров ещё на <strong>${this.formatPrice(1000 - itemsTotal)} ₽</strong>
-                            и доставка будет бесплатной!
-                        </p>
-                        <button class="delivery-upsell-button" onclick="shop.closeCart();">
+                    <div class="upsell-notice">
+                        <h3><i class="fas fa-gift"></i> Получите бесплатную доставку!</h3>
+                        <p>Добавьте товаров ещё на <strong>${this.formatPrice(1000 - itemsTotal)} ₽</strong>
+                        и доставка будет бесплатной!</p>
+                        <button class="btn btn-outline" onclick="shop.closeCart();"
+                                style="margin-top: 10px; background: white; color: #d35400; border-color: #d35400;">
                             <i class="fas fa-shopping-cart"></i> Добавить товары
                         </button>
                     </div>
