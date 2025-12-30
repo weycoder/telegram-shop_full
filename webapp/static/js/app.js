@@ -1244,8 +1244,8 @@ class TelegramShop {
                     </div>
 
                     <div class="delivery-actions">
-                        <button class="btn btn-primary" onclick="shop.showAddressForm(${userId})">
-                            <i class="fas fa-plus"></i> Добавить новый адрес
+                        <button class="btn btn-primary" onclick="shop.saveAddress(${this.userId})">
+                            <i class="fas fa-save"></i> Сохранить адрес
                         </button>
                         <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
                             <i class="fas fa-arrow-left"></i> Назад
@@ -1392,10 +1392,10 @@ class TelegramShop {
         this.showNotification('Возвращено в корзину', 'info');
     }
 
-    async saveAddress() {
+    async saveAddress(userId) {
         try {
             const addressData = {
-                user_id: this.userId,
+                user_id: userId,
                 city: document.getElementById('city').value,
                 street: document.getElementById('street').value,
                 house: document.getElementById('house').value,
@@ -1406,6 +1406,8 @@ class TelegramShop {
                 phone: document.getElementById('recipientPhone').value
             };
 
+            console.log('💾 Сохранение адреса:', addressData);
+
             // Проверка обязательных полей
             if (!addressData.city || !addressData.street || !addressData.house || !addressData.recipient_name) {
                 this.showNotification('❌ Заполните обязательные поля', 'error');
@@ -1414,9 +1416,10 @@ class TelegramShop {
 
             let result;
 
-            if (this.userId === 0) {
+            if (userId === 0) {
                 // Для гостя сохраняем в localStorage
                 result = this.saveGuestAddress(addressData);
+                console.log('💾 Адрес гостя сохранен:', result);
             } else {
                 // Для зарегистрированных пользователей - на сервер
                 const response = await fetch('/api/user/addresses', {
@@ -1427,15 +1430,18 @@ class TelegramShop {
                     body: JSON.stringify(addressData)
                 });
                 result = await response.json();
+                console.log('💾 Адрес сохранен на сервере:', result);
             }
 
             if (result.success) {
-                this.deliveryData.address_id = result.id;
+                this.deliveryData.address_id = userId === 0 ? `guest_${result.id - 1}` : result.id;
+                this.deliveryData.address_details = addressData;
+
                 this.showNotification('✅ Адрес сохранен', 'success');
 
-                // ВМЕСТО confirmOrder() -> возвращаем к выбору адреса
+                // Показываем выбор оплаты
                 setTimeout(() => {
-                    this.showAddressSelection();
+                    this.showPaymentSelection();
                 }, 1000);
 
             } else {
@@ -1604,20 +1610,41 @@ class TelegramShop {
 
     async selectAddress(addressId) {
         try {
+            console.log('📍 Выбран адрес ID:', addressId, 'для пользователя ID:', this.userId);
+
             if (this.userId === 0) {
+                // Для гостя
                 this.deliveryData.address_id = `guest_${addressId}`;
-                this.deliveryData.address_details = localStorage.getItem('guest_addresses')
-                    ? JSON.parse(localStorage.getItem('guest_addresses'))[addressId]
-                    : null;
+
+                // Получаем полные данные адреса
+                const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
+                const addressIndex = addressId; // addressId уже индекс для гостей
+                this.deliveryData.address_details = guestAddresses[addressIndex] || null;
+
+                console.log('🏠 Адресные данные гостя:', this.deliveryData.address_details);
             } else {
+                // Для зарегистрированного пользователя
                 this.deliveryData.address_id = addressId;
+
+                // Загружаем полные данные адреса с сервера
+                try {
+                    const response = await fetch(`/api/user/addresses?user_id=${this.userId}`);
+                    if (response.ok) {
+                        const addresses = await response.json();
+                        const selectedAddress = addresses.find(addr => addr.id === addressId);
+                        this.deliveryData.address_details = selectedAddress || null;
+                        console.log('👤 Адресные данные с сервера:', this.deliveryData.address_details);
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Не удалось загрузить детали адреса:', error);
+                }
             }
 
             // ВМЕСТО confirmOrder() -> показываем выбор оплаты
             await this.showPaymentSelection();
 
         } catch (error) {
-            console.error('Ошибка выбора адреса:', error);
+            console.error('❌ Ошибка выбора адреса:', error);
             this.showNotification('❌ Ошибка выбора адреса', 'error');
         }
     }
@@ -1657,46 +1684,60 @@ class TelegramShop {
 
     async confirmOrder() {
         try {
+            console.log('🔍 Начинаем оформление заказа...');
+            console.log('📊 Данные пользователя:', { userId: this.userId, username: this.username });
+            console.log('🚚 Данные доставки:', this.deliveryData);
+            console.log('🛒 Товары в корзине:', this.cart.length);
+
             // Подготавливаем данные о доставке и оплате
             let deliveryDetails = {};
 
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
                 if (this.deliveryData.address_id.toString().startsWith('guest_')) {
+                    // Для гостя - достаем адрес из localStorage
                     const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
                     const addressIndex = parseInt(this.deliveryData.address_id.split('_')[1]);
                     deliveryDetails = guestAddresses[addressIndex] || {};
+                    console.log('🏠 Адрес гостя:', deliveryDetails);
                 } else {
+                    // Для зарегистрированного - просто ID
                     deliveryDetails = { address_id: this.deliveryData.address_id };
+                    console.log('👤 Адрес зарегистрированного пользователя ID:', this.deliveryData.address_id);
                 }
+            } else if (this.deliveryData.type === 'pickup' && this.deliveryData.pickup_point) {
+                deliveryDetails = { pickup_point_id: this.deliveryData.pickup_point };
             }
+
+            // Формируем items для заказа
+            const orderItems = this.cart.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity
+            }));
 
             // Подготавливаем данные заказа
             const orderData = {
-                user_id: this.userId,
-                username: this.username,
-                items: this.cart.map(item => ({
-                    id: item.id,
-                    name: item.name,
-                    price: item.price,
-                    quantity: item.quantity
-                })),
+                user_id: parseInt(this.userId) || 0,  // ← ВАЖНО: преобразуем в int
+                username: this.username || 'Гость',
+                items: orderItems,
                 total: this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
                 delivery_type: this.deliveryData.type,
-                delivery_address: JSON.stringify(deliveryDetails),
+                delivery_address: JSON.stringify(deliveryDetails),  // ← сохраняем весь объект
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
                 recipient_name: deliveryDetails.recipient_name || '',
                 phone_number: deliveryDetails.phone || ''
             };
 
-            console.log('📤 Отправка заказа:', orderData);
+            console.log('📤 Отправка заказа на сервер:', orderData);
 
             // Используем метод createOrder класса
             const result = await this.createOrder(orderData);
             console.log('📥 Ответ сервера:', result);
 
             if (result.success) {
-                // ✅ ВАЖНОЕ ИЗМЕНЕНИЕ: Отправляем уведомление боту
+                // Отправляем уведомление боту
                 await this.notifyBotAboutOrder(result.order_id, 'created');
 
                 // Показываем подтверждение
@@ -1706,6 +1747,14 @@ class TelegramShop {
                 this.cart = [];
                 this.saveCart();
                 this.updateCartCount();
+
+                // Очищаем данные доставки
+                this.deliveryData = {
+                    type: null,
+                    address_id: null,
+                    pickup_point: null,
+                    address_details: null
+                };
 
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка сервера');
