@@ -548,7 +548,6 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
         message_escaped = escape_markdown(status_info['message'])
         courier_name_escaped = escape_markdown(courier_name) if courier_name else ""
         courier_phone_escaped = escape_markdown(courier_phone) if courier_phone else ""
-        order_id_escaped = escape_markdown(str(order_id))
 
         # Собираем сообщение с MarkdownV2 форматированием
         message = f"*{title_escaped}*\n\n{message_escaped}\n\n"
@@ -558,8 +557,6 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
 
         if courier_phone_escaped:
             message += f"📱 *Телефон:* `{courier_phone_escaped}`\n"
-
-        message += f"\n📋 *Отследить:* /track\\_{order_id_escaped}"
 
         # Отправляем HTTP запрос
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
@@ -584,15 +581,15 @@ def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=
                 # Простое сообщение без Markdown
                 simple_message = f"Заказ #{order_id}\n\n"
                 if status == 'created':
-                    simple_message += "✅ Заказ принят!\n"
+                    simple_message += "✅ Мы успешно приняли ваш заказ!\n"
                 elif status == 'assigned':
-                    simple_message += "👤 Курьер назначен!\n"
+                    simple_message += "👤 Курьер был назначен!\n"
                 elif status == 'picked_up':
                     simple_message += "📦 Товар у курьера!\n"
                 elif status == 'on_the_way':
                     simple_message += "🚗 Курьер едет к вам!\n"
                 elif status == 'delivered':
-                    simple_message += "🎉 Заказ доставлен!\n"
+                    simple_message += "🎉 Ваш заказ был успешно доставлен!\n"
 
                 if courier_name:
                     simple_message += f"\n👤 Курьер: {courier_name}\n"

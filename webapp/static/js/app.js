@@ -320,6 +320,173 @@ class TelegramShop {
         }
     }
 
+        // Добавляем в класс TelegramShop, в метод updateCartDisplay()
+    updateCartDisplay() {
+        console.log('🔄 Обновление корзины...');
+
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
+
+        if (!cartItems || !cartTotal) {
+            console.error('❌ Элементы корзины не найдены!');
+            return;
+        }
+
+        // Рассчитываем стоимость доставки
+        const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        let deliveryCost = 0;
+        let deliveryInfo = '';
+
+        // Если корзина не пуста, рассчитываем доставку
+        if (this.cart.length > 0) {
+            if (this.deliveryData.type === 'courier') {
+                if (itemsTotal < 1000) {
+                    deliveryCost = 100;
+                    deliveryInfo = `
+                        <div class="delivery-warning" style="
+                            background: #fff3cd;
+                            border: 1px solid #ffeaa7;
+                            border-radius: 8px;
+                            padding: 10px;
+                            margin: 10px 0;
+                            color: #856404;
+                        ">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Доставка:</strong> 100 ₽
+                            <span style="font-size: 12px;">(бесплатно от 1000 ₽)</span>
+                        </div>
+                    `;
+                } else {
+                    deliveryInfo = `
+                        <div class="delivery-success" style="
+                            background: #d4edda;
+                            border: 1px solid #c3e6cb;
+                            border-radius: 8px;
+                            padding: 10px;
+                            margin: 10px 0;
+                            color: #155724;
+                        ">
+                            <i class="fas fa-check-circle"></i>
+                            <strong>Доставка:</strong> Бесплатно 🎉
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        const totalWithDelivery = itemsTotal + deliveryCost;
+
+        // ЕСЛИ КОРЗИНА ПУСТА
+        if (this.cart.length === 0) {
+            cartItems.innerHTML = `
+                <div class="empty-cart">
+                    <i class="fas fa-shopping-cart"></i>
+                    <p>Корзина пуста</p>
+                    <p>Добавьте товары из каталога</p>
+                </div>
+            `;
+
+            cartTotal.textContent = '0 ₽';
+            return;
+        }
+
+        // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
+        console.log(`📦 В корзине ${this.cart.length} товаров`);
+
+        // Генерируем HTML для товаров
+        let itemsHTML = '';
+
+        this.cart.forEach(item => {
+            itemsHTML += `
+                <div class="cart-item" data-id="${item.id}">
+                    <img src="${item.image || 'https://via.placeholder.com/80'}"
+                         alt="${item.name}"
+                         class="cart-item-image">
+                    <div class="cart-item-info">
+                        <div class="cart-item-header">
+                            <h4 class="cart-item-name">${item.name}</h4>
+                            <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                        <div class="cart-item-controls">
+                            <div class="quantity-selector small">
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
+                                        ${item.quantity <= 1 ? 'disabled' : ''}>
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="quantity">${item.quantity} шт.</span>
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="cart-item-total">
+                                ${this.formatPrice(item.price * item.quantity)} ₽
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        // Добавляем информацию о доставке ПОД товарами
+        itemsHTML += deliveryInfo;
+
+        // Вставляем HTML
+        cartItems.innerHTML = itemsHTML;
+
+        // Обновляем сумму С УЧЕТОМ ДОСТАВКИ
+        cartTotal.textContent = `${this.formatPrice(totalWithDelivery)} ₽`;
+
+        // Показываем разбивку стоимости
+        const cartFooter = document.querySelector('.cart-summary');
+        if (cartFooter) {
+            const summaryHTML = `
+                <div class="cart-summary">
+                    <div class="price-breakdown">
+                        <div class="price-item">
+                            <span>Товары:</span>
+                            <span>${this.formatPrice(itemsTotal)} ₽</span>
+                        </div>
+                        ${deliveryCost > 0 ? `
+                            <div class="price-item">
+                                <span>Доставка:</span>
+                                <span>${this.formatPrice(deliveryCost)} ₽</span>
+                            </div>
+                        ` : `
+                            <div class="price-item" style="color: #27ae60;">
+                                <span>Доставка:</span>
+                                <span>Бесплатно</span>
+                            </div>
+                        `}
+                        <div class="price-total">
+                            <span>Итого:</span>
+                            <span class="total-price">${this.formatPrice(totalWithDelivery)} ₽</span>
+                        </div>
+                    </div>
+                    <div class="cart-actions">
+                        <button class="btn btn-outline" id="clearCart">
+                            <i class="fas fa-trash"></i> Очистить
+                        </button>
+                        <button class="btn btn-primary" id="checkoutBtn">
+                            <i class="fas fa-paper-plane"></i> Купить
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            cartFooter.innerHTML = summaryHTML;
+
+            // Назначаем обработчики
+            this.bindEvent('clearCart', 'click', () => this.clearCart());
+            this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+        }
+
+        console.log('✅ Корзина обновлена');
+    }
+
+
     updateBackButton() {
         if (window.Telegram?.WebApp?.BackButton) {
             try {
@@ -898,9 +1065,22 @@ class TelegramShop {
         const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
         const cartCount = document.getElementById('cartCount');
 
+        // Рассчитываем сумму с доставкой для всплывающей подсказки
+        const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        let deliveryCost = 0;
+
+        if (this.deliveryData.type === 'courier' && itemsTotal < 1000) {
+            deliveryCost = 100;
+        }
+
+        const totalWithDelivery = itemsTotal + deliveryCost;
+
         if (cartCount) {
             cartCount.textContent = totalItems;
             cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
+
+            // Добавляем подсказку с суммой
+            cartCount.title = `Товаров: ${totalItems} шт.\nСумма: ${this.formatPrice(itemsTotal)} ₽\nДоставка: ${deliveryCost > 0 ? deliveryCost + ' ₽' : 'Бесплатно'}\nИтого: ${this.formatPrice(totalWithDelivery)} ₽`;
         }
     }
 
@@ -1152,6 +1332,14 @@ class TelegramShop {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
+        // Рассчитываем стоимость
+        const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        let deliveryCost = 0;
+
+        if (itemsTotal < 1000) {
+            deliveryCost = 100;
+        }
+
         cartOverlay.innerHTML = `
             <div class="cart-modal">
                 <div class="cart-header">
@@ -1160,6 +1348,41 @@ class TelegramShop {
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
+
+                <!-- Информация о доставке -->
+                <div class="delivery-info" style="
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 0 20px 20px 20px;
+                    border-left: 4px solid #3498db;
+                ">
+                    <h3 style="margin: 0 0 10px 0; color: #2c3e50;">
+                        <i class="fas fa-info-circle"></i> Информация о доставке
+                    </h3>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Сумма заказа:</span>
+                        <span><strong>${this.formatPrice(itemsTotal)} ₽</strong></span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Стоимость доставки:</span>
+                        <span style="${itemsTotal >= 1000 ? 'color: #27ae60; font-weight: bold;' : ''}">
+                            ${itemsTotal >= 1000 ? 'Бесплатно 🎉' : '100 ₽'}
+                        </span>
+                    </div>
+                    ${itemsTotal < 1000 ? `
+                        <div style="font-size: 12px; color: #e74c3c; margin-top: 5px;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Добавьте товаров ещё на ${1000 - itemsTotal} ₽ для бесплатной доставки!
+                        </div>
+                    ` : `
+                        <div style="font-size: 12px; color: #27ae60; margin-top: 5px;">
+                            <i class="fas fa-check-circle"></i>
+                            Ура! Ваша доставка бесплатная!
+                        </div>
+                    `}
+                </div>
+
                 <div class="delivery-options">
                     <button class="delivery-option" id="courierOption">
                         <div class="option-icon">
@@ -1168,6 +1391,10 @@ class TelegramShop {
                         <div class="option-info">
                             <h3>🚗 Доставка курьером</h3>
                             <p>Привезем прямо к вашей двери</p>
+                            <p style="font-size: 12px; color: ${itemsTotal >= 1000 ? '#27ae60' : '#666'}; margin-top: 5px;">
+                                <i class="fas ${itemsTotal >= 1000 ? 'fa-check-circle' : 'fa-info-circle'}"></i>
+                                ${itemsTotal >= 1000 ? 'Доставка бесплатная!' : 'Доставка 100 ₽'}
+                            </p>
                         </div>
                         <i class="fas fa-chevron-right"></i>
                     </button>
@@ -1179,14 +1406,41 @@ class TelegramShop {
                         <div class="option-info">
                             <h3>🏪 Самовывоз</h3>
                             <p>Заберите из ближайшей точки</p>
+                            <p style="font-size: 12px; color: #666; margin-top: 5px;">
+                                <i class="fas fa-check-circle"></i> Всегда бесплатно
+                            </p>
                         </div>
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
+
+                <!-- Информация о скидке -->
+                ${itemsTotal < 1000 ? `
+                    <div class="upsell-notice" style="
+                        background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+                        border-radius: 10px;
+                        padding: 15px;
+                        margin: 20px;
+                        text-align: center;
+                        border: 2px dashed #e74c3c;
+                    ">
+                        <h3 style="margin: 0 0 10px 0; color: #d35400;">
+                            <i class="fas fa-gift"></i> Получите бесплатную доставку!
+                        </h3>
+                        <p style="margin: 0; color: #7f8c8d;">
+                            Добавьте товаров ещё на <strong>${1000 - itemsTotal} ₽</strong>
+                            и доставка будет бесплатной!
+                        </p>
+                        <button class="btn btn-outline" onclick="shop.closeCart();"
+                                style="margin-top: 10px; background: white; color: #d35400; border-color: #d35400;">
+                            <i class="fas fa-shopping-cart"></i> Добавить товары
+                        </button>
+                    </div>
+                ` : ''}
+
                 <div class="delivery-actions">
-                    <!-- ИЗМЕНЕНИЕ ЗДЕСЬ: вызываем returnToCartFromDelivery() -->
                     <button class="btn btn-outline" onclick="shop.returnToCartFromDelivery()">
-                        <i class="fas fa-arrow-left"></i> Назад
+                        <i class="fas fa-arrow-left"></i> Назад в корзину
                     </button>
                 </div>
             </div>
