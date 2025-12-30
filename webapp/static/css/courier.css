@@ -1127,3 +1127,73 @@ body {
     background-color: #fff8f8;
     border-left: 4px solid #e74c3c !important;
 }
+
+/* Добавить в courier.html или courier.css */
+.available-orders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.order-card.available {
+    border: 2px solid #3498db;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+}
+
+.order-reward {
+    background: #27ae60;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.btn-take-order {
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.btn-take-order:hover {
+    background: linear-gradient(135deg, #219653 0%, #27ae60 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+}
+
+.price-breakdown {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 10px 0;
+    border-left: 4px solid #3498db;
+}
+
+.price-breakdown p {
+    margin: 5px 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Стили для навигации */
+.nav-badge {
+    background: #e74c3c;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    margin-left: auto;
+}

@@ -787,7 +787,6 @@ def api_categories():
 def api_create_order():
     data = request.json
 
-    # ДОБАВЬТЕ ЛОГИРОВАНИЕ
     print("=" * 50)
     print("📦 ПОЛУЧЕН ЗАПРОС НА СОЗДАНИЕ ЗАКАЗА")
     print("=" * 50)
@@ -796,8 +795,6 @@ def api_create_order():
     print(f"📦 items: {len(data.get('items', []))} товаров")
     print(f"💰 total: {data.get('total', 0)} руб.")
     print(f"🚚 delivery_type: {data.get('delivery_type')}")
-    print(f"📞 phone_number (из запроса): {data.get('phone_number')}")
-    print(f"👤 recipient_name (из запроса): {data.get('recipient_name')}")
     print("=" * 50)
 
     db = get_db()
@@ -806,8 +803,24 @@ def api_create_order():
         payment_method = data.get('payment_method', 'cash')
         delivery_address = data.get('delivery_address', '{}')
 
-        # ========== ИСПРАВЛЕННАЯ ЧАСТЬ ==========
-        # Парсим delivery_address если это JSON строка
+        # ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
+        order_total = float(data.get('total', 0))
+        delivery_cost = 0.0
+
+        if delivery_type == 'courier':
+            if order_total < 1000:
+                delivery_cost = 100.0  # Доставка 100 руб для заказов до 1000 руб
+                print(f"💰 Доставка платная: +{delivery_cost} руб (сумма заказа: {order_total} руб)")
+            else:
+                print(f"✅ Доставка бесплатная (сумма заказа: {order_total} руб)")
+
+        # Общая сумма заказа с учетом доставки
+        total_with_delivery = order_total + delivery_cost
+        print(
+            f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
+        # ========== КОНЕЦ РАСЧЕТА ==========
+
+        # ИСПРАВЛЕННАЯ ОБРАБОТКА АДРЕСА (оставляем как было)
         address_obj = {}
         if isinstance(delivery_address, str):
             try:
@@ -819,48 +832,28 @@ def api_create_order():
         elif isinstance(delivery_address, dict):
             address_obj = delivery_address
 
-        # Извлекаем recipient_name и phone_number из разных источников
         recipient_name = ""
         phone_number = ""
 
-        # 1. Из объекта адреса (самый приоритет)
         if isinstance(address_obj, dict):
             recipient_name = address_obj.get('recipient_name', '')
             phone_number = address_obj.get('phone', '') or address_obj.get('phone_number', '')
 
-        # 2. Из прямых полей запроса
         if not recipient_name:
             recipient_name = data.get('recipient_name', '')
         if not phone_number:
             phone_number = data.get('phone_number', '')
 
-        # 3. Из username (если совсем пусто)
         if not recipient_name:
             recipient_name = data.get('username', 'Гость')
         if not phone_number:
             phone_number = 'Не указан'
 
-        print(f"✅ Извлеченные данные:")
-        print(f"   recipient_name: {recipient_name}")
-        print(f"   phone_number: {phone_number}")
-        print(f"   address_obj: {address_obj}")
-        # ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
-
-        if isinstance(delivery_address, str):
-            try:
-                delivery_address = json.loads(delivery_address)
-            except:
-                delivery_address = {}
-
-        # ПОЛУЧАЕМ user_id и username
         user_id = data.get('user_id', 0)
         username = data.get('username', 'Гость')
 
-        # ПРОВЕРКА: если user_id = 0, ищем другой способ
         if user_id == 0:
             print("⚠️ ВНИМАНИЕ: user_id = 0! Пробуем альтернативные методы...")
-
-            # Вариант 1: Ищем в заголовках Telegram Web App
             telegram_data = request.headers.get('X-Telegram-Init-Data')
             if telegram_data:
                 try:
@@ -874,7 +867,6 @@ def api_create_order():
                 except Exception as e:
                     print(f"⚠️ Не удалось распарсить Telegram данные: {e}")
 
-            # Вариант 2: Ищем по username в базе
             if user_id == 0 and username != 'Гость':
                 user_record = db.execute('SELECT telegram_id FROM telegram_users WHERE username = ?',
                                          (username,)).fetchone()
@@ -882,7 +874,6 @@ def api_create_order():
                     user_id = user_record['telegram_id']
                     print(f"✅ Найден user_id по username: {user_id}")
 
-            # Вариант 3: Если все еще 0, генерируем временный ID
             if user_id == 0:
                 import random
                 user_id = random.randint(100000000, 999999999)
@@ -891,23 +882,26 @@ def api_create_order():
         print(f"👤 Используемый user_id: {user_id}")
         print(f"👤 Используемый username: {username}")
 
+        # Сохраняем стоимость доставки в заказе
         cursor = db.execute('''
-                            INSERT INTO orders (user_id, username, items, total_price, status, delivery_type,
+                            INSERT INTO orders (user_id, username, items, total_price, delivery_cost, status,
+                                                delivery_type,
                                                 delivery_address, pickup_point, payment_method, recipient_name,
                                                 phone_number)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
-                                user_id,  # Используем исправленный user_id
-                                username,  # Используем исправленный username
+                                user_id,
+                                username,
                                 json.dumps(data['items'], ensure_ascii=False),
-                                data['total'],
+                                order_total,  # Стоимость товаров
+                                delivery_cost,  # Стоимость доставки
                                 'pending',
                                 delivery_type,
-                                json.dumps(address_obj if address_obj else {}, ensure_ascii=False),  # Исправлено
+                                json.dumps(address_obj if address_obj else {}, ensure_ascii=False),
                                 data.get('pickup_point'),
                                 payment_method,
-                                recipient_name,  # Исправлено
-                                phone_number  # Исправлено
+                                recipient_name,
+                                phone_number
                             ))
 
         for item in data['items']:
@@ -916,12 +910,14 @@ def api_create_order():
         db.commit()
         order_id = cursor.lastrowid
 
-        # НАЗНАЧАЕМ КУРЬЕРА АВТОМАТИЧЕСКИ
-        if data.get('delivery_type') == 'courier':
-            courier_id = assign_order_to_courier(order_id, 'courier')
-            print(f"✅ Курьер назначен на заказ #{order_id}")
+        # ========== ИЗМЕНЕНИЕ: НЕ НАЗНАЧАЕМ КУРЬЕРА АВТОМАТИЧЕСКИ ==========
+        if delivery_type == 'courier':
+            # Только создаем заказ, но не назначаем курьера
+            print(f"📋 Создан заказ #{order_id} для доставки курьером (ожидает назначения)")
+
+            # Отправляем уведомление об успешном создании заказа
+            send_order_notification(order_id, 'created')
         else:
-            # Для самовывоза тоже отправляем уведомление о создании заказа
             send_order_notification(order_id, 'created')
             print(f"✅ Уведомление о создании заказа #{order_id} отправлено")
 
@@ -929,7 +925,8 @@ def api_create_order():
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
         print("=" * 50)
-        return jsonify({'success': True, 'order_id': order_id})
+        return jsonify({'success': True, 'order_id': order_id, 'delivery_cost': delivery_cost,
+                        'total_with_delivery': total_with_delivery})
 
     except Exception as e:
         db.close()
@@ -938,6 +935,107 @@ def api_create_order():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/courier/available-orders', methods=['GET'])
+def get_available_orders():
+    """Получить список заказов, доступных для взятия курьером"""
+    try:
+        db = get_db()
+
+        # Заказы с доставкой курьером, которые еще не назначены
+        available_orders = db.execute('''
+                                      SELECT o.id,
+                                             o.username,
+                                             o.items,
+                                             o.total_price,
+                                             o.delivery_cost,
+                                             o.delivery_type,
+                                             o.delivery_address,
+                                             o.recipient_name,
+                                             o.phone_number,
+                                             o.created_at,
+                                             (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
+                                      FROM orders o
+                                               LEFT JOIN order_assignments a ON o.id = a.order_id
+                                      WHERE o.delivery_type = 'courier'
+                                        AND o.status = 'pending'
+                                        AND a.id IS NULL                       -- Не назначен
+                                        AND DATE (o.created_at) = DATE ('now') -- Сегодняшние заказы
+                                      ORDER BY o.created_at DESC
+                                      ''').fetchall()
+
+        processed_orders = []
+        for order in available_orders:
+            order_dict = dict(order)
+
+            # Парсим JSON поля
+            try:
+                order_dict['items_list'] = json.loads(order_dict['items'])
+            except:
+                order_dict['items_list'] = []
+
+            # Парсим адрес доставки
+            if order_dict.get('delivery_address'):
+                try:
+                    order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
+                except:
+                    order_dict['delivery_address_obj'] = {}
+            else:
+                order_dict['delivery_address_obj'] = {}
+
+            processed_orders.append(order_dict)
+
+        db.close()
+        return jsonify({'success': True, 'available_orders': processed_orders})
+
+    except Exception as e:
+        print(f"❌ Ошибка получения доступных заказов: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/courier/take-order', methods=['POST'])
+def courier_take_order():
+    """Курьер берет заказ в доставку"""
+    try:
+        data = request.json
+        order_id = data.get('order_id')
+        courier_id = data.get('courier_id')
+
+        if not order_id or not courier_id:
+            return jsonify({'success': False, 'error': 'Не указан ID заказа или курьера'}), 400
+
+        db = get_db()
+
+        # Проверяем, не взят ли уже заказ
+        existing = db.execute('SELECT id FROM order_assignments WHERE order_id = ?', (order_id,)).fetchone()
+        if existing:
+            db.close()
+            return jsonify({'success': False, 'error': 'Заказ уже взят другим курьером'}), 400
+
+        # Назначаем заказ курьеру
+        db.execute('''
+                   INSERT INTO order_assignments (order_id, courier_id, status, assigned_at)
+                   VALUES (?, ?, 'assigned', CURRENT_TIMESTAMP)
+                   ''', (order_id, courier_id))
+
+        # Обновляем статус заказа
+        db.execute('UPDATE orders SET status = ? WHERE id = ?', ('processing', order_id))
+
+        db.commit()
+        db.close()
+
+        print(f"✅ Заказ #{order_id} взят курьером #{courier_id}")
+
+        # Отправляем уведомление покупателю
+        send_order_notification(order_id, 'assigned', courier_id)
+
+        return jsonify({'success': True, 'message': 'Заказ успешно взят в доставку'})
+
+    except Exception as e:
+        print(f"❌ Ошибка взятия заказа: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== API ДЛЯ КУРЬЕРОВ ==========
 @app.route('/api/courier/login', methods=['POST'])

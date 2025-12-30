@@ -240,6 +240,11 @@
             color: white;
         }
 
+        .btn-take-order {
+            background: #27ae60;
+            color: white;
+        }
+
         .btn-action:hover {
             opacity: 0.9;
             transform: translateY(-1px);
@@ -332,12 +337,69 @@
             margin: 15px 0;
         }
 
+        /* Стили для доступных заказов */
+        .available-orders-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .order-card.available {
+            border: 2px solid #3498db;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+        }
+
+        .order-reward {
+            background: #27ae60;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .btn-take-order {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-take-order:hover {
+            background: linear-gradient(135deg, #219653 0%, #27ae60 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+        }
+
+        /* Стили для навигации */
+        .nav-badge {
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
         @media (max-width: 768px) {
             .container { padding: 10px; }
             .header { padding: 20px; }
             .tab-content { padding: 20px; }
             .stats-grid { grid-template-columns: 1fr; }
             .order-info { grid-template-columns: 1fr; }
+            .available-orders-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -376,15 +438,30 @@
             </div>
 
             <div class="tabs">
-                <div class="tab active" onclick="showTab('orders')">📦 Активные заказы</div>
+                <div class="tab active" onclick="showTab('available')">📦 Доступные заказы</div>
+                <div class="tab" onclick="showTab('orders')">🚚 Мои заказы</div>
                 <div class="tab" onclick="showTab('completed')">✅ Выполненные</div>
                 <div class="tab" onclick="showTab('stats')">📊 Статистика</div>
                 <div class="tab" onclick="showTab('settings')">⚙️ Настройки</div>
             </div>
 
+            <!-- Доступные заказы -->
+            <div id="tab-available" class="tab-content active">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">📦 Доступные заказы</h2>
+                    <button class="btn-action" onclick="loadAvailableOrders()" style="background: #3498db; color: white;">
+                        🔄 Обновить
+                    </button>
+                </div>
+
+                <div id="available-orders-list" class="available-orders-grid">
+                    <div class="loader">Загрузка доступных заказов...</div>
+                </div>
+            </div>
+
             <!-- Активные заказы -->
-            <div id="tab-orders" class="tab-content active">
-                <h2 style="margin-bottom: 20px;">📦 Активные заказы</h2>
+            <div id="tab-orders" class="tab-content">
+                <h2 style="margin-bottom: 20px;">🚚 Мои заказы</h2>
                 <div id="active-orders-list" class="loader">
                     Загрузка заказов...
                 </div>
@@ -498,9 +575,6 @@
         </div>
     </div>
 
-    <!-- Подключаем courier.js -->
-    <script src="/static/js/courier.js"></script>
-
     <script>
         let currentCourier = null;
         let currentToken = null;
@@ -544,6 +618,7 @@
 
                     // Обновляем информацию
                     updateCourierInfo();
+                    loadAvailableOrders();
                     loadActiveOrders();
                     loadStatistics();
 
@@ -571,6 +646,7 @@
                     document.getElementById('main-screen').style.display = 'block';
 
                     updateCourierInfo();
+                    loadAvailableOrders();
                     loadActiveOrders();
                     loadStatistics();
                 } catch (e) {
@@ -608,6 +684,9 @@
 
             // Загружаем данные для вкладки
             switch(tabName) {
+                case 'available':
+                    loadAvailableOrders();
+                    break;
                 case 'orders':
                     loadActiveOrders();
                     break;
@@ -620,6 +699,138 @@
                 case 'settings':
                     loadProfile();
                     break;
+            }
+        }
+
+        // Загрузить доступные заказы
+        async function loadAvailableOrders() {
+            const container = document.getElementById('available-orders-list');
+            if (!container) return;
+
+            container.innerHTML = '<div class="loader">Загрузка доступных заказов...</div>';
+
+            try {
+                const response = await fetch('/api/courier/available-orders');
+                const data = await response.json();
+
+                if (data.success && data.available_orders.length > 0) {
+                    let html = '';
+
+                    data.available_orders.forEach(order => {
+                        const deliveryInfo = extractDeliveryInfo(order);
+
+                        // Рассчитываем сумму с доставкой
+                        const total = order.total_price || 0;
+                        const deliveryCost = order.delivery_cost || 0;
+                        const totalWithDelivery = order.total_with_delivery || (total + deliveryCost);
+
+                        html += `
+                            <div class="order-card available" data-order-id="${order.id}">
+                                <div class="order-header">
+                                    <div class="order-id">Заказ #${order.id}</div>
+                                    <div class="order-reward">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                        ${totalWithDelivery} ₽
+                                    </div>
+                                </div>
+
+                                <div class="order-info">
+                                    <div class="info-item">
+                                        <span class="info-label">Товары:</span>
+                                        <span class="info-value">${total} ₽</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Доставка:</span>
+                                        <span class="info-value" style="${deliveryCost > 0 ? '' : 'color: #27ae60;'}">
+                                            ${deliveryCost > 0 ? `${deliveryCost} ₽` : 'Бесплатно'}
+                                        </span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Получатель:</span>
+                                        <span class="info-value">${deliveryInfo.recipient}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Телефон:</span>
+                                        <span class="info-value">${deliveryInfo.phone}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Адрес:</span>
+                                        <span class="info-value" style="font-size: 12px;">${deliveryInfo.address}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Создан:</span>
+                                        <span class="info-value">${new Date(order.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</span>
+                                    </div>
+                                </div>
+
+                                <div class="order-actions">
+                                    <button class="btn-action btn-take-order" onclick="takeOrder(${order.id})">
+                                        👋 Взять заказ
+                                    </button>
+                                    <button class="btn-action btn-details" onclick="showOrderDetails(${order.id})">
+                                        📋 Подробнее
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    container.innerHTML = html;
+
+                    // Обновляем счетчик в навигации
+                    const badge = document.querySelector('.tab[onclick*="available"] .nav-badge');
+                    if (badge) {
+                        badge.textContent = data.available_orders.length;
+                        badge.style.display = data.available_orders.length > 0 ? 'flex' : 'none';
+                    }
+
+                } else {
+                    container.innerHTML = '<div class="loader">Нет доступных заказов</div>';
+
+                    // Скрываем бейдж если нет заказов
+                    const badge = document.querySelector('.tab[onclick*="available"] .nav-badge');
+                    if (badge) badge.style.display = 'none';
+                }
+            } catch (error) {
+                container.innerHTML = '<div class="error-message">Ошибка загрузки доступных заказов</div>';
+                console.error('Error loading available orders:', error);
+            }
+        }
+
+        // Взять заказ
+        async function takeOrder(orderId) {
+            if (!currentCourier) {
+                alert('Сначала войдите в систему');
+                return;
+            }
+
+            if (confirm(`Взять заказ #${orderId} в доставку?`)) {
+                try {
+                    const response = await fetch('/api/courier/take-order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            order_id: orderId,
+                            courier_id: currentCourier.id
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        alert(`✅ Заказ #${orderId} взят в доставку!`);
+
+                        // Перезагружаем списки заказов
+                        loadAvailableOrders();
+                        loadActiveOrders();
+                        loadStatistics();
+                    } else {
+                        throw new Error(data.error || 'Ошибка взятия заказа');
+                    }
+                } catch (error) {
+                    console.error('Ошибка взятия заказа:', error);
+                    alert(`❌ ${error.message}`);
+                }
             }
         }
 
@@ -928,7 +1139,9 @@
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                 <p><strong>Номер заказа:</strong> #${order.id}</p>
                                 <p><strong>Статус заказа:</strong> ${getStatusText(order.status || order.assignment_status)}</p>
-                                <p><strong>Сумма:</strong> ${order.total_price || 0} ₽</p>
+                                <p><strong>Сумма товаров:</strong> ${order.total_price || 0} ₽</p>
+                                <p><strong>Стоимость доставки:</strong> ${order.delivery_cost ? order.delivery_cost + ' ₽' : 'Бесплатно'}</p>
+                                <p><strong>Итого:</strong> ${(parseFloat(order.total_price || 0) + parseFloat(order.delivery_cost || 0))} ₽</p>
                                 <p><strong>Тип доставки:</strong> ${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</p>
                                 <p><strong>Способ оплата:</strong> ${order.payment_method === 'cash' ? 'Наличные' : 'Перевод'}</p>
                                 <p><strong>Дата создания:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
@@ -1353,59 +1566,6 @@
                 closeModal();
             }
         });
-    </script>
-    <script>
-    // Функция для проверки и подсветки заказов с недостающими данными
-    function highlightIncompleteOrders() {
-        document.querySelectorAll('.order-card').forEach(card => {
-            const recipient = card.querySelector('.info-item:nth-child(2) .info-value')?.textContent;
-            const phone = card.querySelector('.info-item:nth-child(3) .info-value')?.textContent;
-            const address = card.querySelector('.info-item:nth-child(4) .info-value')?.textContent;
-
-            // Проверяем, если какие-то данные отсутствуют
-            if (recipient && recipient.includes('Не указан') ||
-                phone && phone.includes('Не указан') ||
-                address && address.includes('не указан')) {
-
-                // Добавляем предупреждающую рамку
-                card.style.border = '2px solid #e74c3c';
-                card.style.position = 'relative';
-
-                // Добавляем иконку предупреждения
-                if (!card.querySelector('.warning-icon')) {
-                    const warningIcon = document.createElement('div');
-                    warningIcon.className = 'warning-icon';
-                    warningIcon.innerHTML = '⚠️';
-                    warningIcon.style.cssText = `
-                        position: absolute;
-                        top: 10px;
-                        right: 10px;
-                        font-size: 20px;
-                        color: #e74c3c;
-                        background: white;
-                        border-radius: 50%;
-                        width: 30px;
-                        height: 30px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        border: 2px solid #e74c3c;
-                    `;
-                    card.appendChild(warningIcon);
-                }
-            }
-        });
-    }
-
-    // Запускаем проверку после загрузки заказов
-    setTimeout(() => {
-        highlightIncompleteOrders();
-    }, 1000);
-
-    // Также проверяем при клике на кнопки
-    document.addEventListener('click', () => {
-        setTimeout(highlightIncompleteOrders, 500);
-    });
     </script>
 </body>
 </html>

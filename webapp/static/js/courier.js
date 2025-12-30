@@ -152,6 +152,212 @@ class CourierApp {
         });
     }
 
+
+    async loadAvailableOrders() {
+        if (!this.currentCourier) return;
+
+        try {
+            const response = await fetch('/api/courier/available-orders');
+            const result = await response.json();
+
+            if (result.success) {
+                this.displayAvailableOrders(result.available_orders || []);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки доступных заказов:', error);
+            this.showNotification('❌ Не удалось загрузить доступные заказы', 'error');
+        }
+    }
+
+    displayAvailableOrders(orders) {
+        const container = document.getElementById('available-orders-list');
+        if (!container) return;
+
+        if (orders.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-box-open"></i>
+                    <h3>Нет доступных заказов</h3>
+                    <p>Все заказы уже взяты в доставку</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        orders.forEach(order => {
+            html += this.createAvailableOrderCard(order);
+        });
+
+        container.innerHTML = html;
+    }
+
+    createAvailableOrderCard(order) {
+        // Извлекаем данные как в createOrderCard
+        let address = "Адрес не указан";
+        let recipient = "Не указан";
+        let phone = "Телефон не указан";
+
+        if (order.recipient_name && order.recipient_name !== 'Гость' && order.recipient_name !== 'Не указан') {
+            recipient = order.recipient_name;
+        }
+
+        if (order.phone_number && order.phone_number !== 'Телефон не указан') {
+            phone = order.phone_number;
+        }
+
+        if (order.delivery_address) {
+            try {
+                let addressData = null;
+                if (typeof order.delivery_address === 'string') {
+                    if (order.delivery_address.startsWith('{') || order.delivery_address.startsWith('[')) {
+                        addressData = JSON.parse(order.delivery_address);
+                    } else {
+                        address = order.delivery_address;
+                    }
+                } else {
+                    addressData = order.delivery_address;
+                }
+
+                if (addressData && typeof addressData === 'object') {
+                    const parts = [];
+                    if (addressData.city) parts.push(addressData.city);
+                    if (addressData.street) parts.push(`ул. ${addressData.street}`);
+                    if (addressData.house) parts.push(`д. ${addressData.house}`);
+                    if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
+
+                    if (parts.length > 0) {
+                        address = parts.join(', ');
+                    } else if (addressData.address) {
+                        address = addressData.address;
+                    }
+
+                    if (recipient === "Не указан" && addressData.recipient_name) {
+                        recipient = addressData.recipient_name;
+                    }
+
+                    if (phone === "Телефон не указан") {
+                        phone = addressData.phone || addressData.phone_number || "Телефон не указан";
+                    }
+                }
+            } catch (e) {
+                console.error('Ошибка обработки адреса:', e);
+                if (typeof order.delivery_address === 'string') {
+                    address = order.delivery_address;
+                }
+            }
+        }
+
+        // Расчет суммы с доставкой
+        const total = order.total_price || 0;
+        const deliveryCost = order.delivery_cost || 0;
+        const totalWithDelivery = order.total_with_delivery || (total + deliveryCost);
+
+        // Информация о стоимости доставки
+        let deliveryInfo = '';
+        if (deliveryCost > 0) {
+            deliveryInfo = `
+                <div class="info-item">
+                    <span class="info-label">Доставка:</span>
+                    <span class="info-value">${deliveryCost} ₽</span>
+                </div>
+            `;
+        } else {
+            deliveryInfo = `
+                <div class="info-item">
+                    <span class="info-label">Доставка:</span>
+                    <span class="info-value" style="color: #27ae60;">Бесплатно</span>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="order-card available" data-order-id="${order.id}">
+                <div class="order-header">
+                    <div class="order-id">Заказ #${order.id}</div>
+                    <div class="order-reward">
+                        <i class="fas fa-money-bill-wave"></i>
+                        ${totalWithDelivery} ₽
+                    </div>
+                </div>
+
+                <div class="order-info">
+                    <div class="info-item">
+                        <span class="info-label">Товары:</span>
+                        <span class="info-value">${total} ₽</span>
+                    </div>
+                    ${deliveryInfo}
+                    <div class="info-item">
+                        <span class="info-label">Получатель:</span>
+                        <span class="info-value">${recipient}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Телефон:</span>
+                        <span class="info-value">${phone}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Адрес:</span>
+                        <span class="info-value" style="font-size: 12px;">${address}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Создан:</span>
+                        <span class="info-value">${new Date(order.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                </div>
+
+                <div class="order-actions">
+                    <button class="btn-action btn-take-order" onclick="takeOrder(${order.id})">
+                        <i class="fas fa-hand-paper"></i> Взять заказ
+                    </button>
+                    <button class="btn-action btn-details" onclick="showOrderDetails(${order.id})">
+                        <i class="fas fa-info-circle"></i> Подробнее
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Добавляем глобальную функцию для взятия заказа
+    async function takeOrder(orderId) {
+        if (!window.courierApp || !window.courierApp.currentCourier) {
+            alert('Сначала войдите в систему');
+            return;
+        }
+
+        if (confirm(`Взять заказ #${orderId} в доставку?`)) {
+            try {
+                const response = await fetch('/api/courier/take-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        order_id: orderId,
+                        courier_id: window.courierApp.currentCourier.id
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    window.courierApp.showNotification(`✅ Заказ #${orderId} взят в доставку!`, 'success');
+
+                    // Перезагружаем списки заказов
+                    window.courierApp.loadAvailableOrders();
+                    window.courierApp.loadOrders();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Ошибка взятия заказа:', error);
+                window.courierApp.showNotification(`❌ ${error.message}`, 'error');
+            }
+        }
+    }
+
+
     // Авторизация
     async login() {
         const usernameInput = document.getElementById('login-username');
@@ -217,16 +423,15 @@ class CourierApp {
 
     // Переключение разделов
     switchSection(section) {
-        // Скрываем все разделы
         document.querySelectorAll('.content-section').forEach(el => {
             el.classList.remove('active');
         });
 
-        // Показываем выбранный
         document.getElementById(section + 'Section').classList.add('active');
 
-        // Загружаем данные если нужно
-        if (section === 'today') {
+        if (section === 'available') {
+            this.loadAvailableOrders();
+        } else if (section === 'today') {
             this.loadTodayOrders();
         } else if (section === 'history') {
             this.loadHistoryOrders();

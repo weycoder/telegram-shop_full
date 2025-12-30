@@ -1752,7 +1752,6 @@ class TelegramShop {
             console.log('🚚 Данные доставки:', this.deliveryData);
             console.log('🛒 Товары в корзине:', this.cart.length);
 
-            // ========== ИСПРАВЛЕННАЯ ЧАСТЬ ==========
             // Подготавливаем данные о доставке и оплате
             let deliveryDetails = {};
             let recipient_name = "";
@@ -1760,26 +1759,19 @@ class TelegramShop {
 
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
                 if (this.deliveryData.address_id.toString().startsWith('guest_')) {
-                    // Для гостя - достаем адрес из localStorage
                     const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
                     const addressIndex = parseInt(this.deliveryData.address_id.split('_')[1]);
                     deliveryDetails = guestAddresses[addressIndex] || {};
-
-                    // Извлекаем имя и телефон из адреса гостя
                     recipient_name = deliveryDetails.recipient_name || '';
                     phone_number = deliveryDetails.phone || '';
-
                     console.log('🏠 Адрес гостя:', deliveryDetails);
-                    console.log('📱 Извлеченные данные:', { recipient_name, phone_number });
                 } else {
-                    // Для зарегистрированного - используем address_details
                     deliveryDetails = this.deliveryData.address_details || {};
                     recipient_name = deliveryDetails.recipient_name || '';
                     phone_number = deliveryDetails.phone || deliveryDetails.phone_number || '';
                     console.log('👤 Адрес пользователя:', deliveryDetails);
                 }
 
-                // Проверка обязательных полей
                 if (!recipient_name || recipient_name.trim() === '') {
                     this.showNotification('❌ Укажите имя получателя', 'error');
                     this.showAddressSelection();
@@ -1793,11 +1785,9 @@ class TelegramShop {
                 }
             } else if (this.deliveryData.type === 'pickup' && this.deliveryData.pickup_point) {
                 deliveryDetails = { pickup_point_id: this.deliveryData.pickup_point };
-                // Для самовывоза используем данные пользователя
                 recipient_name = this.username || 'Гость';
                 phone_number = 'Будет указан при получении';
             }
-            // ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
 
             // Формируем items для заказа
             const orderItems = this.cart.map(item => ({
@@ -1807,21 +1797,39 @@ class TelegramShop {
                 quantity: item.quantity
             }));
 
+            // Рассчитываем стоимость
+            const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            let deliveryCost = 0;
+
+            // ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
+            if (this.deliveryData.type === 'courier') {
+                if (itemsTotal < 1000) {
+                    deliveryCost = 100;
+                    console.log(`💰 Доставка платная: +${deliveryCost} руб (сумма заказа: ${itemsTotal} руб)`);
+                } else {
+                    console.log(`✅ Доставка бесплатная (сумма заказа: ${itemsTotal} руб)`);
+                }
+            }
+
+            const totalWithDelivery = itemsTotal + deliveryCost;
+            // ========== КОНЕЦ РАСЧЕТА ==========
+
             // Подготавливаем данные заказа
             const orderData = {
-                user_id: parseInt(this.userId) || 0,  // ← ВАЖНО: преобразуем в int
+                user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
-                total: this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+                total: itemsTotal,  // Только стоимость товаров
                 delivery_type: this.deliveryData.type,
-                delivery_address: JSON.stringify(deliveryDetails),  // ← сохраняем весь объект
+                delivery_address: JSON.stringify(deliveryDetails),
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
-                recipient_name: recipient_name,  // ← Явно передаем имя
-                phone_number: phone_number       // ← Явно передаем телефон
+                recipient_name: recipient_name,
+                phone_number: phone_number
             };
 
             console.log('📤 Отправка заказа на сервер:', orderData);
+            console.log(`💰 Итоговая сумма: ${totalWithDelivery} руб (товары: ${itemsTotal} руб + доставка: ${deliveryCost} руб)`);
 
             // Используем метод createOrder класса
             const result = await this.createOrder(orderData);
@@ -1831,8 +1839,8 @@ class TelegramShop {
                 // Отправляем уведомление боту
                 await this.notifyBotAboutOrder(result.order_id, 'created');
 
-                // Показываем подтверждение
-                await this.showOrderConfirmation(result.order_id);
+                // ========== ИЗМЕНЕННОЕ ПОДТВЕРЖДЕНИЕ ЗАКАЗА ==========
+                this.showOrderConfirmation(result.order_id, itemsTotal, deliveryCost, totalWithDelivery);
 
                 // Очищаем корзину ПОСЛЕ показа подтверждения
                 this.cart = [];
@@ -1854,22 +1862,18 @@ class TelegramShop {
         } catch (error) {
             console.error('❌ Ошибка оформления заказа:', error);
             this.showNotification(`❌ Ошибка: ${error.message}`, 'error');
-            // Возвращаем к выбору оплаты
             this.showPaymentSelection();
         }
     }
 
-    showOrderConfirmation(orderId) {
+    showOrderConfirmation(orderId, itemsTotal = 0, deliveryCost = 0, totalWithDelivery = 0) {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
-
-        const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
         const deliveryText = this.deliveryData.type === 'courier'
             ? 'Доставка курьером'
             : 'Самовывоз';
 
-        // Названия способов оплаты
         const paymentMethods = {
             'cash': 'Наличные',
             'transfer': 'Перевод курьеру',
@@ -1877,6 +1881,27 @@ class TelegramShop {
         };
 
         const paymentText = paymentMethods[this.deliveryData.payment_method] || 'Наличные';
+
+        // ========== ИЗМЕНЕННОЕ ОТОБРАЖЕНИЕ С УЧЕТОМ ДОСТАВКИ ==========
+        let deliveryInfo = '';
+        if (this.deliveryData.type === 'courier') {
+            if (deliveryCost > 0) {
+                deliveryInfo = `
+                    <div class="price-breakdown">
+                        <p><strong>Товары:</strong> ${this.formatPrice(itemsTotal)} ₽</p>
+                        <p><strong>Доставка:</strong> ${this.formatPrice(deliveryCost)} ₽</p>
+                        <p style="font-size: 12px; color: #666;">* Бесплатная доставка при заказе от 1000 ₽</p>
+                    </div>
+                `;
+            } else {
+                deliveryInfo = `
+                    <div class="price-breakdown">
+                        <p><strong>Товары:</strong> ${this.formatPrice(itemsTotal)} ₽</p>
+                        <p><strong>Доставка:</strong> Бесплатно 🎉</p>
+                    </div>
+                `;
+            }
+        }
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
@@ -1889,12 +1914,15 @@ class TelegramShop {
                         <p><strong>Номер заказа:</strong> #${orderId}</p>
                         <p><strong>Способ получения:</strong> ${deliveryText}</p>
                         <p><strong>Способ оплаты:</strong> ${paymentText}</p>
-                        <p><strong>Сумма:</strong> ${this.formatPrice(totalAmount)} ₽</p>
-                        <p><strong>Статус:</strong> <span class="status-processing">Ожидает обработки</span></p>
+                        ${deliveryInfo}
+                        <p><strong>Итого к оплате:</strong> <span style="font-size: 18px; font-weight: bold;">${this.formatPrice(totalWithDelivery)} ₽</span></p>
+                        <p><strong>Статус:</strong> <span class="status-processing">Ожидает курьера</span></p>
                     </div>
                     <div class="confirmation-message processing">
                         <p><i class="fas fa-info-circle"></i> Заказ передан на обработку</p>
-                        <p>Наш менеджер свяжется с вами в ближайшее время для подтверждения заказа</p>
+                        ${this.deliveryData.type === 'courier' ?
+                            '<p><strong>🚚 Курьер будет назначен в течение 15 минут</strong></p>' :
+                            '<p>Вы можете забрать заказ в течение 2 часов</p>'}
                         <p><strong>📱 Вы получите уведомления в Telegram боте о статусе доставки!</strong></p>
                     </div>
                     <button class="btn btn-primary" id="closeCartAndReturn">
@@ -1904,7 +1932,6 @@ class TelegramShop {
             </div>
         `;
 
-        // Обработчик кнопки
         document.getElementById('closeCartAndReturn').addEventListener('click', () => {
             this.cart = [];
             this.saveCart();
@@ -1915,7 +1942,6 @@ class TelegramShop {
             }, 300);
         });
     }
-
     // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
     formatPrice(price) {
         return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
