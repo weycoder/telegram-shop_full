@@ -2005,268 +2005,468 @@ html {
     border-color: rgba(255, 179, 0, 0.2);
 }
 
-/* ========== КРАСИВЫЙ БЛОК ИНФОРМАЦИИ О ДОСТАВКЕ ========== */
+/* ========== ОБНОВЛЕННЫЕ СТИЛИ ДЛЯ СТРУКТУРЫ ========== */
 
-.delivery-info-section {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fdf8 100%);
-    border-radius: 16px;
+/* Контейнер опций доставки */
+.delivery-options {
     padding: 20px;
-    margin: 0 20px 20px 20px;
-    border: 2px solid #e8f5e9;
-    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+/* Карточка информации о доставке (ПОД опциями) */
+.delivery-info-card {
+    background: linear-gradient(145deg, #f8fff8, #e8f5e9);
+    border-radius: 20px;
+    padding: 24px;
+    margin: 0 20px 24px 20px;
+    border: 2px solid #81c784;
+    box-shadow:
+        0 8px 25px rgba(129, 199, 132, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
     position: relative;
     overflow: hidden;
 }
 
-.delivery-info-section::before {
+/* Заголовок "Информация о доставке" */
+.delivery-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px dashed #a5d6a7;
+    position: relative;
+    z-index: 2;
+}
+
+.delivery-card-header i {
+    font-size: 24px;
+    color: #2e7d32;
+    background: white;
+    padding: 10px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(46, 125, 50, 0.15);
+}
+
+.delivery-card-header h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1b5e20;
+    margin: 0;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+/* Строки с информацией */
+.delivery-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(129, 199, 132, 0.4);
+    position: relative;
+    z-index: 2;
+}
+
+.delivery-info-row:last-child {
+    border-bottom: none;
+}
+
+.delivery-info-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    color: #33691e;
+    font-weight: 600;
+}
+
+.delivery-info-label i {
+    color: #388e3c;
+    font-size: 16px;
+    opacity: 0.8;
+}
+
+.delivery-info-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1b5e20;
+    text-align: right;
+}
+
+/* Для бесплатной доставки */
+.delivery-info-value.free {
+    color: #2e7d32;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    font-size: 18px;
+}
+
+.delivery-info-value.free i {
+    color: #4caf50;
+    font-size: 18px;
+}
+
+/* Итоговая сумма - выделенный блок */
+.delivery-total-section {
+    background: linear-gradient(145deg, #2e7d32, #388e3c);
+    border-radius: 16px;
+    padding: 20px;
+    margin-top: 20px;
+    border: 2px solid #81c784;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 6px 20px rgba(46, 125, 50, 0.25);
+    overflow: hidden;
+}
+
+.delivery-total-section::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
-    width: 4px;
-    height: 100%;
-    background: linear-gradient(to bottom, #4CAF50, #8BC34A);
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #a5d6a7, transparent);
 }
 
-.delivery-info-header {
+.delivery-total-label {
+    color: #e8f5e9;
+    font-size: 17px;
+    font-weight: 600;
     display: flex;
     align-items: center;
-    margin-bottom: 18px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid #f0f9f1;
+    gap: 12px;
 }
 
-.delivery-info-header h3 {
-    font-size: 16px;
+.delivery-total-label i {
+    color: #c8e6c9;
+    font-size: 20px;
+}
+
+.delivery-total-value {
+    font-size: 26px;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    letter-spacing: 0.5px;
+}
+
+/* Бейдж бесплатной доставки */
+.free-delivery-badge {
+    background: linear-gradient(145deg, #4caf50, #8bc34a);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 30px;
+    font-size: 15px;
     font-weight: 700;
-    color: #2E7D32;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.free-delivery-badge i {
+    font-size: 16px;
+}
+
+/* Сообщение о скидке (если доставка платная) */
+.delivery-upsell-message {
+    background: linear-gradient(145deg, #fff8e1, #ffecb3);
+    border-radius: 18px;
+    padding: 22px;
+    margin: 0 20px 20px 20px;
+    border: 2px solid #ffd54f;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.delivery-upsell-message::before {
+    content: '🎁';
+    position: absolute;
+    top: -15px;
+    right: 15px;
+    font-size: 45px;
+    opacity: 0.3;
+}
+
+.delivery-upsell-title {
+    color: #ff8f00;
+    margin: 0 0 14px 0;
+    font-size: 17px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.delivery-upsell-text {
+    color: #f57c00;
+    margin: 0 0 18px 0;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.delivery-upsell-text strong {
+    color: #e65100;
+    font-size: 19px;
+    font-weight: 800;
+}
+
+.delivery-upsell-button {
+    background: white;
+    color: #ff8f00;
+    border: 2px solid #ffb300;
+    font-weight: 700;
+    padding: 14px 28px;
+    border-radius: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 16px;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(255, 179, 0, 0.2);
+}
+
+.delivery-upsell-button:hover {
+    background: #ffb300;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 179, 0, 0.4);
+}
+
+/* Кнопки действий */
+.delivery-actions {
+    padding: 20px;
+    border-top: 2px solid #e8f5e9;
+    background: white;
+    display: flex;
+    gap: 12px;
+    position: sticky;
+    bottom: 0;
+}
+
+/* ========== ОПЦИИ ДОСТАВКИ ========== */
+.delivery-option-card {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 22px;
+    background: white;
+    border: 2px solid #e8f5e9;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: left;
+    outline: none;
+    gap: 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 5px 20px rgba(129, 199, 132, 0.08);
+}
+
+.delivery-option-card:hover {
+    border-color: #4caf50;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(76, 175, 80, 0.15);
+    background: #f9fbe7;
+}
+
+.delivery-option-card:active {
+    transform: translateY(-1px);
+}
+
+.delivery-option-icon {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(145deg, #4caf50, #8bc34a);
+    color: white;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+    box-shadow: 0 5px 15px rgba(76, 175, 80, 0.25);
+}
+
+.delivery-option-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.delivery-option-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2e7d32;
     margin: 0;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.delivery-info-header i {
-    color: #4CAF50;
-    font-size: 18px;
-    background: rgba(76, 175, 80, 0.1);
-    padding: 8px;
-    border-radius: 50%;
-}
-
-.delivery-price-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px dashed #e8f5e9;
-}
-
-.delivery-price-row:last-child {
-    border-bottom: none;
-}
-
-.delivery-label {
-    font-size: 14px;
+.delivery-option-description {
+    font-size: 15px;
     color: #546e7a;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.delivery-label i {
-    color: #78909C;
-    font-size: 14px;
-}
-
-.delivery-value {
-    font-size: 15px;
-    font-weight: 600;
-    color: #2E7D32;
-}
-
-.delivery-value.free {
-    color: #4CAF50;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.delivery-value.free::after {
-    content: '🎉';
-    font-size: 16px;
-}
-
-.delivery-total {
-    background: linear-gradient(135deg, #f1f8e9 0%, #e8f5e9 100%);
-    border-radius: 10px;
-    padding: 14px;
-    margin-top: 15px;
-    border: 2px solid #c8e6c9;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.delivery-total .delivery-label {
-    color: #388E3C;
-    font-weight: 700;
-    font-size: 15px;
-}
-
-.delivery-total .delivery-value {
-    font-size: 20px;
-    font-weight: 800;
-    color: #2E7D32;
-    background: linear-gradient(45deg, #4CAF50, #8BC34A);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
-}
-
-.delivery-hint {
-    margin-top: 12px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    animation: pulseHint 2s infinite;
-}
-
-.delivery-hint.free {
-    background: rgba(139, 195, 74, 0.1);
-    color: #388E3C;
-    border-left: 3px solid #8BC34A;
-}
-
-.delivery-hint.paid {
-    background: rgba(255, 152, 0, 0.1);
-    color: #F57C00;
-    border-left: 3px solid #FF9800;
-}
-
-.delivery-hint i {
-    font-size: 14px;
-}
-
-@keyframes pulseHint {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.8; }
-}
-
-/* Стили для сообщения о скидке */
-.upsell-notice {
-    background: linear-gradient(135deg, #fff8e1 0%, #ffeaa7 100%);
-    border-radius: 14px;
-    padding: 18px;
-    margin: 20px;
-    border: 2px solid #FFD54F;
-    position: relative;
-    overflow: hidden;
-}
-
-.upsell-notice::before {
-    content: '🎁';
-    position: absolute;
-    top: -10px;
-    right: -10px;
-    font-size: 40px;
-    opacity: 0.2;
-    transform: rotate(15deg);
-}
-
-.upsell-notice h3 {
-    color: #FF8F00;
-    margin: 0 0 10px 0;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.upsell-notice p {
-    color: #F57C00;
-    margin: 0 0 15px 0;
-    font-size: 14px;
+    margin: 0;
     line-height: 1.5;
 }
 
-.upsell-notice strong {
-    color: #E65100;
-}
-
-.upsell-notice .btn-outline {
-    background: white;
-    color: #FF8F00;
-    border: 2px solid #FFB300;
+.delivery-option-price {
+    font-size: 15px;
     font-weight: 600;
-    padding: 10px 16px;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
     border-radius: 10px;
-    transition: all 0.3s;
+    background: rgba(129, 199, 132, 0.1);
+    align-self: flex-start;
 }
 
-.upsell-notice .btn-outline:hover {
-    background: #FFB300;
-    color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 179, 0, 0.3);
+.delivery-option-price.free {
+    color: #2e7d32;
+    background: rgba(129, 199, 132, 0.15);
 }
 
-/* Темная тема */
-.dark-mode .delivery-info-section {
-    background: linear-gradient(135deg, #2D2D2D 0%, #1E2929 100%);
-    border: 2px solid #388E3C;
+.delivery-option-price.paid {
+    color: #ff9800;
+    background: rgba(255, 152, 0, 0.1);
 }
 
-.dark-mode .delivery-info-header h3 {
-    color: #8BC34A;
+.delivery-option-price i {
+    font-size: 14px;
 }
 
-.dark-mode .delivery-info-header i {
-    color: #8BC34A;
-    background: rgba(139, 195, 74, 0.2);
+.delivery-option-arrow {
+    color: #81c784;
+    font-size: 18px;
+    flex-shrink: 0;
 }
 
-.dark-mode .delivery-price-row {
-    border-bottom-color: #388E3C;
+/* ========== ТЕМНАЯ ТЕМА ========== */
+.dark-mode .delivery-info-card {
+    background: linear-gradient(145deg, #1b5e20, #2e7d32);
+    border-color: #4caf50;
 }
 
-.dark-mode .delivery-label {
-    color: #B0BEC5;
+.dark-mode .delivery-card-header i {
+    background: #2e7d32;
+    color: #c8e6c9;
 }
 
-.dark-mode .delivery-label i {
-    color: #8BC34A;
+.dark-mode .delivery-card-header h3 {
+    color: #e8f5e9;
+    text-shadow: none;
 }
 
-.dark-mode .delivery-total {
-    background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
-    border-color: #4CAF50;
+.dark-mode .delivery-info-label {
+    color: #c8e6c9;
 }
 
-.dark-mode .delivery-total .delivery-label {
-    color: #C5E1A5;
+.dark-mode .delivery-info-label i {
+    color: #a5d6a7;
 }
 
-.dark-mode .delivery-hint.free {
-    background: rgba(139, 195, 74, 0.2);
-    color: #C5E1A5;
-    border-left-color: #8BC34A;
+.dark-mode .delivery-info-value {
+    color: #e8f5e9;
 }
 
-.dark-mode .delivery-hint.paid {
+.dark-mode .delivery-info-value.free {
+    color: #a5d6a7;
+}
+
+.dark-mode .delivery-total-section {
+    background: linear-gradient(145deg, #388e3c, #43a047);
+    border-color: #66bb6a;
+}
+
+.dark-mode .delivery-total-label {
+    color: #f1f8e9;
+}
+
+.dark-mode .delivery-total-label i {
+    color: #c8e6c9;
+}
+
+.dark-mode .free-delivery-badge {
+    background: linear-gradient(145deg, #66bb6a, #81c784);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark-mode .delivery-upsell-message {
+    background: linear-gradient(145deg, #5d4037, #8d6e63);
+    border-color: #ffb74d;
+}
+
+.dark-mode .delivery-upsell-title {
+    color: #ffd54f;
+}
+
+.dark-mode .delivery-upsell-text {
+    color: #ffcc80;
+}
+
+.dark-mode .delivery-upsell-text strong {
+    color: #ffb74d;
+}
+
+.dark-mode .delivery-upsell-button {
+    background: #5d4037;
+    color: #ffd54f;
+    border-color: #ffb74d;
+}
+
+.dark-mode .delivery-upsell-button:hover {
+    background: #ffb74d;
+    color: #5d4037;
+}
+
+.dark-mode .delivery-option-card {
+    background: #2d2d2d;
+    border-color: #388e3c;
+}
+
+.dark-mode .delivery-option-card:hover {
+    background: #3d3d3d;
+    border-color: #4caf50;
+}
+
+.dark-mode .delivery-option-title {
+    color: #a5d6a7;
+}
+
+.dark-mode .delivery-option-description {
+    color: #b0bec5;
+}
+
+.dark-mode .delivery-option-price.free {
+    color: #a5d6a7;
+    background: rgba(129, 199, 132, 0.2);
+}
+
+.dark-mode .delivery-option-price.paid {
+    color: #ffcc80;
     background: rgba(255, 152, 0, 0.2);
-    color: #FFCC80;
-    border-left-color: #FF9800;
 }
 
-.dark-mode .upsell-notice {
-    background: linear-gradient(135deg, #5D4037 0%, #8D6E63 100%);
-    border-color: #FFB74D;
+.dark-mode .delivery-actions {
+    background: #2d2d2d;
+    border-top-color: #388e3c;
 }
-
-.dark-mode .upsell-notice h3 {
-    color: #FFD54F;
