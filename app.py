@@ -434,6 +434,206 @@ def init_db():
                        )
                        ''')
 
+        # 1. Добавляем поля к существующей таблице products
+        cursor.execute('''
+                       ALTER TABLE products
+                           ADD COLUMN product_type TEXT DEFAULT 'piece'
+                               CHECK (product_type IN ('piece', 'weight'))
+                       ''')
+
+        cursor.execute('''
+                       ALTER TABLE products
+                           ADD COLUMN unit TEXT DEFAULT 'шт'
+                       ''')
+
+        cursor.execute('''
+                       ALTER TABLE products
+                           ADD COLUMN weight_unit TEXT DEFAULT 'кг'
+                       ''')
+
+        cursor.execute('''
+                       ALTER TABLE products
+                           ADD COLUMN price_per_unit DECIMAL(10, 2)
+                       ''')
+
+        cursor.execute('''
+                       ALTER TABLE products
+                           ADD COLUMN min_weight DECIMAL(10, 3) DEFAULT 0.1
+                       ''')
+
+        cursor.execute('''
+                       ALTER TABLE products
+                           ADD COLUMN step_weight DECIMAL(10, 3) DEFAULT 0.1
+                       ''')
+
+        cursor.execute('''
+                       ALTER TABLE products
+                           ADD COLUMN stock_weight DECIMAL(10, 3)
+                       ''')
+
+        # 2. Таблица скидок
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS discounts
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           name
+                           TEXT
+                           NOT
+                           NULL,
+                           discount_type
+                           TEXT
+                           CHECK (
+                           discount_type
+                           IN
+                       (
+                           'percentage',
+                           'fixed',
+                           'bogo'
+                       )),
+                           value DECIMAL
+                       (
+                           10,
+                           2
+                       ),
+                           min_order_amount DECIMAL
+                       (
+                           10,
+                           2
+                       ) DEFAULT 0,
+                           max_discount DECIMAL
+                       (
+                           10,
+                           2
+                       ),
+                           start_date TIMESTAMP,
+                           end_date TIMESTAMP,
+                           is_active BOOLEAN DEFAULT 1,
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                           )
+                       ''')
+
+        # 3. Применение скидок к товарам/категориям
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS discount_applications
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           discount_id
+                           INTEGER,
+                           product_id
+                           INTEGER,
+                           category
+                           TEXT,
+                           apply_to_all
+                           BOOLEAN
+                           DEFAULT
+                           0,
+                           FOREIGN
+                           KEY
+                       (
+                           discount_id
+                       ) REFERENCES discounts
+                       (
+                           id
+                       ),
+                           FOREIGN KEY
+                       (
+                           product_id
+                       ) REFERENCES products
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
+        # 4. Промокоды
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS promo_codes
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           code
+                           TEXT
+                           UNIQUE
+                           NOT
+                           NULL,
+                           discount_id
+                           INTEGER,
+                           usage_limit
+                           INTEGER,
+                           used_count
+                           INTEGER
+                           DEFAULT
+                           0,
+                           is_active
+                           BOOLEAN
+                           DEFAULT
+                           1,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           discount_id
+                       ) REFERENCES discounts
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
+        # 5. Категории для скидок
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS product_categories
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           name
+                           TEXT
+                           NOT
+                           NULL
+                           UNIQUE,
+                           parent_id
+                           INTEGER,
+                           discount_id
+                           INTEGER,
+                           sort_order
+                           INTEGER
+                           DEFAULT
+                           0,
+                           FOREIGN
+                           KEY
+                       (
+                           parent_id
+                       ) REFERENCES product_categories
+                       (
+                           id
+                       ),
+                           FOREIGN KEY
+                       (
+                           discount_id
+                       ) REFERENCES discounts
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
         # Тестовые курьеры
         if cursor.execute("SELECT COUNT(*) FROM couriers").fetchone()[0] == 0:
             cursor.executemany('''
@@ -1590,6 +1790,706 @@ def admin_dashboard():
             'total_orders': 0, 'total_revenue': 0, 'pending_orders': 0,
             'total_products': 0, 'total_customers': 0, 'recent_orders': []
         })
+
+
+# ========== API ДЛЯ ВЕСОВЫХ ТОВАРОВ И СКИДОК ==========
+
+@app.route('/api/admin/discounts', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def admin_discounts():
+    """Управление скидками"""
+    db = get_db()
+    try:
+        if request.method == 'GET':
+            # Получить все скидки
+            discounts = db.execute('SELECT * FROM discounts ORDER BY created_at DESC').fetchall()
+            discount_list = []
+
+            for discount in discounts:
+                discount_dict = dict(discount)
+
+                # Получаем товары и категории для этой скидки
+                applications = db.execute(
+                    'SELECT product_id, category, apply_to_all FROM discount_applications WHERE discount_id = ?',
+                    (discount_dict['id'],)
+                ).fetchall()
+
+                discount_dict['applications'] = [dict(app) for app in applications]
+                discount_list.append(discount_dict)
+
+            return jsonify(discount_list)
+
+        elif request.method == 'POST':
+            # Создать новую скидку
+            data = request.json
+
+            # Проверяем обязательные поля
+            if not data.get('name') or not data.get('discount_type') or data.get('value') is None:
+                return jsonify({'success': False, 'error': 'Заполните обязательные поля'}), 400
+
+            # Вставляем скидку
+            cursor = db.execute('''
+                                INSERT INTO discounts (name, discount_type, value, min_order_amount, max_discount,
+                                                       start_date, end_date, is_active)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    data['name'],
+                                    data['discount_type'],
+                                    data['value'],
+                                    data.get('min_order_amount', 0),
+                                    data.get('max_discount'),
+                                    data.get('start_date'),
+                                    data.get('end_date'),
+                                    data.get('is_active', True)
+                                ))
+
+            discount_id = cursor.lastrowid
+
+            # Добавляем применения скидки
+            applications = data.get('applications', [])
+            for app in applications:
+                db.execute('''
+                           INSERT INTO discount_applications (discount_id, product_id, category, apply_to_all)
+                           VALUES (?, ?, ?, ?)
+                           ''', (
+                               discount_id,
+                               app.get('product_id'),
+                               app.get('category'),
+                               app.get('apply_to_all', False)
+                           ))
+
+            db.commit()
+            return jsonify({'success': True, 'id': discount_id})
+
+        elif request.method == 'PUT':
+            # Обновить скидку
+            discount_id = request.args.get('id')
+            data = request.json
+
+            if not discount_id:
+                return jsonify({'success': False, 'error': 'Не указан ID скидки'}), 400
+
+            db.execute('''
+                       UPDATE discounts
+                       SET name             = ?,
+                           discount_type    = ?,
+                           value            = ?,
+                           min_order_amount = ?,
+                           max_discount     = ?,
+                           start_date       = ?,
+                           end_date         = ?,
+                           is_active        = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name'),
+                           data.get('discount_type'),
+                           data.get('value'),
+                           data.get('min_order_amount', 0),
+                           data.get('max_discount'),
+                           data.get('start_date'),
+                           data.get('end_date'),
+                           data.get('is_active', True),
+                           discount_id
+                       ))
+
+            # Удаляем старые применения и добавляем новые
+            db.execute('DELETE FROM discount_applications WHERE discount_id = ?', (discount_id,))
+
+            applications = data.get('applications', [])
+            for app in applications:
+                db.execute('''
+                           INSERT INTO discount_applications (discount_id, product_id, category, apply_to_all)
+                           VALUES (?, ?, ?, ?)
+                           ''', (
+                               discount_id,
+                               app.get('product_id'),
+                               app.get('category'),
+                               app.get('apply_to_all', False)
+                           ))
+
+            db.commit()
+            return jsonify({'success': True})
+
+        elif request.method == 'DELETE':
+            # Удалить скидку
+            discount_id = request.args.get('id')
+
+            if not discount_id:
+                return jsonify({'success': False, 'error': 'Не указан ID скидки'}), 400
+
+            db.execute('DELETE FROM discounts WHERE id = ?', (discount_id,))
+            db.execute('DELETE FROM discount_applications WHERE discount_id = ?', (discount_id,))
+
+            db.commit()
+            return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/products/update', methods=['PUT'])
+def admin_update_product():
+    """Обновить товар с поддержкой весовых товаров"""
+    db = get_db()
+    try:
+        product_id = request.args.get('id')
+        data = request.json
+
+        if not product_id:
+            return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
+
+        # Проверяем тип товара
+        product_type = data.get('product_type', 'piece')
+
+        if product_type == 'weight':
+            # Для весовых товаров
+            db.execute('''
+                       UPDATE products
+                       SET name           = ?,
+                           description    = ?,
+                           price          = ?,
+                           image_url      = ?,
+                           category       = ?,
+                           product_type   = ?,
+                           unit           = ?,
+                           weight_unit    = ?,
+                           price_per_unit = ?,
+                           min_weight     = ?,
+                           step_weight    = ?,
+                           stock          = ?,
+                           stock_weight   = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name', ''),
+                           data.get('description', ''),
+                           data.get('price', 0),
+                           data.get('image_url', ''),
+                           data.get('category', ''),
+                           'weight',
+                           data.get('unit', 'кг'),
+                           data.get('weight_unit', 'кг'),
+                           data.get('price_per_unit', 0),
+                           data.get('min_weight', 0.1),
+                           data.get('step_weight', 0.1),
+                           data.get('stock', 0),
+                           data.get('stock_weight', 0)
+                       ))
+        else:
+            # Для штучных товаров
+            db.execute('''
+                       UPDATE products
+                       SET name         = ?,
+                           description  = ?,
+                           price        = ?,
+                           image_url    = ?,
+                           category     = ?,
+                           product_type = ?,
+                           unit         = ?,
+                           stock        = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name', ''),
+                           data.get('description', ''),
+                           data.get('price', 0),
+                           data.get('image_url', ''),
+                           data.get('category', ''),
+                           'piece',
+                           data.get('unit', 'шт'),
+                           data.get('stock', 0)
+                       ))
+
+        db.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/products/create', methods=['POST'])
+def admin_create_product():
+    """Создать товар с поддержкой весовых товаров"""
+    db = get_db()
+    try:
+        data = request.json
+
+        # Проверяем обязательные поля
+        if not data.get('name') or data.get('price') is None:
+            return jsonify({'success': False, 'error': 'Заполните обязательные поля'}), 400
+
+        product_type = data.get('product_type', 'piece')
+
+        if product_type == 'weight':
+            # Для весовых товаров
+            cursor = db.execute('''
+                                INSERT INTO products (name, description, price, image_url, category,
+                                                      product_type, unit, weight_unit, price_per_unit,
+                                                      min_weight, step_weight, stock, stock_weight)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    data.get('name', ''),
+                                    data.get('description', ''),
+                                    data.get('price', 0),
+                                    data.get('image_url', ''),
+                                    data.get('category', ''),
+                                    'weight',
+                                    data.get('unit', 'кг'),
+                                    data.get('weight_unit', 'кг'),
+                                    data.get('price_per_unit', 0),
+                                    data.get('min_weight', 0.1),
+                                    data.get('step_weight', 0.1),
+                                    data.get('stock', 0),
+                                    data.get('stock_weight', 0)
+                                ))
+        else:
+            # Для штучных товаров
+            cursor = db.execute('''
+                                INSERT INTO products (name, description, price, image_url, category,
+                                                      product_type, unit, stock)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    data.get('name', ''),
+                                    data.get('description', ''),
+                                    data.get('price', 0),
+                                    data.get('image_url', ''),
+                                    data.get('category', ''),
+                                    'piece',
+                                    data.get('unit', 'шт'),
+                                    data.get('stock', 0)
+                                ))
+
+        product_id = cursor.lastrowid
+        db.commit()
+
+        return jsonify({'success': True, 'id': product_id})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/promo-codes', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def admin_promo_codes():
+    """Управление промокодами"""
+    db = get_db()
+    try:
+        if request.method == 'GET':
+            # Получить все промокоды
+            promo_codes = db.execute('''
+                                     SELECT pc.*, d.name as discount_name, d.discount_type, d.value
+                                     FROM promo_codes pc
+                                              LEFT JOIN discounts d ON pc.discount_id = d.id
+                                     ORDER BY pc.created_at DESC
+                                     ''').fetchall()
+
+            return jsonify([dict(pc) for pc in promo_codes])
+
+        elif request.method == 'POST':
+            # Создать промокод
+            data = request.json
+
+            if not data.get('code') or not data.get('discount_id'):
+                return jsonify({'success': False, 'error': 'Заполните обязательные поля'}), 400
+
+            # Проверяем уникальность кода
+            existing = db.execute('SELECT id FROM promo_codes WHERE code = ?', (data['code'],)).fetchone()
+            if existing:
+                return jsonify({'success': False, 'error': 'Такой промокод уже существует'}), 400
+
+            cursor = db.execute('''
+                                INSERT INTO promo_codes (code, discount_id, usage_limit, is_active)
+                                VALUES (?, ?, ?, ?)
+                                ''', (
+                                    data['code'],
+                                    data['discount_id'],
+                                    data.get('usage_limit'),
+                                    data.get('is_active', True)
+                                ))
+
+            db.commit()
+            return jsonify({'success': True, 'id': cursor.lastrowid})
+
+        elif request.method == 'PUT':
+            # Обновить промокод
+            promo_id = request.args.get('id')
+            data = request.json
+
+            if not promo_id:
+                return jsonify({'success': False, 'error': 'Не указан ID промокода'}), 400
+
+            db.execute('''
+                       UPDATE promo_codes
+                       SET code        = ?,
+                           discount_id = ?,
+                           usage_limit = ?,
+                           is_active   = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('code'),
+                           data.get('discount_id'),
+                           data.get('usage_limit'),
+                           data.get('is_active', True),
+                           promo_id
+                       ))
+
+            db.commit()
+            return jsonify({'success': True})
+
+        elif request.method == 'DELETE':
+            # Удалить промокод
+            promo_id = request.args.get('id')
+
+            if not promo_id:
+                return jsonify({'success': False, 'error': 'Не указан ID промокода'}), 400
+
+            db.execute('DELETE FROM promo_codes WHERE id = ?', (promo_id,))
+            db.commit()
+            return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/categories/tree', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def admin_categories_tree():
+    """Управление деревом категорий"""
+    db = get_db()
+    try:
+        if request.method == 'GET':
+            # Получить дерево категорий
+            categories = db.execute('''
+                                    SELECT pc.*, d.name as discount_name
+                                    FROM product_categories pc
+                                             LEFT JOIN discounts d ON pc.discount_id = d.id
+                                    ORDER BY pc.sort_order, pc.name
+                                    ''').fetchall()
+
+            # Строим дерево
+            categories_dict = {}
+            root_categories = []
+
+            for cat in categories:
+                cat_dict = dict(cat)
+                cat_dict['children'] = []
+                categories_dict[cat_dict['id']] = cat_dict
+
+            for cat_id, cat in categories_dict.items():
+                if cat['parent_id']:
+                    if cat['parent_id'] in categories_dict:
+                        categories_dict[cat['parent_id']]['children'].append(cat)
+                else:
+                    root_categories.append(cat)
+
+            return jsonify(root_categories)
+
+        elif request.method == 'POST':
+            # Создать категорию
+            data = request.json
+
+            if not data.get('name'):
+                return jsonify({'success': False, 'error': 'Введите название категории'}), 400
+
+            cursor = db.execute('''
+                                INSERT INTO product_categories (name, parent_id, discount_id, sort_order)
+                                VALUES (?, ?, ?, ?)
+                                ''', (
+                                    data['name'],
+                                    data.get('parent_id'),
+                                    data.get('discount_id'),
+                                    data.get('sort_order', 0)
+                                ))
+
+            db.commit()
+            return jsonify({'success': True, 'id': cursor.lastrowid})
+
+        elif request.method == 'PUT':
+            # Обновить категорию
+            category_id = request.args.get('id')
+            data = request.json
+
+            if not category_id:
+                return jsonify({'success': False, 'error': 'Не указан ID категории'}), 400
+
+            db.execute('''
+                       UPDATE product_categories
+                       SET name        = ?,
+                           parent_id   = ?,
+                           discount_id = ?,
+                           sort_order  = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name'),
+                           data.get('parent_id'),
+                           data.get('discount_id'),
+                           data.get('sort_order', 0),
+                           category_id
+                       ))
+
+            db.commit()
+            return jsonify({'success': True})
+
+        elif request.method == 'DELETE':
+            # Удалить категорию
+            category_id = request.args.get('id')
+
+            if not category_id:
+                return jsonify({'success': False, 'error': 'Не указан ID категории'}), 400
+
+            # Проверяем, есть ли товары в этой категории
+            products_count = db.execute(
+                'SELECT COUNT(*) FROM products WHERE category = (SELECT name FROM product_categories WHERE id = ?)',
+                (category_id,)
+            ).fetchone()[0]
+
+            if products_count > 0:
+                return jsonify({'success': False, 'error': 'Нельзя удалить категорию с товарами'}), 400
+
+            # Проверяем, есть ли подкатегории
+            children_count = db.execute(
+                'SELECT COUNT(*) FROM product_categories WHERE parent_id = ?',
+                (category_id,)
+            ).fetchone()[0]
+
+            if children_count > 0:
+                return jsonify({'success': False, 'error': 'Нельзя удалить категорию с подкатегориями'}), 400
+
+            db.execute('DELETE FROM product_categories WHERE id = ?', (category_id,))
+            db.commit()
+            return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/check-discount', methods=['POST'])
+def check_discount():
+    """Проверить скидки для товаров в корзине"""
+    try:
+        data = request.json
+        items = data.get('items', [])
+
+        if not items:
+            return jsonify({'discounts': [], 'total_discount': 0})
+
+        db = get_db()
+
+        # Получаем все активные скидки
+        discounts = db.execute('''
+                               SELECT d.*, da.product_id, da.category, da.apply_to_all
+                               FROM discounts d
+                                        LEFT JOIN discount_applications da ON d.id = da.discount_id
+                               WHERE d.is_active = 1
+                                 AND (d.start_date IS NULL OR d.start_date <= CURRENT_TIMESTAMP)
+                                 AND (d.end_date IS NULL OR d.end_date >= CURRENT_TIMESTAMP)
+                               ''').fetchall()
+
+        # Применяем скидки к товарам
+        item_discounts = []
+        total_discount = 0
+
+        for item in items:
+            product_id = item.get('id')
+            quantity = item.get('quantity', 1)
+            price = item.get('price', 0)
+
+            # Ищем скидки для этого товара
+            item_discount = 0
+
+            for discount in discounts:
+                discount_dict = dict(discount)
+
+                # Проверяем применение скидки
+                applies = False
+
+                if discount_dict['apply_to_all']:
+                    applies = True
+                elif discount_dict['product_id'] and discount_dict['product_id'] == product_id:
+                    applies = True
+                elif discount_dict['category']:
+                    # Получаем категорию товара
+                    product = db.execute('SELECT category FROM products WHERE id = ?', (product_id,)).fetchone()
+                    if product and product['category'] == discount_dict['category']:
+                        applies = True
+
+                if applies:
+                    # Рассчитываем скидку
+                    discount_value = 0
+                    if discount_dict['discount_type'] == 'percentage':
+                        discount_value = price * quantity * (discount_dict['value'] / 100)
+                        # Проверяем максимальную скидку
+                        if discount_dict['max_discount']:
+                            discount_value = min(discount_value, discount_dict['max_discount'])
+                    elif discount_dict['discount_type'] == 'fixed':
+                        discount_value = discount_dict['value'] * quantity
+
+                    item_discount += discount_value
+
+            item_discounts.append({
+                'product_id': product_id,
+                'discount': item_discount
+            })
+
+            total_discount += item_discount
+
+        db.close()
+
+        return jsonify({
+            'discounts': item_discounts,
+            'total_discount': total_discount
+        })
+
+    except Exception as e:
+        print(f"Ошибка проверки скидок: {e}")
+        return jsonify({'discounts': [], 'total_discount': 0})
+
+
+@app.route('/api/check-promo-code', methods=['POST'])
+def check_promo_code():
+    """Проверить промокод"""
+    try:
+        data = request.json
+        code = data.get('code', '').strip().upper()
+
+        if not code:
+            return jsonify({'success': False, 'error': 'Введите промокод'})
+
+        db = get_db()
+
+        # Ищем промокод
+        promo = db.execute('''
+                           SELECT pc.*, d.discount_type, d.value, d.max_discount
+                           FROM promo_codes pc
+                                    LEFT JOIN discounts d ON pc.discount_id = d.id
+                           WHERE pc.code = ?
+                             AND pc.is_active = 1
+                           ''', (code,)).fetchone()
+
+        if not promo:
+            return jsonify({'success': False, 'error': 'Промокод не найден'})
+
+        promo_dict = dict(promo)
+
+        # Проверяем лимит использования
+        if promo_dict['usage_limit'] and promo_dict['used_count'] >= promo_dict['usage_limit']:
+            return jsonify({'success': False, 'error': 'Промокод закончился'})
+
+        db.close()
+
+        return jsonify({
+            'success': True,
+            'promo_code': promo_dict,
+            'discount_type': promo_dict['discount_type'],
+            'value': promo_dict['value'],
+            'max_discount': promo_dict['max_discount']
+        })
+
+    except Exception as e:
+        print(f"Ошибка проверки промокода: {e}")
+        return jsonify({'success': False, 'error': 'Ошибка проверки промокода'})
+
+
+@app.route('/api/products/with-discounts', methods=['GET'])
+def get_products_with_discounts():
+    """Получить товары со скидками"""
+    db = get_db()
+    try:
+        category = request.args.get('category', 'all')
+
+        # Получаем товары
+        if category and category != 'all':
+            products = db.execute('''
+                                  SELECT *
+                                  FROM products
+                                  WHERE stock > 0
+                                    AND category = ?
+                                  ORDER BY created_at DESC
+                                  ''', (category,)).fetchall()
+        else:
+            products = db.execute('''
+                                  SELECT *
+                                  FROM products
+                                  WHERE stock > 0
+                                  ORDER BY created_at DESC
+                                  ''').fetchall()
+
+        # Получаем активные скидки
+        discounts = db.execute('''
+                               SELECT d.*, da.product_id, da.category, da.apply_to_all
+                               FROM discounts d
+                                        LEFT JOIN discount_applications da ON d.id = da.discount_id
+                               WHERE d.is_active = 1
+                                 AND (d.start_date IS NULL OR d.start_date <= CURRENT_TIMESTAMP)
+                                 AND (d.end_date IS NULL OR d.end_date >= CURRENT_TIMESTAMP)
+                               ''').fetchall()
+
+        # Применяем скидки к товарам
+        result = []
+
+        for product in products:
+            product_dict = dict(product)
+
+            # Рассчитываем скидку для товара
+            product_discount = 0
+            discounted_price = product_dict['price']
+
+            for discount in discounts:
+                discount_dict = dict(discount)
+
+                # Проверяем применение скидки
+                applies = False
+
+                if discount_dict['apply_to_all']:
+                    applies = True
+                elif discount_dict['product_id'] and discount_dict['product_id'] == product_dict['id']:
+                    applies = True
+                elif discount_dict['category'] and product_dict['category'] == discount_dict['category']:
+                    applies = True
+
+                if applies:
+                    if discount_dict['discount_type'] == 'percentage':
+                        discount_amount = product_dict['price'] * (discount_dict['value'] / 100)
+                        if discount_dict['max_discount']:
+                            discount_amount = min(discount_amount, discount_dict['max_discount'])
+                        product_discount += discount_amount
+                    elif discount_dict['discount_type'] == 'fixed':
+                        product_discount += discount_dict['value']
+
+            if product_discount > 0:
+                discounted_price = max(0, product_dict['price'] - product_discount)
+                product_dict['original_price'] = product_dict['price']
+                product_dict['discount'] = product_discount
+                product_dict['discount_percentage'] = round((product_discount / product_dict['price']) * 100, 1)
+
+            product_dict['final_price'] = discounted_price
+            result.append(product_dict)
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Ошибка получения товаров со скидками: {e}")
+        # Возвращаем товары без скидок при ошибке
+        if 'products' in locals():
+            return jsonify([dict(p) for p in products])
+        return jsonify([])
+    finally:
+        db.close()
+
+
+
+
+
+
+
+
+
+
 
 
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])

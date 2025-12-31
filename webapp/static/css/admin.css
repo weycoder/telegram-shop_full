@@ -1703,3 +1703,309 @@ body.admin {
     background: #dc3545;
     color: #2d2d2d;
 }
+
+
+/* ========== СТИЛИ ДЛЯ ВЕСОВЫХ ТОВАРОВ И СКИДОК ========== */
+
+/* Переключатель типа товара */
+.product-mode-toggle {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 12px 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    background: white;
+    color: #495057;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.mode-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+    border-color: #667eea;
+    color: white;
+}
+
+/* Поля для весового товара */
+.weight-fields {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+}
+
+.weight-fields.active {
+    display: block;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Карточки скидок */
+.discounts-container {
+    padding: 20px;
+}
+
+.discounts-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.discounts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.discount-card {
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s;
+    border: 2px solid #e9ecef;
+}
+
+.discount-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+.discount-card.active {
+    border-color: #51cf66;
+}
+
+.discount-card.inactive {
+    border-color: #ffd8d8;
+    opacity: 0.8;
+}
+
+.discount-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.discount-type-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.discount-type-badge.percentage {
+    background: #d4edda;
+    color: #155724;
+}
+
+.discount-type-badge.fixed {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.discount-type-badge.bogo {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.discount-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.discount-body {
+    padding: 20px;
+}
+
+.discount-body h4 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+    font-size: 18px;
+}
+
+.discount-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #667eea;
+    margin-bottom: 15px;
+}
+
+.discount-info {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.discount-info p {
+    margin: 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.discount-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-badge.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.inactive {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.discount-id {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+/* Форма создания скидки */
+.create-discount-form {
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 8px;
+    transition: background 0.3s;
+}
+
+.radio-group label:hover {
+    background: #f8f9fa;
+}
+
+.radio-group input[type="radio"] {
+    width: 18px;
+    height: 18px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: #dee2e6;
+    margin-bottom: 20px;
+}
+
+.empty-state h3 {
+    margin: 0 0 10px 0;
+    color: #495057;
+}
+
+.empty-state p {
+    margin: 0 0 20px 0;
+}
+
+/* Стили для темной темы */
+.dark-mode .weight-fields {
+    background: #3d3d3d;
+    border-color: #444;
+}
+
+.dark-mode .discount-card {
+    background: #3d3d3d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+.dark-mode .discount-header {
+    background: linear-gradient(135deg, #4d4d4d 0%, #3d3d3d 100%);
+}
+
+.dark-mode .discount-body h4 {
+    color: #e0e0e0;
+}
+
+.dark-mode .discount-footer {
+    background: #4d4d4d;
+    border-top-color: #555;
+}
+
+.dark-mode .create-discount-form {
+    background: #3d3d3d;
+    color: #e0e0e0;
+}
+
+.dark-mode .radio-group label:hover {
+    background: #4d4d4d;
+}
+
+.dark-mode .empty-state {
+    color: #b0b0b0;
+}
+
+.dark-mode .empty-state i {
+    color: #555;
+}

@@ -1,4 +1,4 @@
-// Telegram Shop Админ Панель
+// Telegram Shop Админ Панель - Расширенная версия с весовыми товарами и скидками
 console.log('🚀 Админ панель загружается...');
 
 class AdminPanel {
@@ -13,6 +13,15 @@ class AdminPanel {
         this.isEditing = false;
         this.editingProductId = null;
 
+        // Новые свойства для весовых товаров и скидок
+        this.discounts = [];
+        this.promo_codes = [];
+        this.categories_tree = [];
+        this.selectedDiscount = null;
+
+        // Режим товара: 'piece' (штучный) или 'weight' (весовой)
+        this.productMode = 'piece';
+
         console.log('✅ Админ панель инициализирована');
         this.init();
     }
@@ -22,6 +31,7 @@ class AdminPanel {
         this.loadInitialData();
         this.bindFileUploadEvents();
         this.addAlertStyles();
+        this.addProductModeToggle();
     }
 
     bindEvents() {
@@ -36,7 +46,10 @@ class AdminPanel {
             });
         });
 
-            // Клик по строке заказа
+        // ДОБАВЛЯЕМ НОВЫЕ ССЫЛКИ В НАВИГАЦИЮ
+        this.addNavigationLinks();
+
+        // Клик по строке заказа
         document.addEventListener('click', (e) => {
             const orderRow = e.target.closest('.order-row');
             if (orderRow) {
@@ -58,7 +71,6 @@ class AdminPanel {
                 this.closeOrderDetails();
             }
         });
-
 
         document.querySelectorAll('.toggle-option input[type="radio"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -112,329 +124,192 @@ class AdminPanel {
         console.log('✅ Все обработчики назначены');
     }
 
-    async loadInitialData() {
-        try {
-            await Promise.all([
-                this.loadStats(),
-                this.loadProducts(),
-                this.loadOrders(),
-                this.loadCategories()
-            ]);
+    // ========== НОВЫЕ МЕТОДЫ ДЛЯ ВЕСОВЫХ ТОВАРОВ И СКИДОК ==========
 
-            this.updateLastUpdated();
-            this.showAlert('✅ Данные загружены', 'success');
+    addNavigationLinks() {
+        // Добавляем новые ссылки в сайдбар если их еще нет
+        const nav = document.querySelector('.admin-nav');
+        if (!nav) return;
 
-        } catch (error) {
-            console.error('❌ Ошибка загрузки данных:', error);
-            this.showAlert('❌ Ошибка загрузки данных', 'error');
+        // Проверяем, есть ли уже ссылки на скидки
+        if (!nav.querySelector('[data-page="discounts"]')) {
+            nav.innerHTML += `
+                <a href="#" class="nav-item" data-page="discounts">
+                    <i class="fas fa-percentage"></i>
+                    <span>Скидки</span>
+                </a>
+                <a href="#" class="nav-item" data-page="promo-codes">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>Промокоды</span>
+                </a>
+                <a href="#" class="nav-item" data-page="categories-tree">
+                    <i class="fas fa-sitemap"></i>
+                    <span>Дерево категорий</span>
+                </a>
+            `;
         }
     }
 
-    async loadStats() {
-        try {
-            console.log('📊 Загрузка статистики...');
-            const response = await fetch('/api/admin/dashboard');
+    addProductModeToggle() {
+        // Добавляем переключатель типа товара в форму
+        const form = document.getElementById('addProductForm');
+        if (!form) return;
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
+        // Находим секцию с основной информацией
+        const mainSection = form.querySelector('.form-section:first-child');
+        if (mainSection) {
+            // Добавляем переключатель после заголовка
+            const toggleHTML = `
+                <div class="form-group">
+                    <label>Тип товара:</label>
+                    <div class="product-mode-toggle">
+                        <button type="button" class="mode-btn ${this.productMode === 'piece' ? 'active' : ''}"
+                                onclick="admin.setProductMode('piece')">
+                            <i class="fas fa-cube"></i> Штучный
+                        </button>
+                        <button type="button" class="mode-btn ${this.productMode === 'weight' ? 'active' : ''}"
+                                onclick="admin.setProductMode('weight')">
+                            <i class="fas fa-weight-hanging"></i> Весовой
+                        </button>
+                    </div>
+                </div>
+            `;
 
-            const data = await response.json();
-
-            // Обновляем статистику
-            const formatPrice = (price) => {
-                return new Intl.NumberFormat('ru-RU').format(price || 0);
-            };
-
-            if (document.getElementById('totalRevenue')) {
-                document.getElementById('totalRevenue').textContent = `${formatPrice(data.total_revenue)} ₽`;
-            }
-            if (document.getElementById('totalOrders')) {
-                document.getElementById('totalOrders').textContent = formatPrice(data.total_orders);
-            }
-            if (document.getElementById('totalProducts')) {
-                document.getElementById('totalProducts').textContent = formatPrice(data.total_products);
-            }
-            if (document.getElementById('pendingOrders')) {
-                document.getElementById('pendingOrders').textContent = formatPrice(data.pending_orders);
-            }
-
-        } catch (error) {
-            console.error('Ошибка загрузки статистики:', error);
-        }
-    }
-
-    async loadProducts() {
-        try {
-            console.log('🛍️ Загрузка товаров...');
-            const response = await fetch('/api/admin/products');
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            this.products = await response.json();
-            this.renderProducts();
-
-        } catch (error) {
-            console.error('Ошибка загрузки товаров:', error);
-            this.products = [];
-            this.renderProducts();
-        }
-    }
-
-
-
-    async showOrderDetails(orderId) {
-        try {
-            console.log(`📋 Загрузка деталей заказа #${orderId}...`);
-
-            const response = await fetch(`/api/admin/orders/${orderId}`);
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const order = await response.json();
-            this.renderOrderDetails(order);
-
-        } catch (error) {
-            console.error('Ошибка загрузки деталей заказа:', error);
-            this.showAlert('❌ Ошибка загрузки деталей заказа', 'error');
-        }
-    }
-
-        // Метод для изменения статуса заказа
-    async changeOrderStatus(orderId, newStatus) {
-        if (!confirm(`Изменить статус заказа #${orderId} на "${newStatus}"?`)) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/admin/orders/${orderId}/status`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ status: newStatus })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.showAlert(`✅ Статус заказа обновлен на "${newStatus}"`, 'success');
-                this.closeOrderDetails();
-
-                // Перезагружаем заказы
-                await this.loadOrders();
+            // Вставляем после первого form-group
+            const firstFormGroup = mainSection.querySelector('.form-group:first-child');
+            if (firstFormGroup) {
+                firstFormGroup.insertAdjacentHTML('afterend', toggleHTML);
             } else {
-                this.showAlert(`❌ Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
+                mainSection.querySelector('.form-grid')?.insertAdjacentHTML('beforebegin', toggleHTML);
             }
-
-        } catch (error) {
-            console.error('Ошибка изменения статуса:', error);
-            this.showAlert('❌ Ошибка изменения статуса', 'error');
-        }
-    }
-
-
-    // Метод для отмены заказа
-    async cancelOrder(orderId) {
-        if (!confirm(`Отменить заказ #${orderId}? Это действие нельзя отменить.`)) {
-            return;
         }
 
-        try {
-            const response = await fetch(`/api/admin/orders/${orderId}/cancel`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
+        // Добавляем стили для переключателя
+        if (!document.getElementById('product-mode-styles')) {
+            const style = document.createElement('style');
+            style.id = 'product-mode-styles';
+            style.textContent = `
+                .product-mode-toggle {
+                    display: flex;
+                    gap: 10px;
+                    margin-top: 10px;
                 }
-            });
 
-            const result = await response.json();
+                .mode-btn {
+                    flex: 1;
+                    padding: 12px 20px;
+                    border: 2px solid #e9ecef;
+                    border-radius: 10px;
+                    background: white;
+                    color: #495057;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    transition: all 0.3s;
+                }
 
-            if (result.success) {
-                this.showAlert('✅ Заказ отменен', 'success');
-                this.closeOrderDetails();
+                .mode-btn:hover {
+                    border-color: #667eea;
+                    color: #667eea;
+                }
 
-                // Перезагружаем заказы
-                await this.loadOrders();
-            } else {
-                this.showAlert(`❌ Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
-            }
+                .mode-btn.active {
+                    background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+                    border-color: #667eea;
+                    color: white;
+                }
 
-        } catch (error) {
-            console.error('Ошибка отмены заказа:', error);
-            this.showAlert('❌ Ошибка отмены заказа', 'error');
-        }
-    }
+                .weight-fields {
+                    display: none;
+                }
 
-    // Метод для закрытия модального окна
-    closeOrderDetails() {
-        const modal = document.getElementById('orderDetailsModal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-    }
-
-
-        // Метод для рендеринга деталей заказа
-    renderOrderDetails(order) {
-        const modal = document.getElementById('orderDetailsModal');
-        const content = document.getElementById('orderDetailsContent');
-
-        if (!modal || !content) return;
-
-        // Парсим данные
-        const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items || [];
-        const deliveryAddress = typeof order.delivery_address === 'string'
-            ? JSON.parse(order.delivery_address)
-            : order.delivery_address || {};
-
-        const paymentMethods = {
-            'cash': 'Наличные',
-            'transfer': 'Перевод курьеру',
-            'terminal': 'Терминал'
-        };
-
-        const statusTexts = {
-            'pending': 'Ожидает обработки',
-            'processing': 'В обработке',
-            'delivering': 'Доставляется',
-            'completed': 'Завершен',
-            'cancelled': 'Отменен'
-        };
-
-        const deliveryTypes = {
-            'courier': 'Доставка курьером',
-            'pickup': 'Самовывоз'
-        };
-
-        // Рассчитываем общую сумму
-        const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-        // Генерируем HTML для товаров
-        let itemsHTML = '';
-        items.forEach(item => {
-            itemsHTML += `
-                <div class="order-item">
-                    <div class="item-name">${item.name}</div>
-                    <div class="item-quantity">${item.quantity} × ${this.formatPrice(item.price)} ₽</div>
-                    <div class="item-total">${this.formatPrice(item.price * item.quantity)} ₽</div>
-                </div>
+                .weight-fields.active {
+                    display: block;
+                }
             `;
+            document.head.appendChild(style);
+        }
+    }
+
+    setProductMode(mode) {
+        this.productMode = mode;
+
+        // Обновляем активные кнопки
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.classList.remove('active');
         });
+        document.querySelector(`.mode-btn[onclick*="${mode}"]`)?.classList.add('active');
 
-        // Генерируем HTML для адреса
-        let addressHTML = '';
-        if (order.delivery_type === 'courier' && deliveryAddress) {
-            addressHTML = `
-                <div class="address-section">
-                    <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
-                    <div class="address-details">
-                        ${deliveryAddress.city ? `<p><strong>Город:</strong> ${deliveryAddress.city}</p>` : ''}
-                        ${deliveryAddress.street ? `<p><strong>Улица:</strong> ${deliveryAddress.street}, ${deliveryAddress.house || ''}</p>` : ''}
-                        ${deliveryAddress.apartment ? `<p><strong>Квартира:</strong> ${deliveryAddress.apartment}</p>` : ''}
-                        ${deliveryAddress.floor ? `<p><strong>Этаж:</strong> ${deliveryAddress.floor}</p>` : ''}
-                        ${deliveryAddress.doorcode ? `<p><strong>Домофон:</strong> ${deliveryAddress.doorcode}</p>` : ''}
-                        ${deliveryAddress.recipient_name ? `<p><strong>Получатель:</strong> ${deliveryAddress.recipient_name}</p>` : ''}
-                        ${deliveryAddress.phone ? `<p><strong>Телефон:</strong> ${deliveryAddress.phone}</p>` : ''}
-                    </div>
-                </div>
-            `;
+        // Показываем/скрываем поля для весового товара
+        const weightFields = document.querySelector('.weight-fields');
+        if (!weightFields) {
+            this.createWeightFields();
+        } else {
+            if (mode === 'weight') {
+                weightFields.classList.add('active');
+            } else {
+                weightFields.classList.remove('active');
+            }
         }
+    }
 
-        content.innerHTML = `
-            <div class="modal-header">
-                <h2><i class="fas fa-clipboard-list"></i> Заказ #${order.id}</h2>
-                <button class="close-modal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
+    createWeightFields() {
+        // Находим форму и добавляем поля для весового товара
+        const form = document.getElementById('addProductForm');
+        if (!form) return;
 
-            <div class="modal-body">
-                <!-- Основная информация -->
-                <div class="order-info-grid">
-                    <div class="info-card">
-                        <h4><i class="fas fa-user"></i> Информация о клиенте</h4>
-                        <p><strong>Имя:</strong> ${order.username || `Пользователь ${order.user_id}`}</p>
-                        <p><strong>Telegram ID:</strong> ${order.user_id || 'Не указан'}</p>
-                        ${order.phone_number ? `<p><strong>Телефон:</strong> ${order.phone_number}</p>` : ''}
+        // Находим секцию с ценой
+        const priceSection = form.querySelector('.form-section:nth-child(2)');
+        if (!priceSection) return;
+
+        // Добавляем поля для весового товара
+        const weightFieldsHTML = `
+            <div class="weight-fields ${this.productMode === 'weight' ? 'active' : ''}">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="pricePerUnit">Цена за единицу (₽)</label>
+                        <input type="number" id="pricePerUnit" step="0.01" placeholder="150">
+                        <small>Цена за кг/литр/метр</small>
                     </div>
 
-                    <div class="info-card">
-                        <h4><i class="fas fa-truck"></i> Доставка и оплата</h4>
-                        <p><strong>Способ:</strong> ${deliveryTypes[order.delivery_type] || order.delivery_type}</p>
-                        <p><strong>Оплата:</strong> ${paymentMethods[order.payment_method] || order.payment_method}</p>
+                    <div class="form-group">
+                        <label for="unit">Единица измерения</label>
+                        <select id="unit">
+                            <option value="кг">Килограмм (кг)</option>
+                            <option value="г">Грамм (г)</option>
+                            <option value="л">Литр (л)</option>
+                            <option value="мл">Миллилитр (мл)</option>
+                            <option value="м">Метр (м)</option>
+                            <option value="см">Сантиметр (см)</option>
+                        </select>
                     </div>
 
-                    <div class="info-card">
-                        <h4><i class="fas fa-history"></i> Статус и даты</h4>
-                        <p><strong>Статус:</strong>
-                            <span class="status-badge status-${order.status}">
-                                ${statusTexts[order.status] || order.status}
-                            </span>
-                        </p>
-                        <p><strong>Создан:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
-                        ${order.updated_at ? `<p><strong>Обновлен:</strong> ${new Date(order.updated_at).toLocaleString('ru-RU')}</p>` : ''}
+                    <div class="form-group">
+                        <label for="minWeight">Минимальный вес</label>
+                        <input type="number" id="minWeight" step="0.001" value="0.1" placeholder="0.1">
+                        <small>Минимальное количество для заказа</small>
                     </div>
-                </div>
 
-                <!-- Адрес доставки -->
-                ${addressHTML}
-
-                <!-- Список товаров -->
-                <div class="items-section">
-                    <h4><i class="fas fa-shopping-cart"></i> Состав заказа</h4>
-                    <div class="items-list">
-                        ${itemsHTML}
-                    </div>
-                    <div class="items-total">
-                        <div class="total-row">
-                            <span>Товары:</span>
-                            <span>${this.formatPrice(totalAmount)} ₽</span>
-                        </div>
-                        ${order.delivery_type === 'courier' && totalAmount < 1000 ? `
-                            <div class="total-row">
-                                <span>Доставка:</span>
-                                <span>100 ₽</span>
-                            </div>
-                        ` : ''}
-                        <div class="total-row grand-total">
-                            <span><strong>Итого к оплате:</strong></span>
-                            <span><strong>${this.formatPrice(order.total_price || totalAmount + (totalAmount < 1000 && order.delivery_type === 'courier' ? 100 : 0))} ₽</strong></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Действия с заказом -->
-                <div class="order-actions">
-                    <h4><i class="fas fa-cogs"></i> Управление заказом</h4>
-                    <div class="action-buttons">
-                        <button class="btn-action btn-status ${order.status === 'pending' ? 'active' : ''}"
-                                onclick="admin.changeOrderStatus(${order.id}, 'processing')">
-                            <i class="fas fa-play"></i> В обработку
-                        </button>
-                        <button class="btn-action btn-status ${order.status === 'processing' ? 'active' : ''}"
-                                onclick="admin.changeOrderStatus(${order.id}, 'delivering')">
-                            <i class="fas fa-truck"></i> В доставку
-                        </button>
-                        <button class="btn-action btn-status ${order.status === 'delivering' ? 'active' : ''}"
-                                onclick="admin.changeOrderStatus(${order.id}, 'completed')">
-                            <i class="fas fa-check"></i> Завершить
-                        </button>
-                        <button class="btn-action btn-danger"
-                                onclick="admin.cancelOrder(${order.id})">
-                            <i class="fas fa-times"></i> Отменить
-                        </button>
+                    <div class="form-group">
+                        <label for="stepWeight">Шаг взвешивания</label>
+                        <input type="number" id="stepWeight" step="0.001" value="0.1" placeholder="0.1">
+                        <small>С каким шагом можно заказывать</small>
                     </div>
                 </div>
             </div>
         `;
 
-        modal.style.display = 'flex';
+        // Вставляем после основной цены
+        const priceGrid = priceSection.querySelector('.form-grid');
+        if (priceGrid) {
+            priceGrid.insertAdjacentHTML('afterend', weightFieldsHTML);
+        }
     }
+
+    // ========== ОБНОВЛЕННЫЙ МЕТОД РЕНДЕРИНГА ТОВАРОВ ==========
 
     renderProducts() {
         const tbody = document.getElementById('productsTableBody');
@@ -443,7 +318,7 @@ class AdminPanel {
         if (!this.products || this.products.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" style="text-align: center; padding: 40px;">
+                    <td colspan="8" style="text-align: center; padding: 40px;">
                         <i class="fas fa-box-open" style="font-size: 48px; color: #ddd;"></i>
                         <p style="margin-top: 15px; color: #6c757d;">Товары не найдены</p>
                     </td>
@@ -473,6 +348,19 @@ class AdminPanel {
                 ? description.substring(0, 60) + '...'
                 : description;
 
+            // Определяем тип товара
+            const productType = product.product_type || 'piece';
+            const unit = product.unit || (productType === 'weight' ? 'кг' : 'шт');
+            const stockDisplay = productType === 'weight'
+                ? `${product.stock_weight || 0} ${unit}`
+                : `${product.stock} ${unit}`;
+
+            // Определяем цену
+            let priceDisplay = `${this.formatPrice(product.price)} ₽`;
+            if (productType === 'weight' && product.price_per_unit) {
+                priceDisplay = `${this.formatPrice(product.price_per_unit)} ₽/${unit}`;
+            }
+
             html += `
                 <tr>
                     <td style="font-weight: 600; color: #2c3e50;">#${product.id}</td>
@@ -485,12 +373,16 @@ class AdminPanel {
                     <td>
                         <div style="font-weight: 600; color: #2c3e50; margin-bottom: 5px;">${product.name}</div>
                         <div style="color: #6c757d; font-size: 14px;">${shortDescription}</div>
+                        <div style="font-size: 12px; color: #667eea; margin-top: 5px;">
+                            <i class="fas ${productType === 'weight' ? 'fa-weight-hanging' : 'fa-cube'}"></i>
+                            ${productType === 'weight' ? 'Весовой товар' : 'Штучный товар'}
+                        </div>
                     </td>
-                    <td style="font-weight: 700; color: #667eea;">${this.formatPrice(product.price)} ₽</td>
+                    <td style="font-weight: 700; color: #667eea;">${priceDisplay}</td>
                     <td>
                         <span class="stock-indicator ${stockClass}">
-                            <i class="fas ${product.stock > 0 ? 'fa-box' : 'fa-box-open'}"></i>
-                            ${product.stock} шт.
+                            <i class="fas ${(product.stock > 0 || product.stock_weight > 0) ? 'fa-box' : 'fa-box-open'}"></i>
+                            ${stockDisplay}
                         </span>
                     </td>
                     <td>
@@ -515,399 +407,84 @@ class AdminPanel {
         tbody.innerHTML = html;
     }
 
-    async loadOrders() {
-        try {
-            console.log('📋 Загрузка заказов...');
-            const response = await fetch('/api/admin/orders');
+    // ========== ОБНОВЛЕННЫЙ МЕТОД EDITPRODUCT ==========
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            this.orders = await response.json();
-            this.renderOrders();
-
-        } catch (error) {
-            console.error('Ошибка загрузки заказов:', error);
-            this.orders = [];
-            this.renderOrders();
-        }
-    }
-
-    renderOrders() {
-        const tbody = document.getElementById('ordersTableBody');
-        if (!tbody) return;
-
-        if (!this.orders || this.orders.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 40px;">
-                        <i class="fas fa-clipboard-list" style="font-size: 48px; color: #ddd;"></i>
-                        <p style="margin-top: 15px; color: #6c757d;">Заказы не найдены</p>
-                    </td>
-                </tr>
-            `;
+    editProduct(id) {
+        const product = this.products.find(p => p.id === id);
+        if (!product) {
+            this.showAlert('❌ Товар не найден', 'error');
             return;
         }
 
-        let html = '';
+        console.log(`✏️ Редактирование товара #${id}`);
 
-        this.orders.forEach(order => {
-            // Парсим товары
-            let items = [];
-            try {
-                items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
-            } catch (e) {
-                items = [];
-            }
+        // Определяем тип товара
+        const productType = product.product_type || 'piece';
+        this.setProductMode(productType);
 
-            const itemCount = Array.isArray(items) ? items.length : 0;
-            const status = order.status || 'pending';
+        // Заполняем форму
+        document.getElementById('productName').value = product.name;
+        document.getElementById('productPrice').value = product.price;
+        document.getElementById('productStock').value = product.stock || 0;
+        document.getElementById('productDescription').value = product.description || '';
+        document.getElementById('productImageUrl').value = product.image_url || '';
 
-            // Цвета статусов
-            const statusColors = {
-                'pending': { bg: '#fff3cd', color: '#856404', text: 'Ожидает' },
-                'processing': { bg: '#cce5ff', color: '#004085', text: 'В обработке' },
-                'completed': { bg: '#d4edda', color: '#155724', text: 'Завершен' },
-                'cancelled': { bg: '#f8d7da', color: '#721c24', text: 'Отменен' }
-            };
-
-            const statusInfo = statusColors[status] || statusColors.pending;
-
-            html += `
-                <tr class="order-row" data-order-id="${order.id}" style="cursor: pointer;">
-                    <td style="font-weight: 600; color: #2c3e50;">#${order.id}</td>
-                    <td>
-                        <div style="font-weight: 600; color: #2c3e50;">${order.username || `Пользователь ${order.user_id}`}</div>
-                        <div style="color: #6c757d; font-size: 14px;">${itemCount} товаров</div>
-                    </td>
-                    <td style="font-weight: 700; color: #667eea;">${this.formatPrice(order.total_price)} ₽</td>
-                    <td>
-                        <span style="background: ${statusInfo.bg}; color: ${statusInfo.color}; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 500;">
-                            ${statusInfo.text}
-                        </span>
-                    </td>
-                    <td>
-                        ${new Date(order.created_at).toLocaleDateString('ru-RU', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        })}
-                    </td>
-                </tr>
-            `;
-        });
-
-        tbody.innerHTML = html;
-    }
-
-    bindFileUploadEvents() {
-        const fileInput = document.getElementById('productImageFile');
-        const uploadArea = document.getElementById('fileUploadArea');
-        const urlInput = document.getElementById('productImageUrl');
-
-        if (!fileInput || !uploadArea || !urlInput) return;
-
-        // Клик по области загрузки
-        uploadArea.addEventListener('click', (e) => {
-            if (!e.target.closest('.file-info')) {
-                fileInput.click();
-            }
-        });
-
-        // Выбор файла
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                this.handleFileSelect(file);
-            }
-        });
-
-        // Drag & Drop
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.style.borderColor = '#5a67d8';
-            uploadArea.style.background = 'rgba(102, 126, 234, 0.1)';
-        });
-
-        uploadArea.addEventListener('dragleave', (e) => {
-            uploadArea.style.borderColor = '#667eea';
-            uploadArea.style.background = 'rgba(102, 126, 234, 0.05)';
-        });
-
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.style.borderColor = '#667eea';
-            uploadArea.style.background = 'rgba(102, 126, 234, 0.05)';
-
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                this.handleFileSelect(file);
-            } else {
-                this.showAlert('❌ Пожалуйста, выберите файл изображения', 'error');
-            }
-        });
-
-        // Предпросмотр URL
-        urlInput.addEventListener('input', (e) => {
-            this.updateImagePreview(e.target.value);
-        });
-    }
-
-        // Обработка выбора файла
-    handleFileSelect(file) {
-        if (!file.type.startsWith('image/')) {
-            this.showAlert('❌ Пожалуйста, выберите файл изображения', 'error');
-            return;
+        // Заполняем поля для весового товара
+        if (productType === 'weight') {
+            document.getElementById('pricePerUnit').value = product.price_per_unit || product.price;
+            document.getElementById('unit').value = product.unit || 'кг';
+            document.getElementById('minWeight').value = product.min_weight || 0.1;
+            document.getElementById('stepWeight').value = product.step_weight || 0.1;
         }
 
-        if (file.size > 10 * 1024 * 1024) { // 10MB лимит
-            this.showAlert('❌ Файл слишком большой (макс. 10MB)', 'error');
-            return;
+        // Устанавливаем категорию
+        const categorySelect = document.getElementById('productCategory');
+        if (categorySelect && product.category) {
+            categorySelect.value = product.category;
         }
 
-        this.selectedFile = file;
+        // Сбрасываем файл
+        this.selectedFile = null;
+        document.getElementById('fileInfo').style.display = 'none';
 
-        // Показываем информацию о файле
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const filePreview = document.getElementById('filePreview');
+        // Показываем предпросмотр из URL
+        this.updateImagePreview(product.image_url);
 
-        fileName.textContent = file.name;
-
-        // Создаем превью
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            filePreview.src = e.target.result;
-            this.updateImagePreview(e.target.result);
-        };
-        reader.readAsDataURL(file);
-
-        fileInfo.style.display = 'flex';
-
-        // Автоматически переключаемся на режим файла
-        this.imageSourceType = 'file';
+        // Определяем тип источника (файл или URL)
+        if (product.image_url && product.image_url.startsWith('http')) {
+            this.imageSourceType = 'url';
+        } else {
+            this.imageSourceType = 'file';
+        }
         this.updateImageSourceUI();
 
-        this.showAlert(`✅ Файл "${file.name}" выбран`, 'success');
+        // Устанавливаем режим редактирования
+        this.isEditing = true;
+        this.editingProductId = id;
+
+        // Меняем заголовок и кнопку
+        document.querySelector('#add-product h2').textContent = 'Редактировать товар';
+        const submitBtn = document.querySelector('#addProductForm button[type="submit"]');
+        submitBtn.innerHTML = '<i class="fas fa-save"></i> Обновить товар';
+
+        // Показываем страницу
+        this.showPage('add-product');
     }
 
-        // Удаление файла
-    removeFile() {
-        this.selectedFile = null;
-
-        const fileInfo = document.getElementById('fileInfo');
-        const fileInput = document.getElementById('productImageFile');
-
-        fileInfo.style.display = 'none';
-        fileInput.value = '';
-
-        this.updateImagePreview('');
-        this.showAlert('🗑️ Файл удален', 'info');
-    }
-
-        // Обновление UI источника изображения
-    updateImageSourceUI() {
-        const fileSection = document.getElementById('fileUploadArea');
-        const urlInput = document.getElementById('productImageUrl');
-
-        if (this.imageSourceType === 'file') {
-            fileSection.parentElement.style.display = 'block';
-            urlInput.parentElement.style.display = 'none';
-        } else {
-            fileSection.parentElement.style.display = 'none';
-            urlInput.parentElement.style.display = 'block';
-        }
-    }
-
-
-    // Обновление предпросмотра
-    updateImagePreview(src) {
-        const previewContainer = document.getElementById('imagePreviewContainer');
-        const preview = document.getElementById('imagePreview');
-
-        if (src) {
-            preview.src = src;
-            previewContainer.style.display = 'block';
-        } else {
-            previewContainer.style.display = 'none';
-        }
-    }
-
-
-    async loadCategories() {
-        try {
-            console.log('📂 Загрузка категорий...');
-            const response = await fetch('/api/admin/categories/manage');
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            this.categories = await response.json();
-            this.renderCategories();
-            this.updateCategorySelect();
-
-        } catch (error) {
-            console.error('Ошибка загрузки категорий:', error);
-            this.categories = [];
-            this.renderCategories();
-        }
-    }
-
-
-    renderCategories() {
-        const list = document.getElementById('categoriesList');
-        if (!list) return;
-
-        if (!this.categories || this.categories.length === 0) {
-            list.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: #6c757d;">
-                    <i class="fas fa-tags" style="font-size: 32px; opacity: 0.3; margin-bottom: 10px;"></i>
-                    <p>Категорий пока нет</p>
-                </div>
-            `;
-            return;
-        }
-
-        let html = '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
-
-        this.categories.forEach(category => {
-            html += `
-                <div class="category-tag">
-                    <i class="fas fa-tag"></i>
-                    <span>${category}</span>
-                    <button onclick="admin.deleteCategory('${category}')" title="Удалить категорию">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-        });
-
-        html += '</div>';
-        list.innerHTML = html;
-    }
-
-    updateCategorySelect() {
-        const select = document.getElementById('productCategory');
-        if (!select) return;
-
-        // Сохраняем текущее значение
-        const currentValue = select.value;
-
-        // Очищаем и добавляем опции
-        select.innerHTML = '<option value="">Выберите категорию</option>';
-
-        this.categories.forEach(category => {
-            const option = document.createElement('option');
-            option.value = category;
-            option.textContent = category;
-            select.appendChild(option);
-        });
-
-        // Восстанавливаем выбранное значение
-        if (currentValue) {
-            select.value = currentValue;
-        }
-    }
-
-    async addCategory() {
-        const input = document.getElementById('newCategory');
-        const categoryName = input.value.trim();
-
-        if (!categoryName) {
-            this.showAlert('❌ Введите название категории', 'error');
-            return;
-        }
-
-        if (categoryName.length < 2) {
-            this.showAlert('❌ Название должно быть не менее 2 символов', 'error');
-            return;
-        }
-
-        // Проверяем, нет ли уже такой категории
-        if (this.categories.includes(categoryName)) {
-            this.showAlert('❌ Такая категория уже существует', 'error');
-            return;
-        }
-
-        try {
-            console.log(`➕ Добавление категории: ${categoryName}`);
-
-            const response = await fetch('/api/admin/categories/manage', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name: categoryName })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.showAlert(`✅ Категория "${categoryName}" успешно создана!`, 'success');
-                input.value = '';
-
-                // Перезагружаем категории
-                await this.loadCategories();
-
-            } else {
-                this.showAlert(`❌ Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
-            }
-
-        } catch (error) {
-            console.error('Ошибка добавления категории:', error);
-            this.showAlert('❌ Ошибка соединения с сервером', 'error');
-        }
-    }
-
-    async deleteCategory(categoryName) {
-        if (!confirm(`Удалить категорию "${categoryName}"?\n\nТовары этой категории будут перемещены в "без категории".`)) {
-            return;
-        }
-
-        try {
-            console.log(`🗑️ Удаление категории: ${categoryName}`);
-
-            const response = await fetch(`/api/admin/categories/manage?name=${encodeURIComponent(categoryName)}`, {
-                method: 'DELETE'
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.showAlert(`✅ Категория "${categoryName}" удалена`, 'success');
-
-                // Перезагружаем категории и товары
-                await Promise.all([
-                    this.loadCategories(),
-                    this.loadProducts()
-                ]);
-
-            } else {
-                this.showAlert(`❌ Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
-            }
-
-        } catch (error) {
-            console.error('Ошибка удаления категории:', error);
-            this.showAlert('❌ Ошибка соединения с сервером', 'error');
-        }
-    }
+    // ========== ОБНОВЛЕННЫЙ МЕТОД HANDLEPRODUCTSUBMIT ==========
 
     async handleProductSubmit(e) {
         e.preventDefault();
 
         const name = document.getElementById('productName').value.trim();
         const price = parseFloat(document.getElementById('productPrice').value);
-        const stock = parseInt(document.getElementById('productStock').value);
+        const stock = parseInt(document.getElementById('productStock').value) || 0;
         const category = document.getElementById('productCategory').value;
         const description = document.getElementById('productDescription').value.trim();
         const imageUrl = document.getElementById('productImageUrl').value.trim();
 
         // Валидация
-        if (!name || isNaN(price) || price <= 0 || isNaN(stock) || stock < 0) {
+        if (!name || isNaN(price) || price <= 0) {
             this.showAlert('❌ Заполните обязательные поля правильно', 'error');
             return;
         }
@@ -926,14 +503,33 @@ class AdminPanel {
             }
         }
 
-        const productData = {
+        // Подготавливаем данные в зависимости от типа товара
+        let productData = {
             name: name,
             description: description,
             price: price,
             stock: stock,
             category: category,
-            image_url: finalImageUrl
+            image_url: finalImageUrl,
+            product_type: this.productMode
         };
+
+        // Добавляем данные для весового товара
+        if (this.productMode === 'weight') {
+            const pricePerUnit = parseFloat(document.getElementById('pricePerUnit').value) || price;
+            const unit = document.getElementById('unit').value;
+            const minWeight = parseFloat(document.getElementById('minWeight').value) || 0.1;
+            const stepWeight = parseFloat(document.getElementById('stepWeight').value) || 0.1;
+
+            productData = {
+                ...productData,
+                unit: unit,
+                price_per_unit: pricePerUnit,
+                min_weight: minWeight,
+                step_weight: stepWeight,
+                stock_weight: stock // Для весовых используем stock_weight
+            };
+        }
 
         console.log('📤 Отправляем товар:', productData);
 
@@ -941,8 +537,8 @@ class AdminPanel {
             let response;
 
             if (this.isEditing && this.editingProductId) {
-                // Редактирование существующего товара
-                response = await fetch(`/api/admin/products?id=${this.editingProductId}`, {
+                // Редактирование существующего товара с новым API
+                response = await fetch(`/api/admin/products/update?id=${this.editingProductId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -950,8 +546,8 @@ class AdminPanel {
                     body: JSON.stringify(productData)
                 });
             } else {
-                // Добавление нового товара
-                response = await fetch('/api/admin/products', {
+                // Создание нового товара с новым API
+                response = await fetch('/api/admin/products/create', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -988,204 +584,119 @@ class AdminPanel {
         }
     }
 
+    // ========== НОВЫЕ МЕТОДЫ ДЛЯ СКИДОК ==========
 
-        // Показать прогресс загрузки
-    showUploadProgress(percent) {
-        let progressContainer = document.getElementById('uploadProgressContainer');
+    async loadDiscounts() {
+        try {
+            console.log('🏷️ Загрузка скидок...');
+            const response = await fetch('/api/admin/discounts');
 
-        if (!progressContainer) {
-            progressContainer = document.createElement('div');
-            progressContainer.id = 'uploadProgressContainer';
-            progressContainer.className = 'upload-progress';
-            progressContainer.innerHTML = `
-                <div>Загрузка: <span id="uploadPercent">0</span>%</div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            this.discounts = await response.json();
+            this.renderDiscounts();
+
+        } catch (error) {
+            console.error('Ошибка загрузки скидок:', error);
+            this.discounts = [];
+            this.renderDiscounts();
+        }
+    }
+
+    renderDiscounts() {
+        const container = document.getElementById('discountsContainer');
+        if (!container) return;
+
+        if (!this.discounts || this.discounts.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-percentage"></i>
+                    <h3>Скидок пока нет</h3>
+                    <p>Создайте первую скидку</p>
+                    <button class="btn btn-primary" onclick="admin.showCreateDiscountForm()">
+                        <i class="fas fa-plus"></i> Создать скидку
+                    </button>
                 </div>
             `;
-
-            const form = document.getElementById('addProductForm');
-            form.insertBefore(progressContainer, form.querySelector('.form-actions'));
-        }
-
-        document.getElementById('uploadPercent').textContent = Math.round(percent);
-        document.getElementById('progressFill').style.width = percent + '%';
-    }
-
-    // Скрыть прогресс загрузки
-    hideUploadProgress() {
-        const progressContainer = document.getElementById('uploadProgressContainer');
-        if (progressContainer) {
-            progressContainer.remove();
-        }
-    }
-
-        // Метод для загрузки файла на сервер
-    async uploadFile(file) {
-        return new Promise((resolve, reject) => {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            // Создаем прогресс-бар
-            this.showUploadProgress(0);
-
-            const xhr = new XMLHttpRequest();
-
-            xhr.upload.addEventListener('progress', (e) => {
-                if (e.lengthComputable) {
-                    const percentComplete = (e.loaded / e.total) * 100;
-                    this.showUploadProgress(percentComplete);
-                }
-            });
-
-            xhr.addEventListener('load', () => {
-                if (xhr.status === 200) {
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        if (response.success) {
-                            this.showUploadProgress(100);
-                            setTimeout(() => {
-                                this.hideUploadProgress();
-                            }, 1000);
-                            resolve(response.file_url);
-                        } else {
-                            reject(new Error(response.error || 'Ошибка сервера'));
-                        }
-                    } catch (e) {
-                        reject(new Error('Ошибка парсинга ответа'));
-                    }
-                } else {
-                    reject(new Error(`HTTP ${xhr.status}`));
-                }
-            });
-
-            xhr.addEventListener('error', () => {
-                reject(new Error('Ошибка сети'));
-            });
-
-            xhr.open('POST', '/api/admin/upload');
-            xhr.send(formData);
-        });
-    }
-
-       // Обновленный метод editProduct
-    editProduct(id) {
-        const product = this.products.find(p => p.id === id);
-        if (!product) {
-            this.showAlert('❌ Товар не найден', 'error');
             return;
         }
 
-        console.log(`✏️ Редактирование товара #${id}`);
+        let html = `
+            <div class="discounts-header">
+                <h3>Активные скидки</h3>
+                <button class="btn btn-primary" onclick="admin.showCreateDiscountForm()">
+                    <i class="fas fa-plus"></i> Новая скидка
+                </button>
+            </div>
+            <div class="discounts-grid">
+        `;
 
-        // Заполняем форму
-        document.getElementById('productName').value = product.name;
-        document.getElementById('productPrice').value = product.price;
-        document.getElementById('productStock').value = product.stock;
-        document.getElementById('productDescription').value = product.description || '';
-        document.getElementById('productImageUrl').value = product.image_url || '';
+        this.discounts.forEach(discount => {
+            const discountTypeText = {
+                'percentage': '%',
+                'fixed': '₽',
+                'bogo': '1+1'
+            }[discount.discount_type] || discount.discount_type;
 
-        // Устанавливаем категорию
-        const categorySelect = document.getElementById('productCategory');
-        if (categorySelect && product.category) {
-            categorySelect.value = product.category;
-        }
+            const valueDisplay = discount.discount_type === 'percentage'
+                ? `${discount.value}%`
+                : `${this.formatPrice(discount.value)} ₽`;
 
-        // Сбрасываем файл
-        this.selectedFile = null;
-        document.getElementById('fileInfo').style.display = 'none';
+            const statusClass = discount.is_active ? 'active' : 'inactive';
+            const statusText = discount.is_active ? 'Активна' : 'Неактивна';
 
-        // Показываем предпросмотр из URL
-        this.updateImagePreview(product.image_url);
-
-        // Определяем тип источника (файл или URL)
-        if (product.image_url && product.image_url.startsWith('http')) {
-            this.imageSourceType = 'url';
-        } else {
-            this.imageSourceType = 'file';
-        }
-        this.updateImageSourceUI();
-
-        // Устанавливаем режим редактирования
-        this.isEditing = true;
-        this.editingProductId = id;
-
-        // Меняем заголовок и кнопку
-        document.querySelector('#add-product h2').textContent = 'Редактировать товар';
-        const submitBtn = document.querySelector('#addProductForm button[type="submit"]');
-        submitBtn.innerHTML = '<i class="fas fa-save"></i> Обновить товар';
-
-        // Показываем страницу
-        this.showPage('add-product');
-    }
-
-    async deleteProduct(id) {
-        if (!confirm(`Удалить товар #${id}? Это действие нельзя отменить.`)) {
-            return;
-        }
-
-        console.log(`🗑️ Удаление товара #${id}`);
-
-        try {
-            const response = await fetch(`/api/admin/products?id=${id}`, {
-                method: 'DELETE'
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.showAlert('✅ Товар удален!', 'success');
-                await this.loadProducts();
-            } else {
-                this.showAlert('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            let applicationsText = '';
+            if (discount.applications && discount.applications.length > 0) {
+                const app = discount.applications[0];
+                if (app.apply_to_all) {
+                    applicationsText = 'На все товары';
+                } else if (app.product_id) {
+                    applicationsText = 'На конкретный товар';
+                } else if (app.category) {
+                    applicationsText = `На категорию: ${app.category}`;
+                }
             }
-        } catch (error) {
-            console.error('Ошибка удаления:', error);
-            this.showAlert('❌ Ошибка удаления товара', 'error');
-        }
+
+            html += `
+                <div class="discount-card ${statusClass}">
+                    <div class="discount-header">
+                        <div class="discount-type-badge ${discount.discount_type}">
+                            ${discountTypeText}
+                        </div>
+                        <div class="discount-actions">
+                            <button class="btn-icon btn-edit" onclick="admin.editDiscount(${discount.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-icon btn-delete" onclick="admin.deleteDiscount(${discount.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="discount-body">
+                        <h4>${discount.name}</h4>
+                        <div class="discount-value">${valueDisplay}</div>
+                        <div class="discount-info">
+                            <p><i class="fas fa-tag"></i> ${applicationsText || 'Без применения'}</p>
+                            <p><i class="fas fa-clock"></i> Срок: ${discount.start_date ? new Date(discount.start_date).toLocaleDateString('ru-RU') : 'Не ограничен'}</p>
+                        </div>
+                    </div>
+
+                    <div class="discount-footer">
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                        <span class="discount-id">ID: ${discount.id}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `</div>`;
+        container.innerHTML = html;
     }
 
-    showAddProduct() {
-        // Сбрасываем форму
-        this.resetProductForm();
-
-        // Снимаем режим редактирования
-        this.isEditing = false;
-        this.editingProductId = null;
-
-        // Восстанавливаем заголовок и кнопку
-        document.querySelector('#add-product h2').textContent = 'Добавить новый товар';
-        const submitBtn = document.querySelector('#addProductForm button[type="submit"]');
-        submitBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить товар';
-
-        // Показываем страницу
-        this.showPage('add-product');
-    }
-
-    // Обновленный метод resetProductForm
-    resetProductForm() {
-        const form = document.getElementById('addProductForm');
-        if (form) {
-            form.reset();
-            document.getElementById('productImageUrl').value = '';
-
-            // Сбрасываем файл
-            this.selectedFile = null;
-            document.getElementById('fileInfo').style.display = 'none';
-            document.getElementById('productImageFile').value = '';
-
-            // Скрываем предпросмотр
-            document.getElementById('imagePreviewContainer').style.display = 'none';
-
-            // Сбрасываем тип источника
-            this.imageSourceType = 'url';
-            this.updateImageSourceUI();
-
-            // Скрываем прогресс
-            this.hideUploadProgress();
-        }
-    }
-
+    // ========== ОБНОВЛЕННЫЙ МЕТОД SHOWPAGE ==========
 
     showPage(pageId) {
         console.log(`📄 Показываем страницу: ${pageId}`);
@@ -1219,7 +730,10 @@ class AdminPanel {
             'products': 'Управление товарами',
             'orders': 'Заказы',
             'add-product': 'Добавить товар',
-            'categories': 'Управление категориями'
+            'categories': 'Управление категориями',
+            'discounts': 'Скидки',
+            'promo-codes': 'Промокоды',
+            'categories-tree': 'Дерево категорий'
         };
 
         const titleElement = document.getElementById('pageTitle');
@@ -1234,133 +748,299 @@ class AdminPanel {
             this.loadProducts();
         } else if (pageId === 'categories') {
             this.loadCategories();
+        } else if (pageId === 'discounts') {
+            this.loadDiscounts();
+        } else if (pageId === 'promo-codes') {
+            this.loadPromoCodes();
+        } else if (pageId === 'categories-tree') {
+            this.loadCategoriesTree();
         }
     }
 
-    refreshCurrentPage() {
-        this.showAlert('🔄 Обновление данных...', 'info');
+    // ========== НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ СО СКИДКАМИ ==========
 
-        if (this.currentPage === 'dashboard') {
-            this.loadStats();
-        } else if (this.currentPage === 'products') {
-            this.loadProducts();
-        } else if (this.currentPage === 'orders') {
-            this.loadOrders();
-        } else if (this.currentPage === 'categories') {
-            this.loadCategories();
-        }
+    showCreateDiscountForm() {
+        const container = document.getElementById('discountsContainer');
+        if (!container) return;
 
-        this.updateLastUpdated();
-    }
+        container.innerHTML = `
+            <div class="create-discount-form">
+                <div class="form-header">
+                    <h3><i class="fas fa-plus-circle"></i> Создать новую скидку</h3>
+                    <button class="btn btn-outline" onclick="admin.showDiscountsPage()">
+                        <i class="fas fa-arrow-left"></i> Назад
+                    </button>
+                </div>
 
-    updateLastUpdated() {
-        const element = document.getElementById('lastUpdated');
-        if (element) {
-            const now = new Date();
-            element.textContent = now.toLocaleTimeString('ru-RU');
-        }
-    }
+                <form id="discountForm" onsubmit="event.preventDefault(); admin.saveDiscount()">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="discountName">Название скидки *</label>
+                            <input type="text" id="discountName" required placeholder="Летняя распродажа">
+                        </div>
 
-    logout() {
-        if (confirm('Вы уверены, что хотите выйти?')) {
-            window.location.href = '/';
-        }
-    }
+                        <div class="form-group">
+                            <label for="discountType">Тип скидки *</label>
+                            <select id="discountType" required>
+                                <option value="">Выберите тип</option>
+                                <option value="percentage">Процентная (%)</option>
+                                <option value="fixed">Фиксированная сумма (₽)</option>
+                                <option value="bogo">1+1 (два по цене одного)</option>
+                            </select>
+                        </div>
 
-    formatPrice(price) {
-        return new Intl.NumberFormat('ru-RU').format(price || 0);
-    }
+                        <div class="form-group">
+                            <label for="discountValue">Значение скидки *</label>
+                            <input type="number" id="discountValue" step="0.01" required placeholder="15">
+                            <small id="valueHelp">Для %: 15 = 15%</small>
+                        </div>
 
-    showAlert(message, type = 'info') {
-        console.log(`💬 [${type.toUpperCase()}] ${message}`);
+                        <div class="form-group">
+                            <label for="maxDiscount">Максимальная сумма скидки</label>
+                            <input type="number" id="maxDiscount" step="0.01" placeholder="1000">
+                            <small>Оставьте пустым, если нет ограничения</small>
+                        </div>
+                    </div>
 
-        // Удаляем предыдущие уведомления
-        document.querySelectorAll('.admin-alert').forEach(alert => alert.remove());
+                    <div class="form-section">
+                        <h4>Условия применения</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="minOrderAmount">Минимальная сумма заказа</label>
+                                <input type="number" id="minOrderAmount" step="0.01" placeholder="0">
+                                <small>0 = без ограничений</small>
+                            </div>
 
-        // Создаем уведомление
-        const alert = document.createElement('div');
-        alert.className = `admin-alert alert-${type}`;
-        alert.innerHTML = `
-            <i class="fas fa-${type === 'success' ? 'check-circle' :
-                             type === 'error' ? 'exclamation-circle' :
-                             'info-circle'}"></i>
-            <span>${message}</span>
+                            <div class="form-group">
+                                <label for="startDate">Дата начала</label>
+                                <input type="datetime-local" id="startDate">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="endDate">Дата окончания</label>
+                                <input type="datetime-local" id="endDate">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h4>Применение скидки</h4>
+                        <div class="form-group">
+                            <div class="radio-group">
+                                <label>
+                                    <input type="radio" name="applyTo" value="all" checked>
+                                    <span>На все товары</span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="applyTo" value="category">
+                                    <span>На категорию</span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="applyTo" value="product">
+                                    <span>На конкретный товар</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="categorySelect" style="display: none;">
+                            <label for="selectedCategory">Выберите категорию</label>
+                            <select id="selectedCategory">
+                                <option value="">Выберите категорию</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="productSelect" style="display: none;">
+                            <label for="selectedProduct">Выберите товар</label>
+                            <select id="selectedProduct">
+                                <option value="">Выберите товар</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="admin.showDiscountsPage()">
+                            Отмена
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить скидку
+                        </button>
+                    </div>
+                </form>
+            </div>
         `;
 
-        document.body.appendChild(alert);
+        // Назначаем обработчики для переключателей
+        document.querySelectorAll('input[name="applyTo"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                document.getElementById('categorySelect').style.display = 'none';
+                document.getElementById('productSelect').style.display = 'none';
 
-        // Автоматическое скрытие через 4 секунды
-        setTimeout(() => {
-            alert.style.animation = 'slideOutRight 0.3s ease';
-            setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.parentNode.removeChild(alert);
+                if (e.target.value === 'category') {
+                    document.getElementById('categorySelect').style.display = 'block';
+                    this.loadCategoriesForDiscount();
+                } else if (e.target.value === 'product') {
+                    document.getElementById('productSelect').style.display = 'block';
+                    this.loadProductsForDiscount();
                 }
-            }, 300);
-        }, 4000);
+            });
+        });
+
+        // Обновляем подсказку при изменении типа скидки
+        document.getElementById('discountType').addEventListener('change', (e) => {
+            const helpText = document.getElementById('valueHelp');
+            if (e.target.value === 'percentage') {
+                helpText.textContent = 'Для %: 15 = 15%';
+            } else if (e.target.value === 'fixed') {
+                helpText.textContent = 'Сумма в рублях: 100 = 100 ₽';
+            } else if (e.target.value === 'bogo') {
+                helpText.textContent = 'Для 1+1 оставьте 0';
+            }
+        });
     }
 
-    addAlertStyles() {
-        if (!document.getElementById('admin-alert-styles')) {
-            const style = document.createElement('style');
-            style.id = 'admin-alert-styles';
-            style.textContent = `
-                .admin-alert {
-                    position: fixed;
-                    top: 30px;
-                    right: 30px;
-                    padding: 20px 30px;
-                    border-radius: 15px;
-                    z-index: 10000;
-                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-                    animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                    max-width: 400px;
-                }
+    async loadCategoriesForDiscount() {
+        try {
+            const response = await fetch('/api/admin/categories/manage');
+            const categories = await response.json();
 
-                .alert-success {
-                    background: linear-gradient(135deg, #51cf66 0%, #27ae60 100%);
-                    color: white;
-                }
+            const select = document.getElementById('selectedCategory');
+            select.innerHTML = '<option value="">Выберите категорию</option>';
 
-                .alert-error {
-                    background: linear-gradient(135deg, #ff4757 0%, #c0392b 100%);
-                    color: white;
-                }
-
-                .alert-info {
-                    background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
-                    color: white;
-                }
-
-                @keyframes slideInRight {
-                    from {
-                        transform: translateX(100%);
-                        opacity: 0;
-                    }
-                    to {
-                        transform: translateX(0);
-                        opacity: 1;
-                    }
-                }
-
-                @keyframes slideOutRight {
-                    from {
-                        transform: translateX(0);
-                        opacity: 1;
-                    }
-                    to {
-                        transform: translateX(100%);
-                        opacity: 0;
-                    }
-                }
-            `;
-            document.head.appendChild(style);
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Ошибка загрузки категорий:', error);
         }
     }
+
+    async loadProductsForDiscount() {
+        try {
+            const response = await fetch('/api/admin/products');
+            const products = await response.json();
+
+            const select = document.getElementById('selectedProduct');
+            select.innerHTML = '<option value="">Выберите товар</option>';
+
+            products.forEach(product => {
+                const option = document.createElement('option');
+                option.value = product.id;
+                option.textContent = `${product.name} (${this.formatPrice(product.price)} ₽)`;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Ошибка загрузки товаров:', error);
+        }
+    }
+
+    async saveDiscount() {
+        try {
+            const name = document.getElementById('discountName').value.trim();
+            const discountType = document.getElementById('discountType').value;
+            const value = parseFloat(document.getElementById('discountValue').value);
+            const maxDiscount = document.getElementById('maxDiscount').value ? parseFloat(document.getElementById('maxDiscount').value) : null;
+            const minOrderAmount = document.getElementById('minOrderAmount').value ? parseFloat(document.getElementById('minOrderAmount').value) : 0;
+            const startDate = document.getElementById('startDate').value || null;
+            const endDate = document.getElementById('endDate').value || null;
+            const applyTo = document.querySelector('input[name="applyTo"]:checked').value;
+
+            // Валидация
+            if (!name || !discountType || isNaN(value) || value < 0) {
+                this.showAlert('❌ Заполните обязательные поля правильно', 'error');
+                return;
+            }
+
+            // Подготавливаем данные применения
+            const applications = [];
+            let applicationData = { apply_to_all: false };
+
+            if (applyTo === 'all') {
+                applicationData.apply_to_all = true;
+            } else if (applyTo === 'category') {
+                const category = document.getElementById('selectedCategory').value;
+                if (!category) {
+                    this.showAlert('❌ Выберите категорию', 'error');
+                    return;
+                }
+                applicationData.category = category;
+            } else if (applyTo === 'product') {
+                const productId = document.getElementById('selectedProduct').value;
+                if (!productId) {
+                    this.showAlert('❌ Выберите товар', 'error');
+                    return;
+                }
+                applicationData.product_id = parseInt(productId);
+            }
+
+            applications.push(applicationData);
+
+            const discountData = {
+                name: name,
+                discount_type: discountType,
+                value: value,
+                max_discount: maxDiscount,
+                min_order_amount: minOrderAmount,
+                start_date: startDate,
+                end_date: endDate,
+                is_active: true,
+                applications: applications
+            };
+
+            console.log('📤 Отправляем скидку:', discountData);
+
+            const response = await fetch('/api/admin/discounts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(discountData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert('✅ Скидка успешно создана!', 'success');
+                this.showDiscountsPage();
+                await this.loadDiscounts();
+            } else {
+                this.showAlert(`❌ Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
+            }
+
+        } catch (error) {
+            console.error('Ошибка создания скидки:', error);
+            this.showAlert('❌ Ошибка создания скидки', 'error');
+        }
+    }
+
+    showDiscountsPage() {
+        // Создаем контейнер для страницы скидок если его нет
+        const content = document.querySelector('.admin-content');
+        if (!content) return;
+
+        // Проверяем, есть ли уже страница скидок
+        let discountsPage = document.getElementById('discounts');
+        if (!discountsPage) {
+            discountsPage = document.createElement('div');
+            discountsPage.id = 'discounts';
+            discountsPage.className = 'page';
+            discountsPage.innerHTML = `
+                <div class="discounts-container" id="discountsContainer">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Загрузка скидок...</p>
+                    </div>
+                </div>
+            `;
+            content.appendChild(discountsPage);
+        }
+
+        this.showPage('discounts');
+    }
+
+    // Добавляем в конец файла до вызова new AdminPanel()
 }
 
 // Запуск при загрузке страницы
