@@ -28,10 +28,10 @@ class AdminPanel {
 
     init() {
         this.bindEvents();
-        this.loadInitialData();
         this.bindFileUploadEvents();
         this.addAlertStyles();
         this.addProductModeToggle();
+        this.showPage('dashboard');
     }
 
     bindEvents() {
