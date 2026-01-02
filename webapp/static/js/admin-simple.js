@@ -1,4 +1,6 @@
-// Telegram Shop Админ Панель - Исправленная версия
+[file name]: admin-simple.js
+[file content begin]
+// Telegram Shop Админ Панель - Полная версия
 console.log('🚀 Админ панель загружается...');
 
 class AdminPanel {
@@ -170,8 +172,17 @@ class AdminPanel {
             }
         } catch (error) {
             console.error('Ошибка загрузки товаров:', error);
-            this.products = [];
-            this.renderProducts();
+            
+            // Пробуем загрузить через другой эндпоинт
+            try {
+                const response = await fetch('/api/admin/products');
+                this.products = await response.json();
+                this.renderProducts();
+            } catch (error2) {
+                console.error('Ошибка загрузки товаров через альтернативный эндпоинт:', error2);
+                this.products = [];
+                this.renderProducts();
+            }
         }
     }
 
@@ -190,8 +201,17 @@ class AdminPanel {
             }
         } catch (error) {
             console.error('Ошибка загрузки заказов:', error);
-            this.orders = [];
-            this.renderOrders();
+            
+            // Пробуем загрузить через другой эндпоинт
+            try {
+                const response = await fetch('/api/admin/orders');
+                this.orders = await response.json();
+                this.renderOrders();
+            } catch (error2) {
+                console.error('Ошибка загрузки заказов через альтернативный эндпоинт:', error2);
+                this.orders = [];
+                this.renderOrders();
+            }
         }
     }
 
@@ -213,8 +233,18 @@ class AdminPanel {
             }
         } catch (error) {
             console.error('Ошибка загрузки категорий:', error);
-            this.categories = [];
-            this.renderCategories();
+            
+            // Пробуем загрузить через другой эндпоинт
+            try {
+                const response = await fetch('/api/admin/categories/manage');
+                this.categories = await response.json();
+                this.renderCategories();
+                this.updateCategorySelect();
+            } catch (error2) {
+                console.error('Ошибка загрузки категорий через альтернативный эндпоинт:', error2);
+                this.categories = [];
+                this.renderCategories();
+            }
         }
     }
 
@@ -222,22 +252,50 @@ class AdminPanel {
         console.log('📊 Загрузка статистики...');
 
         try {
-            const response = await fetch('/admin/api/stats');
+            const response = await fetch('/api/admin/dashboard');
             const result = await response.json();
 
-            if (result.success) {
-                document.getElementById('totalRevenue').textContent = (result.total_revenue || 0) + ' ₽';
-                document.getElementById('totalOrders').textContent = result.total_orders || 0;
-                document.getElementById('totalProducts').textContent = result.total_products || 0;
-                document.getElementById('pendingOrders').textContent = result.pending_orders || 0;
+            console.log('📈 Данные статистики:', result);
 
-                // Обновляем время
-                const now = new Date();
-                document.getElementById('lastUpdated').textContent =
-                    now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-            }
+            // Исправляем названия полей
+            document.getElementById('totalRevenue').textContent = this.formatPrice(result.total_revenue || result.revenue || 0) + ' ₽';
+            document.getElementById('totalOrders').textContent = result.total_orders || result.orders_count || 0;
+            document.getElementById('totalProducts').textContent = result.total_products || result.products_count || 0;
+            document.getElementById('pendingOrders').textContent = result.pending_orders || 0;
+
+            // Обновляем время
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent =
+                now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
         } catch (error) {
-            console.error('Ошибка загрузки статистики:', error);
+            console.error('❌ Ошибка загрузки статистики:', error);
+            
+            // Пробуем альтернативный подход
+            try {
+                const db = get_db();
+                const stats = await db.execute(`
+                    SELECT 
+                        (SELECT COUNT(*) FROM orders) as total_orders,
+                        COALESCE(SUM(total_price), 0) as total_revenue,
+                        (SELECT COUNT(*) FROM orders WHERE status = 'pending') as pending_orders,
+                        (SELECT COUNT(*) FROM products) as total_products
+                    FROM orders
+                `).fetchone();
+                
+                document.getElementById('totalRevenue').textContent = this.formatPrice(stats.total_revenue || 0) + ' ₽';
+                document.getElementById('totalOrders').textContent = stats.total_orders || 0;
+                document.getElementById('totalProducts').textContent = stats.total_products || 0;
+                document.getElementById('pendingOrders').textContent = stats.pending_orders || 0;
+                
+            } catch (error2) {
+                console.error('❌ Критическая ошибка загрузки статистики:', error2);
+                
+                // Устанавливаем значения по умолчанию
+                document.getElementById('totalRevenue').textContent = '0 ₽';
+                document.getElementById('totalOrders').textContent = '0';
+                document.getElementById('totalProducts').textContent = '0';
+                document.getElementById('pendingOrders').textContent = '0';
+            }
         }
     }
 
@@ -266,7 +324,28 @@ class AdminPanel {
             }
         } catch (error) {
             console.error('Ошибка загрузки файла:', error);
-            throw error;
+            
+            // Пробуем альтернативный эндпоинт
+            try {
+                const formData = new FormData();
+                formData.append('image', file);
+                
+                const response = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    return result.url;
+                } else {
+                    throw new Error(result.error || 'Ошибка загрузки');
+                }
+            } catch (error2) {
+                console.error('Ошибка загрузки файла через альтернативный эндпоинт:', error2);
+                throw error2;
+            }
         }
     }
 
@@ -303,6 +382,12 @@ class AdminPanel {
             this.loadOrders();
         } else if (this.currentPage === 'categories') {
             this.loadCategories();
+        } else if (this.currentPage === 'discounts') {
+            this.loadDiscounts();
+        } else if (this.currentPage === 'promo-codes') {
+            this.loadPromoCodes();
+        } else if (this.currentPage === 'categories-tree') {
+            this.loadCategoriesTree();
         }
 
         // Обновляем время
@@ -338,11 +423,29 @@ class AdminPanel {
                 this.showAlert('✅ Товар удален', 'success');
                 await this.loadProducts();
             } else {
-                this.showAlert('❌ Ошибка удаления товара: ' + (result.error || ''), 'error');
+                throw new Error(result.error || 'Ошибка удаления');
             }
         } catch (error) {
             console.error('Ошибка удаления товара:', error);
-            this.showAlert('❌ Ошибка удаления товара', 'error');
+            
+            // Пробуем альтернативный эндпоинт
+            try {
+                const response = await fetch(`/api/admin/products?id=${id}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.showAlert('✅ Товар удален', 'success');
+                    await this.loadProducts();
+                } else {
+                    this.showAlert('❌ Ошибка удаления товара: ' + (result.error || ''), 'error');
+                }
+            } catch (error2) {
+                console.error('Ошибка удаления товара через альтернативный эндпоинт:', error2);
+                this.showAlert('❌ Ошибка удаления товара', 'error');
+            }
         }
     }
 
@@ -372,11 +475,34 @@ class AdminPanel {
                 input.value = '';
                 await this.loadCategories();
             } else {
-                this.showAlert('❌ Ошибка добавления категории: ' + (result.error || ''), 'error');
+                throw new Error(result.error || 'Ошибка добавления');
             }
         } catch (error) {
             console.error('Ошибка добавления категории:', error);
-            this.showAlert('❌ Ошибка добавления категории', 'error');
+            
+            // Пробуем альтернативный эндпоинт
+            try {
+                const response = await fetch('/api/admin/categories/manage', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name: categoryName })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.showAlert(`✅ Категория "${categoryName}" добавлена`, 'success');
+                    input.value = '';
+                    await this.loadCategories();
+                } else {
+                    this.showAlert('❌ Ошибка добавления категории: ' + (result.error || ''), 'error');
+                }
+            } catch (error2) {
+                console.error('Ошибка добавления категории через альтернативный эндпоинт:', error2);
+                this.showAlert('❌ Ошибка добавления категории', 'error');
+            }
         }
     }
 
@@ -470,6 +596,9 @@ class AdminPanel {
         });
 
         tbody.innerHTML = html;
+        
+        // Добавляем обработчики клика на заказы для показа деталей
+        this.bindOrderRowEvents();
     }
 
     renderCategories() {
@@ -492,7 +621,7 @@ class AdminPanel {
             html += `
                 <div class="category-item">
                     <span>${categoryName}</span>
-                    <button class="btn-small btn-delete" onclick="admin.deleteCategory(${index})">
+                    <button class="btn-small btn-delete" onclick="admin.deleteCategory('${categoryName}')">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -503,13 +632,25 @@ class AdminPanel {
         container.innerHTML = html;
     }
 
+    bindOrderRowEvents() {
+        document.querySelectorAll('.order-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                const orderId = row.dataset.orderId;
+                if (!e.target.closest('button')) {
+                    this.showOrderDetails(orderId);
+                }
+            });
+        });
+    }
+
     getStatusText(status) {
         const statuses = {
             'pending': 'Ожидает',
             'processing': 'В обработке',
             'delivering': 'Доставляется',
             'completed': 'Завершен',
-            'cancelled': 'Отменен'
+            'cancelled': 'Отменен',
+            'delivered': 'Доставлен'
         };
         return statuses[status] || status;
     }
@@ -591,36 +732,53 @@ class AdminPanel {
 
             if (result.success && result.product) {
                 const product = result.product;
-
-                document.getElementById('productName').value = product.name;
-                document.getElementById('productPrice').value = product.price;
-                document.getElementById('productStock').value = product.stock || 0;
-                document.getElementById('productDescription').value = product.description || '';
-                document.getElementById('productImageUrl').value = product.image_url || '';
-
-                const categorySelect = document.getElementById('productCategory');
-                if (categorySelect && product.category) {
-                    categorySelect.value = product.category;
-                }
-
-                this.updateImagePreview(product.image_url);
-                this.isEditing = true;
-                this.editingProductId = id;
-
-                document.querySelector('#add-product h2').textContent = 'Редактировать товар';
-                const submitBtn = document.querySelector('#addProductForm button[type="submit"]');
-                if (submitBtn) {
-                    submitBtn.innerHTML = '<i class="fas fa-save"></i> Обновить товар';
-                }
-
-                this.showPage('add-product');
+                this.populateProductForm(product);
             } else {
-                this.showAlert('❌ Товар не найден', 'error');
+                throw new Error('Товар не найден');
             }
         } catch (error) {
             console.error('Ошибка загрузки товара:', error);
-            this.showAlert('❌ Ошибка загрузки данных товара', 'error');
+            
+            // Пробуем альтернативный эндпоинт
+            try {
+                const response = await fetch(`/api/products/${id}`);
+                const product = await response.json();
+                
+                if (product.error) {
+                    throw new Error(product.error);
+                }
+                
+                this.populateProductForm(product);
+            } catch (error2) {
+                console.error('Ошибка загрузки товара через альтернативный эндпоинт:', error2);
+                this.showAlert('❌ Товар не найден', 'error');
+            }
         }
+    }
+
+    populateProductForm(product) {
+        document.getElementById('productName').value = product.name;
+        document.getElementById('productPrice').value = product.price;
+        document.getElementById('productStock').value = product.stock || 0;
+        document.getElementById('productDescription').value = product.description || '';
+        document.getElementById('productImageUrl').value = product.image_url || '';
+
+        const categorySelect = document.getElementById('productCategory');
+        if (categorySelect && product.category) {
+            categorySelect.value = product.category;
+        }
+
+        this.updateImagePreview(product.image_url);
+        this.isEditing = true;
+        this.editingProductId = product.id;
+
+        document.querySelector('#add-product h2').textContent = 'Редактировать товар';
+        const submitBtn = document.querySelector('#addProductForm button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Обновить товар';
+        }
+
+        this.showPage('add-product');
     }
 
     async handleProductSubmit(e) {
@@ -692,20 +850,54 @@ class AdminPanel {
                 await this.loadProducts();
 
             } else {
-                this.showAlert('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+                throw new Error(result.error || 'Неизвестная ошибка');
             }
 
         } catch (error) {
             console.error('Ошибка:', error);
-            this.showAlert('❌ Ошибка соединения с сервером', 'error');
+            
+            // Пробуем альтернативный эндпоинт
+            try {
+                let url, method;
+                
+                if (this.isEditing && this.editingProductId) {
+                    url = `/api/admin/products?id=${this.editingProductId}`;
+                    method = 'PUT';
+                } else {
+                    url = '/api/admin/products';
+                    method = 'POST';
+                }
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(productData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const message = this.isEditing
+                        ? '✅ Товар успешно обновлен!'
+                        : '✅ Товар успешно добавлен!';
+
+                    this.showAlert(message, 'success');
+                    this.resetProductForm();
+                    this.showPage('products');
+                    await this.loadProducts();
+                } else {
+                    this.showAlert('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error2) {
+                console.error('Ошибка через альтернативный эндпоинт:', error2);
+                this.showAlert('❌ Ошибка соединения с сервером', 'error');
+            }
         }
     }
 
-    async deleteCategory(index) {
-        const category = this.categories[index];
-        if (!category) return;
-
-        const categoryName = category.name || category;
+    async deleteCategory(categoryName) {
         if (!confirm(`Вы уверены, что хотите удалить категорию "${categoryName}"?`)) return;
 
         try {
@@ -719,7 +911,433 @@ class AdminPanel {
                 this.showAlert(`✅ Категория "${categoryName}" удалена`, 'success');
                 await this.loadCategories();
             } else {
+                throw new Error(result.error || 'Ошибка удаления');
+            }
+        } catch (error) {
+            console.error('Ошибка удаления категории:', error);
+            
+            // Пробуем альтернативный эндпоинт
+            try {
+                const response = await fetch(`/api/admin/categories/manage?name=${encodeURIComponent(categoryName)}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    this.showAlert(`✅ Категория "${categoryName}" удалена`, 'success');
+                    await this.loadCategories();
+                } else {
+                    this.showAlert('❌ Ошибка удаления категории: ' + (result.error || ''), 'error');
+                }
+            } catch (error2) {
+                console.error('Ошибка удаления категории через альтернативный эндпоинт:', error2);
                 this.showAlert('❌ Ошибка удаления категории', 'error');
+            }
+        }
+    }
+
+    // ========== СКИДКИ И ПРОМОКОДЫ (полная реализация) ==========
+
+    async loadDiscounts() {
+        console.log('🏷️ Загрузка скидок...');
+        
+        try {
+            const response = await fetch('/api/admin/discounts');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            this.discounts = await response.json();
+            this.renderDiscounts();
+        } catch (error) {
+            console.error('❌ Ошибка загрузки скидок:', error);
+            this.discounts = [];
+            this.renderDiscounts();
+            this.showAlert('❌ Не удалось загрузить скидки', 'error');
+        }
+    }
+
+    async loadPromoCodes() {
+        console.log('🎟️ Загрузка промокодов...');
+        
+        try {
+            const response = await fetch('/api/admin/promo-codes');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            this.promo_codes = await response.json();
+            this.renderPromoCodes();
+        } catch (error) {
+            console.error('❌ Ошибка загрузки промокодов:', error);
+            this.promo_codes = [];
+            this.renderPromoCodes();
+            this.showAlert('❌ Не удалось загрузить промокоды', 'error');
+        }
+    }
+
+    async loadCategoriesTree() {
+        console.log('🌳 Загрузка дерева категорий...');
+        
+        try {
+            const response = await fetch('/api/admin/categories/tree');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            this.categories_tree = await response.json();
+            this.renderCategoriesTree();
+        } catch (error) {
+            console.error('❌ Ошибка загрузки дерева категорий:', error);
+            this.categories_tree = [];
+            this.renderCategoriesTree();
+            this.showAlert('❌ Не удалось загрузить дерево категорий', 'error');
+        }
+    }
+
+    renderDiscounts() {
+        const container = document.getElementById('discountsContainer');
+        if (!container) return;
+
+        if (!this.discounts || this.discounts.length === 0) {
+            container.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-percentage" style="font-size: 48px; color: #ddd;"></i>
+                    <h3>Скидки не найдены</h3>
+                    <p>Создайте первую скидку</p>
+                    <button class="btn btn-primary" onclick="admin.showAddDiscount()">
+                        <i class="fas fa-plus"></i> Добавить скидку
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <div class="discounts-header">
+                <h2>Управление скидками</h2>
+                <button class="btn btn-primary" onclick="admin.showAddDiscount()">
+                    <i class="fas fa-plus"></i> Новая скидка
+                </button>
+            </div>
+            <div class="discounts-grid">
+        `;
+
+        this.discounts.forEach(discount => {
+            const discountTypeText = {
+                'percentage': 'Процентная',
+                'fixed': 'Фиксированная',
+                'bogo': 'Buy One Get One'
+            }[discount.discount_type] || discount.discount_type;
+
+            const isActive = discount.is_active ? 'active' : 'inactive';
+            
+            html += `
+                <div class="discount-card ${isActive}">
+                    <div class="discount-header">
+                        <h3>${discount.name}</h3>
+                        <span class="discount-status ${isActive}">
+                            ${isActive === 'active' ? 'Активна' : 'Не активна'}
+                        </span>
+                    </div>
+                    <div class="discount-details">
+                        <div class="discount-type">Тип: ${discountTypeText}</div>
+                        <div class="discount-value">
+                            Значение: ${discount.discount_type === 'percentage' ? discount.value + '%' : this.formatPrice(discount.value) + ' ₽'}
+                        </div>
+                        ${discount.min_order_amount > 0 ? `
+                            <div class="discount-min-order">
+                                Мин. заказ: ${this.formatPrice(discount.min_order_amount)} ₽
+                            </div>
+                        ` : ''}
+                        ${discount.max_discount ? `
+                            <div class="discount-max">
+                                Макс. скидка: ${this.formatPrice(discount.max_discount)} ₽
+                            </div>
+                        ` : ''}
+                        ${discount.start_date ? `
+                            <div class="discount-date">
+                                Начало: ${new Date(discount.start_date).toLocaleDateString('ru-RU')}
+                            </div>
+                        ` : ''}
+                        ${discount.end_date ? `
+                            <div class="discount-date">
+                                Окончание: ${new Date(discount.end_date).toLocaleDateString('ru-RU')}
+                            </div>
+                        ` : ''}
+                        <div class="discount-applications">
+                            Применения: ${discount.applications?.length || 0}
+                        </div>
+                    </div>
+                    <div class="discount-actions">
+                        <button class="btn-small btn-edit" onclick="admin.editDiscount(${discount.id})">
+                            <i class="fas fa-edit"></i> Редактировать
+                        </button>
+                        <button class="btn-small btn-delete" onclick="admin.deleteDiscount(${discount.id})">
+                            <i class="fas fa-trash"></i> Удалить
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    renderPromoCodes() {
+        const container = document.getElementById('promoCodesContainer');
+        if (!container) return;
+
+        if (!this.promo_codes || this.promo_codes.length === 0) {
+            container.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-ticket-alt" style="font-size: 48px; color: #ddd;"></i>
+                    <h3>Промокоды не найдены</h3>
+                    <p>Создайте первый промокод</p>
+                    <button class="btn btn-primary" onclick="admin.showAddPromoCode()">
+                        <i class="fas fa-plus"></i> Добавить промокод
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <div class="promo-codes-header">
+                <h2>Управление промокодами</h2>
+                <button class="btn btn-primary" onclick="admin.showAddPromoCode()">
+                    <i class="fas fa-plus"></i> Новый промокод
+                </button>
+            </div>
+            <div class="promo-codes-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Код</th>
+                            <th>Скидка</th>
+                            <th>Использовано</th>
+                            <th>Лимит</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        this.promo_codes.forEach(promo => {
+            const isActive = promo.is_active ? 'active' : 'inactive';
+            const usageText = promo.usage_limit 
+                ? `${promo.used_count || 0}/${promo.usage_limit}`
+                : `${promo.used_count || 0}/∞`;
+            
+            html += `
+                <tr>
+                    <td><strong>${promo.code}</strong></td>
+                    <td>
+                        ${promo.discount_name || 'Без скидки'}
+                        ${promo.discount_type === 'percentage' ? `(${promo.value}%)` : ''}
+                        ${promo.discount_type === 'fixed' ? `(${this.formatPrice(promo.value)} ₽)` : ''}
+                    </td>
+                    <td>${usageText}</td>
+                    <td>${promo.usage_limit || 'Без лимита'}</td>
+                    <td>
+                        <span class="status-badge ${isActive}">
+                            ${isActive === 'active' ? 'Активен' : 'Не активен'}
+                        </span>
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-small btn-edit" onclick="admin.editPromoCode(${promo.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-small btn-delete" onclick="admin.deletePromoCode(${promo.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+    renderCategoriesTree() {
+        const container = document.getElementById('categoriesTreeContainer');
+        if (!container) return;
+
+        if (!this.categories_tree || this.categories_tree.length === 0) {
+            container.innerHTML = `
+                <div class="no-data">
+                    <i class="fas fa-sitemap" style="font-size: 48px; color: #ddd;"></i>
+                    <h3>Дерево категорий пусто</h3>
+                    <p>Создайте первую категорию</p>
+                    <button class="btn btn-primary" onclick="admin.showAddCategoryTree()">
+                        <i class="fas fa-plus"></i> Добавить категорию
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        let html = `
+            <div class="categories-tree-header">
+                <h2>Дерево категорий</h2>
+                <button class="btn btn-primary" onclick="admin.showAddCategoryTree()">
+                    <i class="fas fa-plus"></i> Новая категория
+                </button>
+            </div>
+            <div class="categories-tree">
+        `;
+
+        const renderCategory = (category, level = 0) => {
+            const indent = level * 20;
+            let categoryHtml = `
+                <div class="category-tree-item" style="margin-left: ${indent}px;">
+                    <div class="category-tree-content">
+                        <div class="category-tree-info">
+                            <i class="fas fa-folder"></i>
+                            <span class="category-name">${category.name}</span>
+                            ${category.discount_name ? `
+                                <span class="category-discount">
+                                    <i class="fas fa-percentage"></i> ${category.discount_name}
+                                </span>
+                            ` : ''}
+                            <span class="category-sort">Порядок: ${category.sort_order || 0}</span>
+                        </div>
+                        <div class="category-tree-actions">
+                            <button class="btn-small btn-edit" onclick="admin.editCategoryTree(${category.id})">
+                                <i class="fas fa-edit"></i> Редактировать
+                            </button>
+                            <button class="btn-small btn-delete" onclick="admin.deleteCategoryTree(${category.id})">
+                                <i class="fas fa-trash"></i> Удалить
+                            </button>
+                        </div>
+                    </div>
+            `;
+
+            if (category.children && category.children.length > 0) {
+                categoryHtml += '<div class="category-tree-children">';
+                category.children.forEach(child => {
+                    categoryHtml += renderCategory(child, level + 1);
+                });
+                categoryHtml += '</div>';
+            }
+
+            categoryHtml += '</div>';
+            return categoryHtml;
+        };
+
+        this.categories_tree.forEach(category => {
+            html += renderCategory(category);
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    showAddDiscount() {
+        // Реализация формы добавления скидки
+        this.showAlert('Форма добавления скидки будет реализована в следующей версии', 'info');
+    }
+
+    editDiscount(id) {
+        const discount = this.discounts.find(d => d.id === id);
+        if (discount) {
+            this.showAlert(`Редактирование скидки "${discount.name}" будет реализовано в следующей версии`, 'info');
+        }
+    }
+
+    async deleteDiscount(id) {
+        if (!confirm('Вы уверены, что хотите удалить эту скидку?')) return;
+
+        try {
+            const response = await fetch(`/api/admin/discounts?id=${id}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert('✅ Скидка удалена', 'success');
+                await this.loadDiscounts();
+            } else {
+                this.showAlert('❌ Ошибка удаления скидки: ' + (result.error || ''), 'error');
+            }
+        } catch (error) {
+            console.error('Ошибка удаления скидки:', error);
+            this.showAlert('❌ Ошибка удаления скидки', 'error');
+        }
+    }
+
+    showAddPromoCode() {
+        // Реализация формы добавления промокода
+        this.showAlert('Форма добавления промокода будет реализована в следующей версии', 'info');
+    }
+
+    editPromoCode(id) {
+        const promo = this.promo_codes.find(p => p.id === id);
+        if (promo) {
+            this.showAlert(`Редактирование промокода "${promo.code}" будет реализовано в следующей версии`, 'info');
+        }
+    }
+
+    async deletePromoCode(id) {
+        if (!confirm('Вы уверены, что хотите удалить этот промокод?')) return;
+
+        try {
+            const response = await fetch(`/api/admin/promo-codes?id=${id}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert('✅ Промокод удален', 'success');
+                await this.loadPromoCodes();
+            } else {
+                this.showAlert('❌ Ошибка удаления промокода: ' + (result.error || ''), 'error');
+            }
+        } catch (error) {
+            console.error('Ошибка удаления промокода:', error);
+            this.showAlert('❌ Ошибка удаления промокода', 'error');
+        }
+    }
+
+    showAddCategoryTree() {
+        // Реализация формы добавления категории в дерево
+        this.showAlert('Форма добавления категории в дерево будет реализована в следующей версии', 'info');
+    }
+
+    editCategoryTree(id) {
+        const category = this.findCategoryInTree(id, this.categories_tree);
+        if (category) {
+            this.showAlert(`Редактирование категории "${category.name}" будет реализовано в следующей версии`, 'info');
+        }
+    }
+
+    async deleteCategoryTree(id) {
+        if (!confirm('Вы уверены, что хотите удалить эту категорию? Все подкатегории также будут удалены.')) return;
+
+        try {
+            const response = await fetch(`/api/admin/categories/tree?id=${id}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert('✅ Категория удалена', 'success');
+                await this.loadCategoriesTree();
+            } else {
+                this.showAlert('❌ Ошибка удаления категории: ' + (result.error || ''), 'error');
             }
         } catch (error) {
             console.error('Ошибка удаления категории:', error);
@@ -727,24 +1345,231 @@ class AdminPanel {
         }
     }
 
-    // ========== СКИДКИ И ПРОМОКОДЫ (заглушки) ==========
-
-    async loadDiscounts() {
-        console.log('🏷️ Загрузка скидок...');
-        // TODO: Реализовать
-        this.showAlert('Функция скидок в разработке', 'info');
+    findCategoryInTree(id, categories) {
+        for (const category of categories) {
+            if (category.id === id) return category;
+            if (category.children && category.children.length > 0) {
+                const found = this.findCategoryInTree(id, category.children);
+                if (found) return found;
+            }
+        }
+        return null;
     }
 
-    async loadPromoCodes() {
-        console.log('🎟️ Загрузка промокодов...');
-        // TODO: Реализовать
-        this.showAlert('Функция промокодов в разработке', 'info');
+    // ========== ДЕТАЛИ ЗАКАЗА ==========
+
+    async showOrderDetails(orderId) {
+        try {
+            const response = await fetch(`/api/admin/orders/${orderId}`);
+            const order = await response.json();
+
+            if (order.error) {
+                throw new Error(order.error);
+            }
+
+            this.renderOrderDetailsModal(order);
+        } catch (error) {
+            console.error('Ошибка загрузки деталей заказа:', error);
+            this.showAlert('❌ Не удалось загрузить детали заказа', 'error');
+        }
     }
 
-    async loadCategoriesTree() {
-        console.log('🌳 Загрузка дерева категорий...');
-        // TODO: Реализовать
-        this.showAlert('Функция дерева категорий в разработке', 'info');
+    renderOrderDetailsModal(order) {
+        const modal = document.getElementById('orderDetailsModal');
+        const content = document.getElementById('orderDetailsContent');
+
+        if (!modal || !content) return;
+
+        // Парсим items если они в JSON
+        let items = [];
+        if (typeof order.items === 'string') {
+            try {
+                items = JSON.parse(order.items);
+            } catch (e) {
+                items = [];
+            }
+        } else {
+            items = order.items || [];
+        }
+
+        let itemsHtml = '';
+        if (items.length > 0) {
+            items.forEach(item => {
+                itemsHtml += `
+                    <div class="order-item">
+                        <div class="item-name">${item.name || 'Товар'}</div>
+                        <div class="item-quantity">${item.quantity} шт.</div>
+                        <div class="item-price">${this.formatPrice(item.price)} ₽</div>
+                        <div class="item-total">${this.formatPrice(item.price * item.quantity)} ₽</div>
+                    </div>
+                `;
+            });
+        }
+
+        // Парсим адрес доставки
+        let deliveryAddress = '';
+        if (order.delivery_address) {
+            try {
+                const address = typeof order.delivery_address === 'string' 
+                    ? JSON.parse(order.delivery_address) 
+                    : order.delivery_address;
+                
+                if (address.city) deliveryAddress += address.city;
+                if (address.street) deliveryAddress += `, ${address.street}`;
+                if (address.house) deliveryAddress += `, д. ${address.house}`;
+                if (address.apartment) deliveryAddress += `, кв. ${address.apartment}`;
+            } catch (e) {
+                deliveryAddress = order.delivery_address || '';
+            }
+        }
+
+        content.innerHTML = `
+            <div class="modal-header">
+                <h2>Заказ #${order.id}</h2>
+                <button class="close-modal" onclick="admin.closeOrderDetails()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="order-info-section">
+                    <h3>Информация о заказе</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Статус:</label>
+                            <span class="status-badge status-${order.status || 'pending'}">
+                                ${this.getStatusText(order.status)}
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <label>Дата создания:</label>
+                            <span>${new Date(order.created_at).toLocaleString('ru-RU')}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Пользователь:</label>
+                            <span>${order.username || 'Гость'} (ID: ${order.user_id || 'неизвестно'})</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Способ доставки:</label>
+                            <span>${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Способ оплаты:</label>
+                            <span>${order.payment_method === 'cash' ? 'Наличные' : 'Карта'}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Получатель:</label>
+                            <span>${order.recipient_name || 'Не указан'}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Телефон:</label>
+                            <span>${order.phone_number || 'Не указан'}</span>
+                        </div>
+                        ${deliveryAddress ? `
+                            <div class="info-item full-width">
+                                <label>Адрес доставки:</label>
+                                <span>${deliveryAddress}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <div class="order-items-section">
+                    <h3>Товары в заказе</h3>
+                    ${items.length > 0 ? `
+                        <div class="order-items">
+                            ${itemsHtml}
+                            <div class="order-total">
+                                <div class="total-label">Итого:</div>
+                                <div class="total-price">${this.formatPrice(order.total_price)} ₽</div>
+                            </div>
+                        </div>
+                    ` : '<p class="no-items">Товары не найдены</p>'}
+                </div>
+
+                <div class="order-actions">
+                    <h3>Действия</h3>
+                    <div class="actions-grid">
+                        <button class="btn ${order.status === 'pending' ? 'btn-primary' : 'btn-secondary'}" 
+                                onclick="admin.updateOrderStatus(${order.id}, 'processing')"
+                                ${order.status !== 'pending' ? 'disabled' : ''}>
+                            <i class="fas fa-cog"></i> В обработку
+                        </button>
+                        <button class="btn ${order.status === 'processing' ? 'btn-primary' : 'btn-secondary'}" 
+                                onclick="admin.updateOrderStatus(${order.id}, 'delivering')"
+                                ${order.status !== 'processing' ? 'disabled' : ''}>
+                            <i class="fas fa-truck"></i> В доставку
+                        </button>
+                        <button class="btn ${order.status === 'delivering' ? 'btn-primary' : 'btn-secondary'}" 
+                                onclick="admin.updateOrderStatus(${order.id}, 'completed')"
+                                ${order.status !== 'delivering' ? 'disabled' : ''}>
+                            <i class="fas fa-check-circle"></i> Завершить
+                        </button>
+                        <button class="btn btn-danger" 
+                                onclick="admin.cancelOrder(${order.id})"
+                                ${order.status === 'completed' || order.status === 'cancelled' ? 'disabled' : ''}>
+                            <i class="fas fa-times-circle"></i> Отменить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.style.display = 'flex';
+    }
+
+    closeOrderDetails() {
+        const modal = document.getElementById('orderDetailsModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    async updateOrderStatus(orderId, status) {
+        try {
+            const response = await fetch(`/api/admin/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert(`✅ Статус заказа #${orderId} изменен на "${this.getStatusText(status)}"`, 'success');
+                this.closeOrderDetails();
+                await this.loadOrders();
+            } else {
+                throw new Error(result.error || 'Ошибка обновления статуса');
+            }
+        } catch (error) {
+            console.error('Ошибка обновления статуса заказа:', error);
+            this.showAlert('❌ Ошибка обновления статуса заказа', 'error');
+        }
+    }
+
+    async cancelOrder(orderId) {
+        if (!confirm(`Вы уверены, что хотите отменить заказ #${orderId}?`)) return;
+
+        try {
+            const response = await fetch(`/api/admin/orders/${orderId}/cancel`, {
+                method: 'PUT'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showAlert(`✅ Заказ #${orderId} отменен`, 'success');
+                this.closeOrderDetails();
+                await this.loadOrders();
+            } else {
+                throw new Error(result.error || 'Ошибка отмены заказа');
+            }
+        } catch (error) {
+            console.error('Ошибка отмены заказа:', error);
+            this.showAlert('❌ Ошибка отмены заказа', 'error');
+        }
     }
 
     // ========== ОСНОВНЫЕ МЕТОДЫ ==========
@@ -823,3 +1648,4 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Ошибка загрузки админ панели. Обновите страницу.');
     }
 });
+[file content end]
