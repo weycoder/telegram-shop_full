@@ -28,9 +28,8 @@ class AdminPanel {
 
     init() {
         this.bindEvents();
-        this.bindFileUploadEvents();
-        this.addAlertStyles();
         this.addProductModeToggle();
+        // Показываем дашборд сразу после инициализации
         this.showPage('dashboard');
     }
 
@@ -268,6 +267,62 @@ class AdminPanel {
                     color: #0c5460;
                 }
 
+                /* Стили для статусов заказов */
+                .status-badge {
+                    padding: 6px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                }
+
+                .status-pending {
+                    background: #fff3cd;
+                    color: #856404;
+                }
+
+                .status-processing {
+                    background: #d1ecf1;
+                    color: #0c5460;
+                }
+
+                .status-delivering {
+                    background: #d4edda;
+                    color: #155724;
+                }
+
+                .status-completed {
+                    background: #28a745;
+                    color: white;
+                }
+
+                .status-cancelled {
+                    background: #dc3545;
+                    color: white;
+                }
+
+                /* Стили для категорий */
+                .categories-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                    gap: 10px;
+                }
+
+                .category-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 12px 15px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    border: 1px solid #e9ecef;
+                }
+
+                .category-item span {
+                    font-weight: 500;
+                    color: #495057;
+                }
+
                 @keyframes slideIn {
                     from { transform: translateY(-20px); opacity: 0; }
                     to { transform: translateY(0); opacity: 1; }
@@ -349,6 +404,236 @@ class AdminPanel {
         const priceGrid = priceSection.querySelector('.form-grid');
         if (priceGrid) {
             priceGrid.insertAdjacentHTML('afterend', weightFieldsHTML);
+        }
+    }
+
+
+
+
+        // ========== БАЗОВЫЕ МЕТОДЫ ==========
+
+    showAlert(message, type = 'info') {
+        console.log(`[${type.toUpperCase()}] ${message}`);
+        // Временная заглушка - просто выводим в консоль
+        // Позже можно добавить красивые уведомления
+    }
+
+    loadProducts() {
+        console.log('📦 Загрузка товаров...');
+        // TODO: Реализовать загрузку товаров с сервера
+        this.products = []; // временно пустой массив
+        this.renderProducts();
+    }
+
+    loadOrders() {
+        console.log('📋 Загрузка заказов...');
+        // TODO: Реализовать загрузку заказов с сервера
+        this.orders = []; // временно пустой массив
+        this.renderOrders();
+    }
+
+    loadCategories() {
+        console.log('🏷️ Загрузка категорий...');
+        // TODO: Реализовать загрузку категорий с сервера
+        this.categories = []; // временно пустой массив
+        this.renderCategories();
+    }
+
+    loadPromoCodes() {
+        console.log('🎟️ Загрузка промокодов...');
+        // TODO: Реализовать
+    }
+
+    loadCategoriesTree() {
+        console.log('🌳 Загрузка дерева категорий...');
+        // TODO: Реализовать
+    }
+
+    formatPrice(price) {
+        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+    }
+
+    uploadFile(file) {
+        console.log('📤 Загрузка файла:', file.name);
+        // TODO: Реализовать загрузку файла на сервер
+        return Promise.resolve('https://via.placeholder.com/300x200');
+    }
+
+    resetProductForm() {
+        document.getElementById('addProductForm')?.reset();
+        this.selectedFile = null;
+        this.isEditing = false;
+        this.editingProductId = null;
+        document.getElementById('fileInfo').style.display = 'none';
+        document.getElementById('imagePreviewContainer').style.display = 'none';
+    }
+
+    refreshCurrentPage() {
+        console.log('🔄 Обновление текущей страницы:', this.currentPage);
+        this.showPage(this.currentPage);
+    }
+
+    logout() {
+        console.log('🚪 Выход из админ панели');
+        // TODO: Реализовать выход
+        window.location.href = '/';
+    }
+
+    showAddProduct() {
+        this.isEditing = false;
+        this.editingProductId = null;
+        this.resetProductForm();
+        document.querySelector('#add-product h2').textContent = 'Добавить товар';
+        const submitBtn = document.querySelector('#addProductForm button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="fas fa-plus"></i> Добавить товар';
+        }
+        this.showPage('add-product');
+    }
+
+    deleteProduct(id) {
+        if (confirm(`Вы уверены, что хотите удалить товар #${id}?`)) {
+            console.log('🗑️ Удаление товара:', id);
+            // TODO: Реализовать удаление товара
+            this.showAlert('Товар удален', 'success');
+            this.loadProducts();
+        }
+    }
+
+    addCategory() {
+        const input = document.getElementById('newCategory');
+        if (!input) return;
+
+        const category = input.value.trim();
+        if (!category) {
+            this.showAlert('Введите название категории', 'error');
+            return;
+        }
+
+        console.log('➕ Добавление категории:', category);
+        // TODO: Реализовать добавление категории
+        this.showAlert(`Категория "${category}" добавлена`, 'success');
+        input.value = '';
+        this.loadCategories();
+    }
+
+    // ========== ЗАКАЗЫ ==========
+
+    renderOrders() {
+        const tbody = document.getElementById('ordersTableBody');
+        if (!tbody) return;
+
+        if (!this.orders || this.orders.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 40px;">
+                        <i class="fas fa-clipboard-list" style="font-size: 48px; color: #ddd;"></i>
+                        <p style="margin-top: 15px; color: #6c757d;">Заказы не найдены</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        this.orders.forEach(order => {
+            html += `
+                <tr class="order-row" data-order-id="${order.id}">
+                    <td style="font-weight: 600; color: #2c3e50;">#${order.id}</td>
+                    <td>${order.username || 'Гость'}</td>
+                    <td style="font-weight: 700; color: #667eea;">${this.formatPrice(order.total_price)} ₽</td>
+                    <td>
+                        <span class="status-badge status-${order.status || 'pending'}">
+                            ${this.getStatusText(order.status)}
+                        </span>
+                    </td>
+                    <td>${new Date(order.created_at).toLocaleDateString('ru-RU')}</td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    getStatusText(status) {
+        const statuses = {
+            'pending': 'Ожидает',
+            'processing': 'В обработке',
+            'delivering': 'Доставляется',
+            'completed': 'Завершен',
+            'cancelled': 'Отменен'
+        };
+        return statuses[status] || status;
+    }
+
+    showOrderDetails(orderId) {
+        console.log('📄 Показать детали заказа:', orderId);
+        // TODO: Реализовать показ деталей заказа
+        this.showAlert(`Показать детали заказа #${orderId}`, 'info');
+    }
+
+    closeOrderDetails() {
+        const modal = document.getElementById('orderDetailsModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    // ========== КАТЕГОРИИ ==========
+
+    renderCategories() {
+        const container = document.getElementById('categoriesList');
+        if (!container) return;
+
+        if (!this.categories || this.categories.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #6c757d;">
+                    <i class="fas fa-tags" style="font-size: 48px; opacity: 0.3;"></i>
+                    <p>Категории не найдены</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="categories-grid">';
+        this.categories.forEach(category => {
+            html += `
+                <div class="category-item">
+                    <span>${category}</span>
+                    <button class="btn-small btn-delete" onclick="admin.deleteCategory('${category}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+    }
+
+    deleteCategory(category) {
+        if (confirm(`Вы уверены, что хотите удалить категорию "${category}"?`)) {
+            console.log('🗑️ Удаление категории:', category);
+            // TODO: Реализовать удаление категории
+            this.showAlert(`Категория "${category}" удалена`, 'success');
+            this.loadCategories();
+        }
+    }
+
+    // ========== СКИДКИ ==========
+
+    editDiscount(id) {
+        console.log('✏️ Редактирование скидки:', id);
+        // TODO: Реализовать
+        this.showAlert(`Редактирование скидки #${id}`, 'info');
+    }
+
+    deleteDiscount(id) {
+        if (confirm(`Вы уверены, что хотите удалить скидку #${id}?`)) {
+            console.log('🗑️ Удаление скидки:', id);
+            // TODO: Реализовать удаление скидки
+            this.showAlert('Скидка удалена', 'success');
+            this.loadDiscounts();
         }
     }
 
