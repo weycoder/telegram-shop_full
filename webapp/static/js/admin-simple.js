@@ -471,6 +471,106 @@ class AdminPanel {
         this.showPage('add-product');
     }
 
+
+    bindFileUploadEvents() {
+        console.log('📁 Настраиваем загрузку файлов...');
+
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('productImageFile');
+
+        if (!fileUploadArea || !fileInput) {
+            console.log('ℹ️ Элементы загрузки файлов не найдены');
+            return;
+        }
+
+        // Клик по области загрузки
+        fileUploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Выбор файла
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this.handleFileSelect(file);
+            }
+        });
+
+        // Drag and drop
+        fileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.add('dragover');
+        });
+
+        fileUploadArea.addEventListener('dragleave', () => {
+            fileUploadArea.classList.remove('dragover');
+        });
+
+        fileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.remove('dragover');
+
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                this.handleFileSelect(file);
+            } else {
+                this.showAlert('❌ Пожалуйста, выберите изображение', 'error');
+            }
+        });
+    }
+
+    handleFileSelect(file) {
+        console.log('📁 Выбран файл:', file.name);
+
+        if (!file.type.startsWith('image/')) {
+            this.showAlert('❌ Пожалуйста, выберите изображение', 'error');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            this.showAlert('❌ Файл слишком большой (макс. 5МБ)', 'error');
+            return;
+        }
+
+        this.selectedFile = file;
+
+        // Показываем информацию о файле
+        document.getElementById('fileInfo').style.display = 'flex';
+        document.getElementById('fileName').textContent = file.name;
+
+        // Показываем превью
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('filePreview').src = e.target.result;
+            this.updateImagePreview(e.target.result);
+        };
+        reader.readAsDataURL(file);
+
+        // Устанавливаем тип источника как "файл"
+        this.imageSourceType = 'file';
+        this.updateImageSourceUI();
+    }
+
+    updateImageSourceUI() {
+        // Обновляем UI в зависимости от выбранного типа источника
+        const toggleOptions = document.querySelectorAll('.toggle-option input[type="radio"]');
+        toggleOptions.forEach(option => {
+            option.checked = option.value === this.imageSourceType;
+        });
+    }
+
+    updateImagePreview(url) {
+        const previewContainer = document.getElementById('imagePreviewContainer');
+        const previewImg = document.getElementById('imagePreview');
+
+        if (url && url.trim() !== '') {
+            previewImg.src = url;
+            previewContainer.style.display = 'block';
+        } else {
+            previewContainer.style.display = 'none';
+        }
+    }
+
     // ========== ОБНОВЛЕННЫЙ МЕТОД HANDLEPRODUCTSUBMIT ==========
 
     async handleProductSubmit(e) {
