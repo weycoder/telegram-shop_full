@@ -234,6 +234,49 @@ class AdminPanel {
         }
     }
 
+    addAlertStyles() {
+        // Добавляем стили для алертов, если они еще не добавлены
+        if (!document.getElementById('alert-styles')) {
+            const style = document.createElement('style');
+            style.id = 'alert-styles';
+            style.textContent = `
+                .alert {
+                    padding: 15px 20px;
+                    border-radius: 10px;
+                    margin: 10px 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    animation: slideIn 0.3s ease;
+                }
+
+                .alert-success {
+                    background: #d4edda;
+                    border: 1px solid #c3e6cb;
+                    color: #155724;
+                }
+
+                .alert-error {
+                    background: #f8d7da;
+                    border: 1px solid #f5c6cb;
+                    color: #721c24;
+                }
+
+                .alert-info {
+                    background: #d1ecf1;
+                    border: 1px solid #bee5eb;
+                    color: #0c5460;
+                }
+
+                @keyframes slideIn {
+                    from { transform: translateY(-20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+
     setProductMode(mode) {
         this.productMode = mode;
 
