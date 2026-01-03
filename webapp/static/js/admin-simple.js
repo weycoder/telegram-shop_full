@@ -28,7 +28,10 @@ class AdminPanel {
 
     init() {
         this.bindEvents();
-        this.showPage('dashboard');
+        // Ждем полной загрузки DOM
+        setTimeout(() => {
+            this.showPage('dashboard');
+        }, 100);
     }
 
     bindEvents() {
@@ -136,9 +139,15 @@ class AdminPanel {
     }
 
     // Методы рендеринга товаров
+    // Методы рендеринга товаров - исправленная версия
     renderProducts() {
         const container = document.getElementById('productsContainer');
-        if (!container) return;
+        if (!container) {
+            console.error('❌ Контейнер товаров не найден');
+            return;
+        }
+
+        console.log('📦 Рендерим товары:', this.products.length);
 
         if (this.products.length === 0) {
             container.innerHTML = `
@@ -165,20 +174,24 @@ class AdminPanel {
         `;
 
         this.products.forEach(product => {
+            const imageUrl = product.image_url || 'https://via.placeholder.com/300x200';
+            const description = product.description || 'Нет описания';
+            const category = product.category || 'Без категории';
+
             html += `
                 <div class="product-card">
                     <div class="product-image">
-                        <img src="${product.image_url || 'https://via.placeholder.com/300x200'}"
+                        <img src="${imageUrl}"
                              alt="${product.name}"
                              onerror="this.src='https://via.placeholder.com/300x200'">
                     </div>
                     <div class="product-info">
                         <h3>${product.name}</h3>
-                        <p class="product-description">${product.description || 'Нет описания'}</p>
+                        <p class="product-description">${description}</p>
                         <div class="product-details">
                             <span class="price">${this.formatPrice(product.price)} ₽</span>
-                            <span class="stock">Остаток: ${product.stock} шт.</span>
-                            <span class="category">${product.category || 'Без категории'}</span>
+                            <span class="stock">Остаток: ${product.stock || 0} шт.</span>
+                            <span class="category">${category}</span>
                         </div>
                     </div>
                     <div class="product-actions">
@@ -364,19 +377,25 @@ class AdminPanel {
         }
     }
 
-    // Методы управления товарами
+   // Методы управления товарами
     showAddProduct() {
         this.isEditing = false;
         this.editingProductId = null;
         this.showPage('add-product');
-        this.resetProductForm();
+        // Используем setTimeout чтобы убедиться что DOM обновился
+        setTimeout(() => {
+            this.resetProductForm();
+        }, 100);
     }
 
     editProduct(productId) {
         this.isEditing = true;
         this.editingProductId = productId;
         this.showPage('add-product');
-        this.loadProductForEdit(productId);
+        // Используем setTimeout чтобы убедиться что DOM обновился
+        setTimeout(() => {
+            this.loadProductForEdit(productId);
+        }, 100);
     }
 
     async loadProductForEdit(productId) {
@@ -385,18 +404,24 @@ class AdminPanel {
             const product = await response.json();
 
             if (product) {
-                document.getElementById('productName').value = product.name || '';
-                document.getElementById('productDescription').value = product.description || '';
-                document.getElementById('productPrice').value = product.price || 0;
-                document.getElementById('productStock').value = product.stock || 0;
-                document.getElementById('imageUrl').value = product.image_url || '';
-
+                const productName = document.getElementById('productName');
+                const productDescription = document.getElementById('productDescription');
+                const productPrice = document.getElementById('productPrice');
+                const productStock = document.getElementById('productStock');
+                const imageUrl = document.getElementById('imageUrl');
                 const categorySelect = document.getElementById('productCategory');
+                const previewImage = document.getElementById('previewImage');
+
+                if (productName) productName.value = product.name || '';
+                if (productDescription) productDescription.value = product.description || '';
+                if (productPrice) productPrice.value = product.price || 0;
+                if (productStock) productStock.value = product.stock || 0;
+                if (imageUrl) imageUrl.value = product.image_url || '';
+
                 if (categorySelect && product.category) {
                     categorySelect.value = product.category;
                 }
 
-                const previewImage = document.getElementById('previewImage');
                 if (previewImage && product.image_url) {
                     previewImage.src = product.image_url;
                     previewImage.style.display = 'block';
@@ -409,18 +434,24 @@ class AdminPanel {
     }
 
     resetProductForm() {
-        document.getElementById('productName').value = '';
-        document.getElementById('productDescription').value = '';
-        document.getElementById('productPrice').value = '';
-        document.getElementById('productStock').value = '';
-        document.getElementById('imageUrl').value = '';
-
+        const productName = document.getElementById('productName');
+        const productDescription = document.getElementById('productDescription');
+        const productPrice = document.getElementById('productPrice');
+        const productStock = document.getElementById('productStock');
+        const imageUrl = document.getElementById('imageUrl');
         const categorySelect = document.getElementById('productCategory');
+        const previewImage = document.getElementById('previewImage');
+
+        if (productName) productName.value = '';
+        if (productDescription) productDescription.value = '';
+        if (productPrice) productPrice.value = '';
+        if (productStock) productStock.value = '';
+        if (imageUrl) imageUrl.value = '';
+
         if (categorySelect) {
             categorySelect.value = '';
         }
 
-        const previewImage = document.getElementById('previewImage');
         if (previewImage) {
             previewImage.src = '';
             previewImage.style.display = 'none';
@@ -430,13 +461,25 @@ class AdminPanel {
     async handleProductSubmit(e) {
         e.preventDefault();
 
+        const productName = document.getElementById('productName');
+        const productDescription = document.getElementById('productDescription');
+        const productPrice = document.getElementById('productPrice');
+        const productStock = document.getElementById('productStock');
+        const imageUrl = document.getElementById('imageUrl');
+        const productCategory = document.getElementById('productCategory');
+
+        if (!productName || !productPrice) {
+            this.showAlert('❌ Форма товара не найдена', 'error');
+            return;
+        }
+
         const formData = {
-            name: document.getElementById('productName').value,
-            description: document.getElementById('productDescription').value,
-            price: parseFloat(document.getElementById('productPrice').value) || 0,
-            stock: parseInt(document.getElementById('productStock').value) || 0,
-            image_url: document.getElementById('imageUrl').value || '',
-            category: document.getElementById('productCategory').value || ''
+            name: productName.value,
+            description: productDescription ? productDescription.value : '',
+            price: parseFloat(productPrice.value) || 0,
+            stock: productStock ? parseInt(productStock.value) || 0 : 0,
+            image_url: imageUrl ? imageUrl.value : '',
+            category: productCategory ? productCategory.value : ''
         };
 
         if (!formData.name || !formData.price) {
@@ -476,6 +519,7 @@ class AdminPanel {
             this.showAlert('❌ Ошибка соединения с сервером', 'error');
         }
     }
+
 
     async deleteProduct(productId) {
         if (!confirm('Вы уверены, что хотите удалить этот товар?')) return;
@@ -624,15 +668,24 @@ class AdminPanel {
     }
 
     // ========== ЗАГРУЗКА ДАННЫХ ==========
-
     async loadProducts() {
         try {
+            console.log('📦 Загрузка товаров...');
             const response = await fetch('/api/admin/products');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
             const products = await response.json();
-            this.products = products;
+            console.log('📦 Получены товары:', products.length);
+
+            this.products = Array.isArray(products) ? products : [];
+            console.log('📦 Товары после обработки:', this.products.length);
+
             this.renderProducts();
         } catch (error) {
             console.error('❌ Ошибка загрузки товаров:', error);
+            this.showAlert('❌ Ошибка загрузки товаров', 'error');
             this.products = [];
             this.renderProducts();
         }
@@ -2133,62 +2186,64 @@ class AdminPanel {
         }
     }
 
-    showPage(pageId) {
-        document.querySelectorAll('.page').forEach(page => {
-            page.classList.remove('active');
-            page.style.display = 'none';
-        });
+        showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+                page.style.display = 'none';
+            });
 
-        const targetPage = document.getElementById(pageId);
-        if (targetPage) {
-            targetPage.style.display = 'block';
-            setTimeout(() => {
-                targetPage.classList.add('active');
-            }, 10);
-        }
-
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-            if (item.dataset.page === pageId) {
-                item.classList.add('active');
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.style.display = 'block';
+                setTimeout(() => {
+                    targetPage.classList.add('active');
+                }, 10);
             }
-        });
 
-        const titles = {
-            'dashboard': 'Статистика',
-            'products': 'Управление товарами',
-            'orders': 'Заказы',
-            'add-product': this.isEditing ? 'Редактировать товар' : 'Добавить товар',
-            'categories': 'Управление категориями',
-            'discounts': 'Скидки',
-            'promo-codes': 'Промокоды',
-            'categories-tree': 'Дерево категорий'
-        };
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.page === pageId) {
+                    item.classList.add('active');
+                }
+            });
 
-        const titleElement = document.getElementById('pageTitle');
-        if (titleElement && titles[pageId]) {
-            titleElement.textContent = titles[pageId];
+            const titles = {
+                'dashboard': 'Статистика',
+                'products': 'Управление товарами',
+                'orders': 'Заказы',
+                'add-product': this.isEditing ? 'Редактировать товар' : 'Добавить товар',
+                'categories': 'Управление категориями',
+                'discounts': 'Скидки',
+                'promo-codes': 'Промокоды',
+                'categories-tree': 'Дерево категорий'
+            };
+
+            const titleElement = document.getElementById('pageTitle');
+            if (titleElement && titles[pageId]) {
+                titleElement.textContent = titles[pageId];
+            }
+
+            this.currentPage = pageId;
+
+            // Загружаем данные для страницы с небольшим таймаутом
+            setTimeout(() => {
+                if (pageId === 'dashboard') {
+                    this.loadDashboardData();
+                } else if (pageId === 'products') {
+                    this.loadProducts();
+                } else if (pageId === 'orders') {
+                    this.loadOrders();
+                } else if (pageId === 'categories') {
+                    this.loadCategories();
+                } else if (pageId === 'discounts') {
+                    this.loadDiscounts();
+                } else if (pageId === 'promo-codes') {
+                    this.loadPromoCodes();
+                } else if (pageId === 'categories-tree') {
+                    this.loadCategoriesTree();
+                }
+            }, 50);
         }
-
-        this.currentPage = pageId;
-
-        // Загружаем данные для страницы
-        if (pageId === 'dashboard') {
-            this.loadDashboardData();
-        } else if (pageId === 'products') {
-            this.loadProducts();
-        } else if (pageId === 'orders') {
-            this.loadOrders();
-        } else if (pageId === 'categories') {
-            this.loadCategories();
-        } else if (pageId === 'discounts') {
-            this.loadDiscounts();
-        } else if (pageId === 'promo-codes') {
-            this.loadPromoCodes();
-        } else if (pageId === 'categories-tree') {
-            this.loadCategoriesTree();
-        }
-    }
 
     // Отсутствующие методы для промокодов
     async showEditPromoCodeForm(promoId) {
