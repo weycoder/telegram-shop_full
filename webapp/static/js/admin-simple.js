@@ -147,7 +147,7 @@ class AdminPanel {
         }
 
         console.log('📦 Рендерим товары:', this.products.length);
-    
+
         if (this.products.length === 0) {
             container.innerHTML = `
                 <tr>

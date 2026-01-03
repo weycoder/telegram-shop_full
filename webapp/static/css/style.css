@@ -2878,3 +2878,169 @@ html {
     background: #4CAF50;
     color: #2D2D2D;
 }
+
+/* Стили для скидок */
+.discount-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #FF416C, #FF4B2B);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    z-index: 2;
+    box-shadow: 0 4px 15px rgba(255, 65, 108, 0.3);
+    animation: pulse 2s infinite;
+}
+
+.discount-badge-large {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: linear-gradient(135deg, #FF416C, #FF4B2B);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: 700;
+    z-index: 2;
+    box-shadow: 0 4px 20px rgba(255, 65, 108, 0.4);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.product-card.has-discount {
+    border: 2px solid #FF416C;
+    position: relative;
+    overflow: hidden;
+}
+
+.price-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.original-price {
+    text-decoration: line-through;
+    color: #999;
+    font-size: 14px;
+}
+
+.discounted-price {
+    font-size: 18px;
+    font-weight: 700;
+    color: #FF416C;
+}
+
+.price-container-modal {
+    margin: 15px 0;
+}
+
+.original-price-modal {
+    text-decoration: line-through;
+    color: #999;
+    font-size: 16px;
+}
+
+.discounted-price-modal {
+    font-size: 28px;
+    font-weight: 700;
+    color: #FF416C;
+    margin: 5px 0;
+}
+
+.discount-savings {
+    background: #e8f5e9;
+    color: #2e7d32;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.discount-savings i {
+    font-size: 16px;
+}
+
+/* Стили для акций */
+.discount-tag {
+    background: #4CAF50;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 2;
+}
+
+.product-pricing {
+    min-height: 40px;
+}
+
+/* Стили для корзины со скидками */
+.cart-item-discount {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
+
+.discount-tag-cart {
+    background: #FF416C;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.cart-price-discounted {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cart-item-original-price {
+    text-decoration: line-through;
+    color: #999;
+    font-size: 12px;
+}
+
+.cart-item-price {
+    font-weight: 700;
+    color: #FF416C;
+}
+
+/* Уведомление о скидке */
+.discount-notification {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+    animation: slideInDown 0.5s ease;
+}
+
+@keyframes slideInDown {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
