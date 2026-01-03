@@ -62,10 +62,9 @@ class TelegramShop {
             address_id: null,
             pickup_point: null,
             address_details: null
+        };
         this.discounts = [];
         this.promo_codes = [];
-
-        };
 
         // Получаем параметры Telegram при создании
         const params = getTelegramParams();
