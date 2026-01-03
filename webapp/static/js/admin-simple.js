@@ -138,75 +138,70 @@ class AdminPanel {
         });
     }
 
-    // Методы рендеринга товаров
     // Методы рендеринга товаров - исправленная версия
     renderProducts() {
-        const container = document.getElementById('productsContainer');
+        const container = document.getElementById('productsTableBody');
         if (!container) {
             console.error('❌ Контейнер товаров не найден');
             return;
         }
 
         console.log('📦 Рендерим товары:', this.products.length);
-
+    
         if (this.products.length === 0) {
             container.innerHTML = `
-                <div class="no-data">
-                    <i class="fas fa-box" style="font-size: 48px; color: #ddd;"></i>
-                    <h3>Товары не найдены</h3>
-                    <p>Создайте первый товар</p>
-                    <button class="btn btn-primary" onclick="admin.showAddProduct()">
-                        <i class="fas fa-plus"></i> Добавить товар
-                    </button>
-                </div>
+                <tr>
+                    <td colspan="7" class="no-data">
+                        <i class="fas fa-box"></i>
+                        <h3>Товары не найдены</h3>
+                        <p>Создайте первый товар</p>
+                        <button class="btn btn-primary" onclick="admin.showAddProduct()">
+                            <i class="fas fa-plus"></i> Добавить товар
+                        </button>
+                    </td>
+                </tr>
             `;
             return;
         }
 
-        let html = `
-            <div class="products-header">
-                <h2>Управление товарами (${this.products.length})</h2>
-                <button class="btn btn-primary" onclick="admin.showAddProduct()">
-                    <i class="fas fa-plus"></i> Новый товар
-                </button>
-            </div>
-            <div class="products-grid">
-        `;
+        let html = '';
 
         this.products.forEach(product => {
-            const imageUrl = product.image_url || 'https://via.placeholder.com/300x200';
-            const description = product.description || 'Нет описания';
+            const imageUrl = product.image_url || 'https://via.placeholder.com/50';
             const category = product.category || 'Без категории';
 
             html += `
-                <div class="product-card">
-                    <div class="product-image">
+                <tr>
+                    <td><strong>#${product.id}</strong></td>
+                    <td>
                         <img src="${imageUrl}"
                              alt="${product.name}"
-                             onerror="this.src='https://via.placeholder.com/300x200'">
-                    </div>
-                    <div class="product-info">
-                        <h3>${product.name}</h3>
-                        <p class="product-description">${description}</p>
-                        <div class="product-details">
-                            <span class="price">${this.formatPrice(product.price)} ₽</span>
-                            <span class="stock">Остаток: ${product.stock || 0} шт.</span>
-                            <span class="category">${category}</span>
+                             style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;"
+                             onerror="this.src='https://via.placeholder.com/50'">
+                    </td>
+                    <td>
+                        <div>
+                            <strong>${product.name}</strong>
+                            <small style="display: block; color: #666; margin-top: 5px;">${product.description ? product.description.substring(0, 50) + '...' : 'Нет описания'}</small>
                         </div>
-                    </div>
-                    <div class="product-actions">
-                        <button class="btn-small btn-edit" onclick="admin.editProduct(${product.id})">
-                            <i class="fas fa-edit"></i> Редактировать
-                        </button>
-                        <button class="btn-small btn-delete" onclick="admin.deleteProduct(${product.id})">
-                            <i class="fas fa-trash"></i> Удалить
-                        </button>
-                    </div>
-                </div>
+                    </td>
+                    <td><strong>${this.formatPrice(product.price)} ₽</strong></td>
+                    <td>${product.stock || 0} шт.</td>
+                    <td><span class="category-badge">${category}</span></td>
+                    <td>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-small btn-edit" onclick="admin.editProduct(${product.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-small btn-delete" onclick="admin.deleteProduct(${product.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
             `;
         });
 
-        html += '</div>';
         container.innerHTML = html;
     }
 
