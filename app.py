@@ -51,597 +51,236 @@ def init_db():
         db = get_db()
         cursor = db.cursor()
 
+        # УДАЛЯЕМ старые проблемные таблицы если они существуют
+        cursor.execute("DROP TABLE IF EXISTS discount_applications")
+        cursor.execute("DROP TABLE IF EXISTS product_categories")
+        cursor.execute("DROP TABLE IF EXISTS promo_codes")
+        cursor.execute("DROP TABLE IF EXISTS discounts")
+
         # Существующие таблицы (НЕ ТРОГАЕМ)
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS couriers
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           username
-                           TEXT
-                           UNIQUE
-                           NOT
-                           NULL,
-                           password
-                           TEXT
-                           NOT
-                           NULL,
-                           full_name
-                           TEXT
-                           NOT
-                           NULL,
-                           phone
-                           TEXT
-                           NOT
-                           NULL,
-                           vehicle_type
-                           TEXT,
-                           is_active
-                           INTEGER
-                           DEFAULT
-                           1,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS couriers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                vehicle_type TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS order_assignments
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           order_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           courier_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           assigned_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP,
-                           status
-                           TEXT
-                           DEFAULT
-                           'assigned',
-                           delivery_started
-                           TIMESTAMP,
-                           delivered_at
-                           TIMESTAMP,
-                           photo_proof
-                           TEXT,
-                           customer_signature
-                           TEXT,
-                           delivery_notes
-                           TEXT,
-                           FOREIGN
-                           KEY
-                       (
-                           order_id
-                       ) REFERENCES orders
-                       (
-                           id
-                       ),
-                           FOREIGN KEY
-                       (
-                           courier_id
-                       ) REFERENCES couriers
-                       (
-                           id
-                       )
-                           )
-                       ''')
+            CREATE TABLE IF NOT EXISTS order_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER NOT NULL,
+                courier_id INTEGER NOT NULL,
+                assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'assigned',
+                delivery_started TIMESTAMP,
+                delivered_at TIMESTAMP,
+                photo_proof TEXT,
+                customer_signature TEXT,
+                delivery_notes TEXT,
+                FOREIGN KEY (order_id) REFERENCES orders (id),
+                FOREIGN KEY (courier_id) REFERENCES couriers (id)
+            )
+        ''')
 
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS pending_notifications
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           telegram_id
-                           BIGINT
-                           NOT
-                           NULL,
-                           order_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           status
-                           TEXT
-                           NOT
-                           NULL,
-                           courier_name
-                           TEXT,
-                           courier_phone
-                           TEXT,
-                           sent
-                           INTEGER
-                           DEFAULT
-                           0,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS pending_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id BIGINT NOT NULL,
+                order_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                courier_name TEXT,
+                courier_phone TEXT,
+                sent INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS products
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           name
-                           TEXT
-                           NOT
-                           NULL,
-                           description
-                           TEXT,
-                           price
-                           REAL
-                           NOT
-                           NULL,
-                           image_url
-                           TEXT,
-                           category
-                           TEXT,
-                           stock
-                           INTEGER
-                           DEFAULT
-                           0,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                price REAL NOT NULL,
+                image_url TEXT,
+                category TEXT,
+                category_id INTEGER,
+                stock INTEGER DEFAULT 0,
+                product_type TEXT DEFAULT 'piece',
+                unit TEXT DEFAULT 'шт',
+                weight_unit TEXT DEFAULT 'кг',
+                price_per_unit DECIMAL(10, 2),
+                min_weight DECIMAL(10, 3) DEFAULT 0.1,
+                step_weight DECIMAL(10, 3) DEFAULT 0.1,
+                stock_weight DECIMAL(10, 3),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         # ========== ИСПРАВЛЕННАЯ ТАБЛИЦА ORDERS ==========
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS orders
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           user_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           username
-                           TEXT,
-                           items
-                           TEXT
-                           NOT
-                           NULL,
-                           total_price
-                           REAL
-                           NOT
-                           NULL,
-                           delivery_cost
-                           REAL
-                           DEFAULT
-                           0,
-                           status
-                           TEXT
-                           DEFAULT
-                           'pending',
-                           delivery_type
-                           TEXT,
-                           delivery_address
-                           TEXT,
-                           pickup_point
-                           TEXT,
-                           payment_method
-                           TEXT
-                           DEFAULT
-                           'cash',
-                           recipient_name
-                           TEXT,
-                           phone_number
-                           TEXT,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                items TEXT NOT NULL,
+                total_price REAL NOT NULL,
+                delivery_cost REAL DEFAULT 0,
+                status TEXT DEFAULT 'pending',
+                delivery_type TEXT,
+                delivery_address TEXT,
+                pickup_point TEXT,
+                payment_method TEXT DEFAULT 'cash',
+                recipient_name TEXT,
+                phone_number TEXT,
+                discount_id INTEGER,
+                promo_code_id INTEGER,
+                discount_amount DECIMAL(10, 2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS user_addresses
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           user_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           city
-                           TEXT
-                           NOT
-                           NULL,
-                           street
-                           TEXT
-                           NOT
-                           NULL,
-                           house
-                           TEXT
-                           NOT
-                           NULL,
-                           apartment
-                           TEXT,
-                           floor
-                           TEXT,
-                           doorcode
-                           TEXT,
-                           recipient_name
-                           TEXT
-                           NOT
-                           NULL,
-                           phone
-                           TEXT,
-                           is_default
-                           INTEGER
-                           DEFAULT
-                           0,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS user_addresses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                city TEXT NOT NULL,
+                street TEXT NOT NULL,
+                house TEXT NOT NULL,
+                apartment TEXT,
+                floor TEXT,
+                doorcode TEXT,
+                recipient_name TEXT NOT NULL,
+                phone TEXT,
+                is_default INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS user_push_tokens
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           user_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           device_type
-                           TEXT,
-                           token
-                           TEXT
-                           NOT
-                           NULL,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS user_push_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                device_type TEXT,
+                token TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS pickup_points
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           name
-                           TEXT
-                           NOT
-                           NULL,
-                           address
-                           TEXT
-                           NOT
-                           NULL,
-                           working_hours
-                           TEXT,
-                           phone
-                           TEXT,
-                           latitude
-                           REAL,
-                           longitude
-                           REAL,
-                           is_active
-                           INTEGER
-                           DEFAULT
-                           1
-                       )
-                       ''')
+            CREATE TABLE IF NOT EXISTS pickup_points (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                address TEXT NOT NULL,
+                working_hours TEXT,
+                phone TEXT,
+                latitude REAL,
+                longitude REAL,
+                is_active INTEGER DEFAULT 1
+            )
+        ''')
 
         # ========== НОВЫЕ ТАБЛИЦЫ ДЛЯ УВЕДОМЛЕНИЙ ==========
-
-        # Таблица пользователей Telegram (если еще не создана)
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS telegram_users
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           telegram_id
-                           BIGINT
-                           UNIQUE
-                           NOT
-                           NULL,
-                           username
-                           TEXT,
-                           first_name
-                           TEXT,
-                           last_name
-                           TEXT,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP,
-                           last_seen
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
-                       ''')
-
-        # Таблица для логов уведомлений
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS notification_logs
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           order_id
-                           INTEGER
-                           NOT
-                           NULL,
-                           telegram_id
-                           BIGINT
-                           NOT
-                           NULL,
-                           status
-                           TEXT
-                           NOT
-                           NULL,
-                           message
-                           TEXT,
-                           sent_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP,
-                           success
-                           INTEGER
-                           DEFAULT
-                           0,
-                           error_message
-                           TEXT
-                       )
-                       ''')
-
-        # 1. Добавляем поля к существующей таблице products
-        cursor.execute('''
-                       ALTER TABLE products
-                           ADD COLUMN product_type TEXT DEFAULT 'piece'
-                               CHECK (product_type IN ('piece', 'weight'))
-                       ''')
+            CREATE TABLE IF NOT EXISTS telegram_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id BIGINT UNIQUE NOT NULL,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         cursor.execute('''
-                       ALTER TABLE products
-                           ADD COLUMN unit TEXT DEFAULT 'шт'
-                       ''')
+            CREATE TABLE IF NOT EXISTS notification_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER NOT NULL,
+                telegram_id BIGINT NOT NULL,
+                status TEXT NOT NULL,
+                message TEXT,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                success INTEGER DEFAULT 0,
+                error_message TEXT
+            )
+        ''')
 
-        cursor.execute('''
-                       ALTER TABLE products
-                           ADD COLUMN weight_unit TEXT DEFAULT 'кг'
-                       ''')
+        # ========== ИСПРАВЛЕННЫЕ ТАБЛИЦЫ ДЛЯ СКИДОК И ПРОМОКОДОВ ==========
 
+        # 1. Таблица скидок с правильной структурой
         cursor.execute('''
-                       ALTER TABLE products
-                           ADD COLUMN price_per_unit DECIMAL(10, 2)
-                       ''')
+            CREATE TABLE IF NOT EXISTS discounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                discount_type TEXT CHECK (discount_type IN ('percentage', 'fixed', 'free_delivery', 'bogo')),
+                value DECIMAL(10, 2),
+                min_order_amount DECIMAL(10, 2) DEFAULT 0,
+                apply_to TEXT CHECK (apply_to IN ('all', 'category', 'product')),
+                target_category TEXT,
+                target_product_id INTEGER,
+                start_date TIMESTAMP,
+                end_date TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                used_count INTEGER DEFAULT 0
+            )
+        ''')
 
+        # 2. Таблица промокодов с правильной структурой
         cursor.execute('''
-                       ALTER TABLE products
-                           ADD COLUMN min_weight DECIMAL(10, 3) DEFAULT 0.1
-                       ''')
+            CREATE TABLE IF NOT EXISTS promo_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                discount_type TEXT CHECK (discount_type IN ('percentage', 'fixed', 'free_delivery', 'bogo')),
+                value DECIMAL(10, 2),
+                usage_limit INTEGER,
+                used_count INTEGER DEFAULT 0,
+                min_order_amount DECIMAL(10, 2) DEFAULT 0,
+                start_date TIMESTAMP,
+                end_date TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1,
+                one_per_customer BOOLEAN DEFAULT 0,
+                exclude_sale_items BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
+        # 3. Таблица категорий с древовидной структурой
         cursor.execute('''
-                       ALTER TABLE products
-                           ADD COLUMN step_weight DECIMAL(10, 3) DEFAULT 0.1
-                       ''')
-
-        cursor.execute('''
-                       ALTER TABLE products
-                           ADD COLUMN stock_weight DECIMAL(10, 3)
-                       ''')
-
-        # 2. Таблица скидок
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS discounts
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           name
-                           TEXT
-                           NOT
-                           NULL,
-                           discount_type
-                           TEXT
-                           CHECK (
-                           discount_type
-                           IN
-                       (
-                           'percentage',
-                           'fixed',
-                           'bogo'
-                       )),
-                           value DECIMAL
-                       (
-                           10,
-                           2
-                       ),
-                           min_order_amount DECIMAL
-                       (
-                           10,
-                           2
-                       ) DEFAULT 0,
-                           max_discount DECIMAL
-                       (
-                           10,
-                           2
-                       ),
-                           start_date TIMESTAMP,
-                           end_date TIMESTAMP,
-                           is_active BOOLEAN DEFAULT 1,
-                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                           )
-                       ''')
-
-        # 3. Применение скидок к товарам/категориям
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS discount_applications
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           discount_id
-                           INTEGER,
-                           product_id
-                           INTEGER,
-                           category
-                           TEXT,
-                           apply_to_all
-                           BOOLEAN
-                           DEFAULT
-                           0,
-                           FOREIGN
-                           KEY
-                       (
-                           discount_id
-                       ) REFERENCES discounts
-                       (
-                           id
-                       ),
-                           FOREIGN KEY
-                       (
-                           product_id
-                       ) REFERENCES products
-                       (
-                           id
-                       )
-                           )
-                       ''')
-
-        # 4. Промокоды
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS promo_codes
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           code
-                           TEXT
-                           UNIQUE
-                           NOT
-                           NULL,
-                           discount_id
-                           INTEGER,
-                           usage_limit
-                           INTEGER,
-                           used_count
-                           INTEGER
-                           DEFAULT
-                           0,
-                           is_active
-                           BOOLEAN
-                           DEFAULT
-                           1,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP,
-                           FOREIGN
-                           KEY
-                       (
-                           discount_id
-                       ) REFERENCES discounts
-                       (
-                           id
-                       )
-                           )
-                       ''')
-
-        # 5. Категории для скидок
-        cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS product_categories
-                       (
-                           id
-                           INTEGER
-                           PRIMARY
-                           KEY
-                           AUTOINCREMENT,
-                           name
-                           TEXT
-                           NOT
-                           NULL
-                           UNIQUE,
-                           parent_id
-                           INTEGER,
-                           discount_id
-                           INTEGER,
-                           sort_order
-                           INTEGER
-                           DEFAULT
-                           0,
-                           FOREIGN
-                           KEY
-                       (
-                           parent_id
-                       ) REFERENCES product_categories
-                       (
-                           id
-                       ),
-                           FOREIGN KEY
-                       (
-                           discount_id
-                       ) REFERENCES discounts
-                       (
-                           id
-                       )
-                           )
-                       ''')
+            CREATE TABLE IF NOT EXISTS product_categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                parent_id INTEGER,
+                discount_id INTEGER,
+                sort_order INTEGER DEFAULT 0,
+                description TEXT,
+                icon TEXT,
+                color TEXT DEFAULT '#667eea',
+                seo_title TEXT,
+                seo_description TEXT,
+                seo_keywords TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_id) REFERENCES product_categories (id),
+                FOREIGN KEY (discount_id) REFERENCES discounts (id)
+            )
+        ''')
 
         # Тестовые курьеры
         if cursor.execute("SELECT COUNT(*) FROM couriers").fetchone()[0] == 0:
             cursor.executemany('''
-                               INSERT INTO couriers (username, password, full_name, phone, vehicle_type)
-                               VALUES (?, ?, ?, ?, ?)
-                               ''', [
-                                   ('courier1', '123456', 'Иван Курьеров', '+79991112233', 'car')
-                               ])
+                INSERT INTO couriers (username, password, full_name, phone, vehicle_type)
+                VALUES (?, ?, ?, ?, ?)
+            ''', [
+                ('courier1', '123456', 'Иван Курьеров', '+79991112233', 'car'),
+                ('courier2', '123456', 'Петр Доставкин', '+79992223344', 'bike'),
+                ('courier3', '123456', 'Сергей Экспрессов', '+79993334455', 'car')
+            ])
 
         # Тестовые товары
         if cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
@@ -652,7 +291,7 @@ def init_db():
                 ('Samsung Galaxy S23', 'Флагман Samsung с камерой 200 Мп', 89999,
                  'https://images.samsung.com/is/image/samsung/p6pim/ru/2302/gallery/ru-galaxy-s23-s911-sm-s911bzadeub-534866168',
                  'Телефоны', 15),
-                ('Наушники Sony WH-1000XM5', 'Беспроводные с шумоподавлением, 30 часов работы', 34999,
+                ('Наушники Sony WH-1000XM5', 'Беспровные с шумоподавлением, 30 часов работы', 34999,
                  'https://sony.scene7.com/is/image/sonyglobalsolutions/WH-1000XM5-B_primary-image', 'Аксессуары', 20),
                 ('MacBook Air M2', 'Ультратонкий ноутбук Apple, 13.6 дюймов', 129999,
                  'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/macbook-air-midnight-select-20220606',
@@ -661,8 +300,7 @@ def init_db():
                  'https://resource.logitechg.com/w_386,ar_1.0,c_limit,f_auto,q_auto,dpr_2.0/d_transparent.gif/content/dam/gaming/en/products/pro-x/pro-x-keyboard-gallery-1.png',
                  'Аксессуары', 30),
                 ('Мышь Razer DeathAdder', 'Игровая мышь, 20000 DPI, 8 кнопок', 6999,
-                 'https://assets2.razerzone.com/images/og-image/razer-deathadder-v3-pro-og-1200x630.jpg', 'Аксессуары',
-                 25),
+                 'https://assets2.razerzone.com/images/og-image/razer-deathadder-v3-pro-og-1200x630.jpg', 'Аксессуары', 25),
                 ('Монитор Samsung 27"', 'Игровой монитор 144 Гц, 4K', 45999,
                  'https://images.samsung.com/is/image/samsung/p6pim/ru/ls27bg402eixci/gallery/ru-odyssey-g4-gaming-ls27bg402eixci-533006960',
                  'Мониторы', 12),
@@ -683,10 +321,66 @@ def init_db():
             cursor.executemany('INSERT INTO pickup_points (name, address, working_hours, phone) VALUES (?, ?, ?, ?)',
                                pickup_points)
 
+        # Тестовые категории
+        if cursor.execute("SELECT COUNT(*) FROM product_categories").fetchone()[0] == 0:
+            test_categories = [
+                ('Телефоны', None, None, 1, 'Мобильные телефоны и смартфоны', 'fas fa-mobile-alt', '#4CAF50',
+                 'Купить телефон недорого', 'Лучшие телефоны по выгодным ценам', 'телефоны, смартфоны, купить телефон'),
+                ('Ноутбуки', None, None, 2, 'Ноутбуки и ультрабуки', 'fas fa-laptop', '#2196F3',
+                 'Купить ноутбук', 'Широкий выбор ноутбуков', 'ноутбуки, купить ноутбук, ультрабук'),
+                ('Аксессуары', None, None, 3, 'Аксессуары для техники', 'fas fa-headphones', '#FF9800',
+                 'Аксессуары для гаджетов', 'Чехлы, наушники, зарядные устройства', 'аксессуары, наушники, чехлы'),
+                ('Мониторы', None, None, 4, 'Мониторы и дисплеи', 'fas fa-desktop', '#9C27B0',
+                 'Мониторы для игр и работы', 'Игровые и профессиональные мониторы', 'мониторы, игровые мониторы, купить монитор')
+            ]
+            cursor.executemany('''
+                INSERT INTO product_categories (name, parent_id, discount_id, sort_order, description, icon, color, seo_title, seo_description, seo_keywords)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', test_categories)
+
+        # Тестовые скидки
+        if cursor.execute("SELECT COUNT(*) FROM discounts").fetchone()[0] == 0:
+            test_discounts = [
+                ('Летняя распродажа', 'percentage', 15.00, 1000.00, 'all', None, None,
+                 '2025-06-01 00:00:00', '2025-08-31 23:59:59', 1),
+                ('Скидка на телефоны', 'percentage', 10.00, 0.00, 'category', 'Телефоны', None,
+                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1),
+                ('Фиксированная скидка', 'fixed', 5000.00, 20000.00, 'all', None, None,
+                 None, None, 1),
+                ('Бесплатная доставка', 'free_delivery', 0.00, 1000.00, 'all', None, None,
+                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1)
+            ]
+            cursor.executemany('''
+                INSERT INTO discounts (name, discount_type, value, min_order_amount, apply_to, target_category, target_product_id, start_date, end_date, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', test_discounts)
+
+        # Тестовые промокоды
+        if cursor.execute("SELECT COUNT(*) FROM promo_codes").fetchone()[0] == 0:
+            test_promo_codes = [
+                ('SUMMER2025', 'percentage', 20.00, 100, 0, 0.00,
+                 '2025-06-01 00:00:00', '2025-08-31 23:59:59', 1, 0, 0),
+                ('WELCOME10', 'percentage', 10.00, 1000, 0, 0.00,
+                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1, 1, 0),
+                ('FREESHIP', 'free_delivery', 0.00, 500, 0, 0.00,
+                 None, None, 1, 0, 0),
+                ('SALE5000', 'fixed', 5000.00, 200, 0, 50000.00,
+                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1, 0, 1)
+            ]
+            cursor.executemany('''
+                INSERT INTO promo_codes (code, discount_type, value, usage_limit, used_count, min_order_amount, start_date, end_date, is_active, one_per_customer, exclude_sale_items)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', test_promo_codes)
+
+        # Обновляем товары, чтобы связать их с категориями
+        cursor.execute("UPDATE products SET category_id = 1 WHERE category = 'Телефоны'")
+        cursor.execute("UPDATE products SET category_id = 2 WHERE category = 'Ноутбуки'")
+        cursor.execute("UPDATE products SET category_id = 3 WHERE category = 'Аксессуары'")
+        cursor.execute("UPDATE products SET category_id = 4 WHERE category = 'Мониторы'")
+
         db.commit()
         db.close()
-        print("✅ База данных инициализирована")
-
+        print("✅ База данных инициализирована с исправленной структурой")
 
 init_db()
 
@@ -984,6 +678,48 @@ def api_categories():
     finally:
         db.close()
 
+@app.route('/api/categories/tree', methods=['GET'])
+def get_categories_tree():
+    """Получить дерево категорий"""
+    db = get_db()
+    try:
+        categories = db.execute('''
+            SELECT pc.*,
+                   d.name as discount_name
+            FROM product_categories pc
+            LEFT JOIN discounts d ON pc.discount_id = d.id
+            ORDER BY pc.sort_order, pc.name
+        ''').fetchall()
+
+        # Строим дерево
+        categories_dict = {}
+        root_categories = []
+
+        for cat in categories:
+            cat_dict = dict(cat)
+            cat_dict['children'] = []
+            # Получаем количество товаров в категории
+            product_count = db.execute(
+                'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
+                (cat_dict['name'], cat_dict['id'])
+            ).fetchone()[0]
+            cat_dict['product_count'] = product_count
+            cat_dict['has_products'] = product_count > 0
+            categories_dict[cat_dict['id']] = cat_dict
+
+        for cat_id, cat in categories_dict.items():
+            if cat['parent_id']:
+                if cat['parent_id'] in categories_dict:
+                    categories_dict[cat['parent_id']]['children'].append(cat)
+            else:
+                root_categories.append(cat)
+
+        db.close()
+        return jsonify(root_categories)
+    except Exception as e:
+        db.close()
+        print(f"❌ Ошибка получения дерева категорий: {e}")
+        return jsonify([])
 
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
@@ -1796,133 +1532,199 @@ def admin_dashboard():
 
 # ========== API ДЛЯ ВЕСОВЫХ ТОВАРОВ И СКИДОК ==========
 
-@app.route('/api/admin/discounts', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/api/discounts', methods=['GET'])
+def get_discounts():
+    """Получить все активные скидки"""
+    db = get_db()
+    try:
+        discounts = db.execute('''
+                               SELECT d.*,
+                                      (SELECT COUNT(*) FROM orders WHERE discount_id = d.id) as used_count
+                               FROM discounts d
+                               ORDER BY d.created_at DESC
+                               ''').fetchall()
+
+        result = [dict(discount) for discount in discounts]
+        db.close()
+        return jsonify(result)
+    except Exception as e:
+        db.close()
+        print(f"❌ Ошибка получения скидок: {e}")
+        return jsonify([])
+
+
+@app.route('/api/admin/discounts', methods=['GET', 'POST'])
 def admin_discounts():
-    """Управление скидками"""
+    """Управление скидками - получение списка и создание"""
     db = get_db()
     try:
         if request.method == 'GET':
             # Получить все скидки
-            discounts = db.execute('SELECT * FROM discounts ORDER BY created_at DESC').fetchall()
-            discount_list = []
+            discounts = db.execute('''
+                                   SELECT d.*,
+                                          (SELECT COUNT(*) FROM orders WHERE discount_id = d.id) as used_count
+                                   FROM discounts d
+                                   ORDER BY d.created_at DESC
+                                   ''').fetchall()
 
-            for discount in discounts:
-                discount_dict = dict(discount)
-
-                # Получаем товары и категории для этой скидки
-                applications = db.execute(
-                    'SELECT product_id, category, apply_to_all FROM discount_applications WHERE discount_id = ?',
-                    (discount_dict['id'],)
-                ).fetchall()
-
-                discount_dict['applications'] = [dict(app) for app in applications]
-                discount_list.append(discount_dict)
-
-            return jsonify(discount_list)
+            return jsonify([dict(discount) for discount in discounts])
 
         elif request.method == 'POST':
             # Создать новую скидку
             data = request.json
 
-            # Проверяем обязательные поля
-            if not data.get('name') or not data.get('discount_type') or data.get('value') is None:
-                return jsonify({'success': False, 'error': 'Заполните обязательные поля'}), 400
+            # Валидация
+            if not data.get('name'):
+                return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
+
+            if not data.get('discount_type'):
+                return jsonify({'success': False, 'error': 'Выберите тип скидки'}), 400
+
+            if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
+                return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
+
+            if not data.get('apply_to'):
+                return jsonify({'success': False, 'error': 'Выберите область применения'}), 400
 
             # Вставляем скидку
             cursor = db.execute('''
-                                INSERT INTO discounts (name, discount_type, value, min_order_amount, max_discount,
+                                INSERT INTO discounts (name, discount_type, value, min_order_amount,
+                                                       apply_to, target_category, target_product_id,
                                                        start_date, end_date, is_active)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (
-                                    data['name'],
-                                    data['discount_type'],
-                                    data['value'],
+                                    data.get('name'),
+                                    data.get('discount_type'),
+                                    data.get('value', 0),
                                     data.get('min_order_amount', 0),
-                                    data.get('max_discount'),
+                                    data.get('apply_to', 'all'),
+                                    data.get('target_category'),
+                                    data.get('target_product_id'),
                                     data.get('start_date'),
                                     data.get('end_date'),
                                     data.get('is_active', True)
                                 ))
 
             discount_id = cursor.lastrowid
-
-            # Добавляем применения скидки
-            applications = data.get('applications', [])
-            for app in applications:
-                db.execute('''
-                           INSERT INTO discount_applications (discount_id, product_id, category, apply_to_all)
-                           VALUES (?, ?, ?, ?)
-                           ''', (
-                               discount_id,
-                               app.get('product_id'),
-                               app.get('category'),
-                               app.get('apply_to_all', False)
-                           ))
-
             db.commit()
+
             return jsonify({'success': True, 'id': discount_id})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/discounts/<int:id>', methods=['GET', 'PUT', 'DELETE'])
+def admin_discount_detail(id):
+    """Управление конкретной скидкой"""
+    db = get_db()
+    try:
+        if request.method == 'GET':
+            # Получить скидку по ID
+            discount = db.execute('SELECT * FROM discounts WHERE id = ?', (id,)).fetchone()
+
+            if not discount:
+                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
+
+            discount_dict = dict(discount)
+
+            # Получаем использования скидки
+            used_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
+            discount_dict['used_count'] = used_count
+
+            return jsonify(discount_dict)
 
         elif request.method == 'PUT':
             # Обновить скидку
-            discount_id = request.args.get('id')
             data = request.json
 
-            if not discount_id:
-                return jsonify({'success': False, 'error': 'Не указан ID скидки'}), 400
+            # Проверяем существование скидки
+            discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
+            if not discount:
+                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
 
+            # Валидация
+            if not data.get('name'):
+                return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
+
+            if not data.get('discount_type'):
+                return jsonify({'success': False, 'error': 'Выберите тип скидки'}), 400
+
+            if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
+                return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
+
+            if not data.get('apply_to'):
+                return jsonify({'success': False, 'error': 'Выберите область применения'}), 400
+
+            # Обновляем скидку
             db.execute('''
-                       UPDATE discounts
-                       SET name             = ?,
-                           discount_type    = ?,
-                           value            = ?,
-                           min_order_amount = ?,
-                           max_discount     = ?,
-                           start_date       = ?,
-                           end_date         = ?,
-                           is_active        = ?
-                       WHERE id = ?
-                       ''', (
-                           data.get('name'),
-                           data.get('discount_type'),
-                           data.get('value'),
-                           data.get('min_order_amount', 0),
-                           data.get('max_discount'),
-                           data.get('start_date'),
-                           data.get('end_date'),
-                           data.get('is_active', True),
-                           discount_id
-                       ))
-
-            # Удаляем старые применения и добавляем новые
-            db.execute('DELETE FROM discount_applications WHERE discount_id = ?', (discount_id,))
-
-            applications = data.get('applications', [])
-            for app in applications:
-                db.execute('''
-                           INSERT INTO discount_applications (discount_id, product_id, category, apply_to_all)
-                           VALUES (?, ?, ?, ?)
-                           ''', (
-                               discount_id,
-                               app.get('product_id'),
-                               app.get('category'),
-                               app.get('apply_to_all', False)
-                           ))
+                UPDATE discounts
+                SET name = ?, discount_type = ?, value = ?, min_order_amount = ?,
+                    apply_to = ?, target_category = ?, target_product_id = ?,
+                    start_date = ?, end_date = ?, is_active = ?
+                WHERE id = ?
+            ''', (
+                data.get('name'),
+                data.get('discount_type'),
+                data.get('value', 0),
+                data.get('min_order_amount', 0),
+                data.get('apply_to', 'all'),
+                data.get('target_category'),
+                data.get('target_product_id'),
+                data.get('start_date'),
+                data.get('end_date'),
+                data.get('is_active', True),
+                id
+            ))
 
             db.commit()
             return jsonify({'success': True})
 
         elif request.method == 'DELETE':
             # Удалить скидку
-            discount_id = request.args.get('id')
+            discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
+            if not discount:
+                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
 
-            if not discount_id:
-                return jsonify({'success': False, 'error': 'Не указан ID скидки'}), 400
+            # Проверяем, используется ли скидка в заказах
+            usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
+            if usage_count > 0:
+                return jsonify({'success': False, 'error': 'Нельзя удалить скидку, которая уже использовалась в заказах'}), 400
 
-            db.execute('DELETE FROM discounts WHERE id = ?', (discount_id,))
-            db.execute('DELETE FROM discount_applications WHERE discount_id = ?', (discount_id,))
-
+            # Удаляем скидку
+            db.execute('DELETE FROM discounts WHERE id = ?', (id,))
             db.commit()
+
             return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+@app.route('/api/admin/discounts/<int:id>/status', methods=['PUT'])
+def admin_discount_status(id):
+    """Изменить статус скидки (активна/неактивна)"""
+    db = get_db()
+    try:
+        data = request.json
+        is_active = data.get('is_active')
+
+        if is_active is None:
+            return jsonify({'success': False, 'error': 'Не указан статус'}), 400
+
+        # Проверяем существование скидки
+        discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
+        if not discount:
+            return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
+
+        # Обновляем статус
+        db.execute('UPDATE discounts SET is_active = ? WHERE id = ?', (is_active, id))
+        db.commit()
+
+        return jsonify({'success': True})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -2397,6 +2199,20 @@ def check_promo_code():
         return jsonify({'success': False, 'error': 'Ошибка проверки промокода'})
 
 
+@app.route('/api/promo-codes', methods=['GET'])
+def get_promo_codes():
+    """Получить все промокоды"""
+    db = get_db()
+    try:
+        promo_codes = db.execute('SELECT * FROM promo_codes ORDER BY created_at DESC').fetchall()
+        result = [dict(pc) for pc in promo_codes]
+        db.close()
+        return jsonify(result)
+    except Exception as e:
+        db.close()
+        print(f"❌ Ошибка получения промокодов: {e}")
+        return jsonify([])
+
 @app.route('/api/products/with-discounts', methods=['GET'])
 def get_products_with_discounts():
     """Получить товары со скидками"""
@@ -2800,205 +2616,16 @@ def uploaded_file(filename):
         return jsonify({'error': 'Файл не найден'}), 404
 
 
-# ========== НОВЫЕ API ДЛЯ СКИДОК, ПРОМОКОДОВ И ДЕРЕВА КАТЕГОРИЙ ==========
-
-@app.route('/api/admin/discounts', methods=['GET', 'POST'])
-def admin_discounts_new():
-    """Управление скидками - получение списка и создание"""
-    db = get_db()
-    try:
-        if request.method == 'GET':
-            # Получить все скидки
-            discounts = db.execute('''
-                                   SELECT d.*,
-                                          (SELECT COUNT(*) FROM orders WHERE discount_id = d.id) as used_count
-                                   FROM discounts d
-                                   ORDER BY d.created_at DESC
-                                   ''').fetchall()
-
-            return jsonify([dict(discount) for discount in discounts])
-
-        elif request.method == 'POST':
-            # Создать новую скидку
-            data = request.json
-
-            # Валидация
-            if not data.get('name'):
-                return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
-
-            if not data.get('discount_type'):
-                return jsonify({'success': False, 'error': 'Выберите тип скидки'}), 400
-
-            if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
-                return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
-
-            # Вставляем скидку
-            cursor = db.execute('''
-                                INSERT INTO discounts (name, discount_type, value, min_order_amount,
-                                                       apply_to, target_category, target_product_id,
-                                                       start_date, end_date, is_active)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    data.get('name'),
-                                    data.get('discount_type'),
-                                    data.get('value', 0),
-                                    data.get('min_order_amount', 0),
-                                    data.get('apply_to', 'all'),
-                                    data.get('target_category'),
-                                    data.get('target_product_id'),
-                                    data.get('start_date'),
-                                    data.get('end_date'),
-                                    data.get('is_active', True)
-                                ))
-
-            discount_id = cursor.lastrowid
-            db.commit()
-
-            return jsonify({'success': True, 'id': discount_id})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-
-@app.route('/api/admin/discounts/<int:id>', methods=['GET', 'PUT', 'DELETE'])
-def admin_discount_detail(id):
-    """Управление конкретной скидкой"""
-    db = get_db()
-    try:
-        if request.method == 'GET':
-            # Получить скидку по ID
-            discount = db.execute('SELECT * FROM discounts WHERE id = ?', (id,)).fetchone()
-
-            if not discount:
-                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
-
-            discount_dict = dict(discount)
-
-            # Получаем использования скидки
-            used_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
-            discount_dict['used_count'] = used_count
-
-            return jsonify(discount_dict)
-
-        elif request.method == 'PUT':
-            # Обновить скидку
-            data = request.json
-
-            # Проверяем существование скидки
-            discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
-            if not discount:
-                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
-
-            # Валидация
-            if not data.get('name'):
-                return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
-
-            if not data.get('discount_type'):
-                return jsonify({'success': False, 'error': 'Выберите тип скидки'}), 400
-
-            if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
-                return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
-
-            # Обновляем скидку
-            db.execute('''
-                       UPDATE discounts
-                       SET name              = ?,
-                           discount_type     = ?,
-                           value             = ?,
-                           min_order_amount  = ?,
-                           apply_to          = ?,
-                           target_category   = ?,
-                           target_product_id = ?,
-                           start_date        = ?,
-                           end_date          = ?,
-                           is_active         = ?
-                       WHERE id = ?
-                       ''', (
-                           data.get('name'),
-                           data.get('discount_type'),
-                           data.get('value', 0),
-                           data.get('min_order_amount', 0),
-                           data.get('apply_to', 'all'),
-                           data.get('target_category'),
-                           data.get('target_product_id'),
-                           data.get('start_date'),
-                           data.get('end_date'),
-                           data.get('is_active', True),
-                           id
-                       ))
-
-            db.commit()
-            return jsonify({'success': True})
-
-        elif request.method == 'DELETE':
-            # Удалить скидку
-            discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
-            if not discount:
-                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
-
-            # Проверяем, используется ли скидка в заказах
-            usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
-            if usage_count > 0:
-                return jsonify(
-                    {'success': False, 'error': 'Нельзя удалить скидку, которая уже использовалась в заказах'}), 400
-
-            # Удаляем скидку
-            db.execute('DELETE FROM discounts WHERE id = ?', (id,))
-            db.commit()
-
-            return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-
-@app.route('/api/admin/discounts/<int:id>/status', methods=['PUT'])
-def admin_discount_status(id):
-    """Изменить статус скидки (активна/неактивна)"""
-    db = get_db()
-    try:
-        data = request.json
-        is_active = data.get('is_active')
-
-        if is_active is None:
-            return jsonify({'success': False, 'error': 'Не указан статус'}), 400
-
-        # Проверяем существование скидки
-        discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
-        if not discount:
-            return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
-
-        # Обновляем статус
-        db.execute('UPDATE discounts SET is_active = ? WHERE id = ?', (is_active, id))
-        db.commit()
-
-        return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
 
 # ========== API ДЛЯ ПРОМОКОДОВ ==========
-
 @app.route('/api/admin/promo-codes', methods=['GET', 'POST'])
-def admin_promo_codes_new():
+def admin_promo_codes_api():
     """Управление промокодами - получение списка и создание"""
     db = get_db()
     try:
         if request.method == 'GET':
             # Получить все промокоды
-            promo_codes = db.execute('''
-                                     SELECT pc.*
-                                     FROM promo_codes pc
-                                     ORDER BY pc.created_at DESC
-                                     ''').fetchall()
-
+            promo_codes = db.execute('SELECT * FROM promo_codes ORDER BY created_at DESC').fetchall()
             return jsonify([dict(pc) for pc in promo_codes])
 
         elif request.method == 'POST':
@@ -3022,22 +2649,23 @@ def admin_promo_codes_new():
 
             # Создаем промокод
             cursor = db.execute('''
-                                INSERT INTO promo_codes (code, discount_type, value, usage_limit,
-                                                         min_order_amount, start_date, end_date,
-                                                         is_active, one_per_customer, exclude_sale_items)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    data.get('code').upper(),
-                                    data.get('discount_type'),
-                                    data.get('value', 0),
-                                    data.get('usage_limit'),
-                                    data.get('min_order_amount', 0),
-                                    data.get('start_date'),
-                                    data.get('end_date'),
-                                    data.get('is_active', True),
-                                    data.get('one_per_customer', False),
-                                    data.get('exclude_sale_items', False)
-                                ))
+                INSERT INTO promo_codes (
+                    code, discount_type, value, usage_limit,
+                    min_order_amount, start_date, end_date,
+                    is_active, one_per_customer, exclude_sale_items
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                data.get('code').upper(),
+                data.get('discount_type'),
+                data.get('value', 0),
+                data.get('usage_limit'),
+                data.get('min_order_amount', 0),
+                data.get('start_date'),
+                data.get('end_date'),
+                data.get('is_active', True),
+                data.get('one_per_customer', False),
+                data.get('exclude_sale_items', False)
+            ))
 
             promo_id = cursor.lastrowid
             db.commit()
@@ -3048,7 +2676,6 @@ def admin_promo_codes_new():
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
-
 
 @app.route('/api/admin/promo-codes/<int:id>', methods=['GET', 'PUT', 'DELETE'])
 def admin_promo_code_detail(id):
@@ -3071,7 +2698,7 @@ def admin_promo_code_detail(id):
             # Проверяем существование промокода
             promo_code = db.execute('SELECT id FROM promo_codes WHERE id = ?', (id,)).fetchone()
             if not promo_code:
-                return jsonify({'success': False, 'error': 'Промокод не найден'}), 404
+                return jsonify({'success': False, 'error': 'Промокод не найдена'}), 404
 
             # Валидация
             if not data.get('code'):
@@ -3085,37 +2712,30 @@ def admin_promo_code_detail(id):
 
             # Проверяем уникальность кода (если изменился)
             existing = db.execute('SELECT id FROM promo_codes WHERE code = ? AND id != ?',
-                                  (data['code'].upper(), id)).fetchone()
+                                (data['code'].upper(), id)).fetchone()
             if existing:
                 return jsonify({'success': False, 'error': 'Такой промокод уже существует'}), 400
 
             # Обновляем промокод
             db.execute('''
-                       UPDATE promo_codes
-                       SET code               = ?,
-                           discount_type      = ?,
-                           value              = ?,
-                           usage_limit        = ?,
-                           min_order_amount   = ?,
-                           start_date         = ?,
-                           end_date           = ?,
-                           is_active          = ?,
-                           one_per_customer   = ?,
-                           exclude_sale_items = ?
-                       WHERE id = ?
-                       ''', (
-                           data.get('code').upper(),
-                           data.get('discount_type'),
-                           data.get('value', 0),
-                           data.get('usage_limit'),
-                           data.get('min_order_amount', 0),
-                           data.get('start_date'),
-                           data.get('end_date'),
-                           data.get('is_active', True),
-                           data.get('one_per_customer', False),
-                           data.get('exclude_sale_items', False),
-                           id
-                       ))
+                UPDATE promo_codes
+                SET code = ?, discount_type = ?, value = ?, usage_limit = ?,
+                    min_order_amount = ?, start_date = ?, end_date = ?,
+                    is_active = ?, one_per_customer = ?, exclude_sale_items = ?
+                WHERE id = ?
+            ''', (
+                data.get('code').upper(),
+                data.get('discount_type'),
+                data.get('value', 0),
+                data.get('usage_limit'),
+                data.get('min_order_amount', 0),
+                data.get('start_date'),
+                data.get('end_date'),
+                data.get('is_active', True),
+                data.get('one_per_customer', False),
+                data.get('exclude_sale_items', False),
+                id
+            ))
 
             db.commit()
             return jsonify({'success': True})
@@ -3129,8 +2749,7 @@ def admin_promo_code_detail(id):
             # Проверяем, используется ли промокод в заказах
             usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE promo_code_id = ?', (id,)).fetchone()[0]
             if usage_count > 0:
-                return jsonify(
-                    {'success': False, 'error': 'Нельзя удалить промокод, который уже использовался в заказах'}), 400
+                return jsonify({'success': False, 'error': 'Нельзя удалить промокод, который уже использовался в заказах'}), 400
 
             # Удаляем промокод
             db.execute('DELETE FROM promo_codes WHERE id = ?', (id,))
@@ -3145,7 +2764,7 @@ def admin_promo_code_detail(id):
 
 
 @app.route('/api/admin/promo-codes/<int:id>/status', methods=['PUT'])
-def admin_promo_code_status(id):
+def admin_promo_code_status_api(id):
     """Изменить статус промокода (активен/неактивен)"""
     db = get_db()
     try:
@@ -3171,24 +2790,22 @@ def admin_promo_code_status(id):
     finally:
         db.close()
 
-
 # ========== API ДЛЯ ДЕРЕВА КАТЕГОРИЙ ==========
 
 @app.route('/api/admin/categories/tree', methods=['GET', 'POST'])
-def admin_categories_tree_new():
-    """Управление деревом категорий - получение и создание"""
+def admin_categories_tree_api():
+    """Управление деревом категорий"""
     db = get_db()
     try:
         if request.method == 'GET':
             # Получить дерево категорий
             categories = db.execute('''
-                                    SELECT pc.*,
-                                           d.name                                                    as discount_name,
-                                           (SELECT COUNT(*) FROM products WHERE category_id = pc.id) as product_count
-                                    FROM product_categories pc
-                                             LEFT JOIN discounts d ON pc.discount_id = d.id
-                                    ORDER BY pc.sort_order, pc.name
-                                    ''').fetchall()
+                SELECT pc.*,
+                       d.name as discount_name
+                FROM product_categories pc
+                LEFT JOIN discounts d ON pc.discount_id = d.id
+                ORDER BY pc.sort_order, pc.name
+            ''').fetchall()
 
             # Строим дерево
             categories_dict = {}
@@ -3197,7 +2814,13 @@ def admin_categories_tree_new():
             for cat in categories:
                 cat_dict = dict(cat)
                 cat_dict['children'] = []
-                cat_dict['has_products'] = cat_dict['product_count'] > 0
+                # Получаем количество товаров в категории
+                product_count = db.execute(
+                    'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
+                    (cat_dict['name'], cat_dict['id'])
+                ).fetchone()[0]
+                cat_dict['product_count'] = product_count
+                cat_dict['has_products'] = product_count > 0
                 categories_dict[cat_dict['id']] = cat_dict
 
             for cat_id, cat in categories_dict.items():
@@ -3217,35 +2840,34 @@ def admin_categories_tree_new():
             if not data.get('name'):
                 return jsonify({'success': False, 'error': 'Введите название категории'}), 400
 
-            # Проверяем уникальность имени (в пределах одного уровня)
-            existing = db.execute('''
-                                  SELECT id
-                                  FROM product_categories
-                                  WHERE name = ?
-                                    AND parent_id = ?
-                                  ''', (data['name'], data.get('parent_id'))).fetchone()
+            # Проверяем уникальность имени
+            existing = db.execute(
+                'SELECT id FROM product_categories WHERE name = ?',
+                (data['name'],)
+            ).fetchone()
 
             if existing:
                 return jsonify({'success': False, 'error': 'Категория с таким именем уже существует'}), 400
 
             # Создаем категорию
             cursor = db.execute('''
-                                INSERT INTO product_categories (name, parent_id, discount_id, sort_order,
-                                                                description, icon, color,
-                                                                seo_title, seo_description, seo_keywords)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    data.get('name'),
-                                    data.get('parent_id'),
-                                    data.get('discount_id'),
-                                    data.get('sort_order', 0),
-                                    data.get('description'),
-                                    data.get('icon'),
-                                    data.get('color'),
-                                    data.get('seo_title'),
-                                    data.get('seo_description'),
-                                    data.get('seo_keywords')
-                                ))
+                INSERT INTO product_categories (
+                    name, parent_id, discount_id, sort_order,
+                    description, icon, color,
+                    seo_title, seo_description, seo_keywords
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                data.get('name'),
+                data.get('parent_id'),
+                data.get('discount_id'),
+                data.get('sort_order', 0),
+                data.get('description'),
+                data.get('icon'),
+                data.get('color', '#667eea'),
+                data.get('seo_title'),
+                data.get('seo_description'),
+                data.get('seo_keywords')
+            ))
 
             category_id = cursor.lastrowid
             db.commit()
@@ -3258,38 +2880,51 @@ def admin_categories_tree_new():
         db.close()
 
 
-@app.route('/api/admin/categories/tree/<int:id>', methods=['GET', 'PUT', 'DELETE'])
-def admin_category_tree_detail(id):
+app.route('/api/admin/categories/tree/<int:id>', methods=['GET', 'PUT', 'DELETE'])
+def admin_category_tree_detail_api(id):
     """Управление конкретной категорией в дереве"""
     db = get_db()
     try:
         if request.method == 'GET':
             # Получить категорию по ID
             category = db.execute('''
-                                  SELECT pc.*,
-                                         d.name                                                    as discount_name,
-                                         (SELECT COUNT(*) FROM products WHERE category_id = pc.id) as product_count
-                                  FROM product_categories pc
-                                           LEFT JOIN discounts d ON pc.discount_id = d.id
-                                  WHERE pc.id = ?
-                                  ''', (id,)).fetchone()
+                SELECT pc.*,
+                       d.name as discount_name
+                FROM product_categories pc
+                LEFT JOIN discounts d ON pc.discount_id = d.id
+                WHERE pc.id = ?
+            ''', (id,)).fetchone()
 
             if not category:
                 return jsonify({'success': False, 'error': 'Категория не найдена'}), 404
 
             category_dict = dict(category)
-            category_dict['has_products'] = category_dict['product_count'] > 0
+            # Получаем количество товаров в категории
+            product_count = db.execute(
+                'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
+                (category_dict['name'], id)
+            ).fetchone()[0]
+            category_dict['product_count'] = product_count
+            category_dict['has_products'] = product_count > 0
 
             # Получаем детей категории
             children = db.execute('''
-                                  SELECT pc.*,
-                                         d.name                                                    as discount_name,
-                                         (SELECT COUNT(*) FROM products WHERE category_id = pc.id) as product_count
-                                  FROM product_categories pc
-                                           LEFT JOIN discounts d ON pc.discount_id = d.id
-                                  WHERE pc.parent_id = ?
-                                  ORDER BY pc.sort_order, pc.name
-                                  ''', (id,)).fetchall()
+                SELECT pc.*,
+                       d.name as discount_name
+                FROM product_categories pc
+                LEFT JOIN discounts d ON pc.discount_id = d.id
+                WHERE pc.parent_id = ?
+                ORDER BY pc.sort_order, pc.name
+            ''', (id,)).fetchall()
+
+            for child in children:
+                child_dict = dict(child)
+                child_product_count = db.execute(
+                    'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
+                    (child_dict['name'], child_dict['id'])
+                ).fetchone()[0]
+                child_dict['product_count'] = child_product_count
+                child_dict['has_products'] = child_product_count > 0
 
             category_dict['children'] = [dict(child) for child in children]
 
@@ -3308,61 +2943,35 @@ def admin_category_tree_detail(id):
             if not data.get('name'):
                 return jsonify({'success': False, 'error': 'Введите название категории'}), 400
 
-            # Проверяем уникальность имени (в пределах одного уровня)
-            existing = db.execute('''
-                                  SELECT id
-                                  FROM product_categories
-                                  WHERE name = ?
-                                    AND parent_id = ?
-                                    AND id != ?
-                                  ''', (data['name'], data.get('parent_id'), id)).fetchone()
+            # Проверяем уникальность имени
+            existing = db.execute(
+                'SELECT id FROM product_categories WHERE name = ? AND id != ?',
+                (data['name'], id)
+            ).fetchone()
 
             if existing:
                 return jsonify({'success': False, 'error': 'Категория с таким именем уже существует'}), 400
 
-            # Проверяем, не пытаемся ли сделать категорию родителем самой себе
-            if data.get('parent_id') == id:
-                return jsonify({'success': False, 'error': 'Категория не может быть родителем самой себе'}), 400
-
-            # Проверяем циклические зависимости
-            if data.get('parent_id'):
-                parent_id = data.get('parent_id')
-                # Проверяем всех родителей
-                while parent_id:
-                    if parent_id == id:
-                        return jsonify({'success': False, 'error': 'Обнаружена циклическая зависимость'}), 400
-
-                    parent = db.execute('SELECT parent_id FROM product_categories WHERE id = ?',
-                                        (parent_id,)).fetchone()
-                    parent_id = parent['parent_id'] if parent else None
-
             # Обновляем категорию
             db.execute('''
-                       UPDATE product_categories
-                       SET name            = ?,
-                           parent_id       = ?,
-                           discount_id     = ?,
-                           sort_order      = ?,
-                           description     = ?,
-                           icon            = ?,
-                           color           = ?,
-                           seo_title       = ?,
-                           seo_description = ?,
-                           seo_keywords    = ?
-                       WHERE id = ?
-                       ''', (
-                           data.get('name'),
-                           data.get('parent_id'),
-                           data.get('discount_id'),
-                           data.get('sort_order', 0),
-                           data.get('description'),
-                           data.get('icon'),
-                           data.get('color'),
-                           data.get('seo_title'),
-                           data.get('seo_description'),
-                           data.get('seo_keywords'),
-                           id
-                       ))
+                UPDATE product_categories
+                SET name = ?, parent_id = ?, discount_id = ?, sort_order = ?,
+                    description = ?, icon = ?, color = ?,
+                    seo_title = ?, seo_description = ?, seo_keywords = ?
+                WHERE id = ?
+            ''', (
+                data.get('name'),
+                data.get('parent_id'),
+                data.get('discount_id'),
+                data.get('sort_order', 0),
+                data.get('description'),
+                data.get('icon'),
+                data.get('color', '#667eea'),
+                data.get('seo_title'),
+                data.get('seo_description'),
+                data.get('seo_keywords'),
+                id
+            ))
 
             db.commit()
             return jsonify({'success': True})
@@ -3374,13 +2983,18 @@ def admin_category_tree_detail(id):
                 return jsonify({'success': False, 'error': 'Категория не найдена'}), 404
 
             # Проверяем, есть ли товары в этой категории
-            products_count = db.execute('SELECT COUNT(*) FROM products WHERE category_id = ?', (id,)).fetchone()[0]
-            if products_count > 0:
+            product_count = db.execute(
+                'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
+                (category['name'], id)
+            ).fetchone()[0]
+            if product_count > 0:
                 return jsonify({'success': False, 'error': 'Нельзя удалить категорию с товарами'}), 400
 
             # Проверяем, есть ли подкатегории
-            children_count = \
-            db.execute('SELECT COUNT(*) FROM product_categories WHERE parent_id = ?', (id,)).fetchone()[0]
+            children_count = db.execute(
+                'SELECT COUNT(*) FROM product_categories WHERE parent_id = ?',
+                (id,)
+            ).fetchone()[0]
             if children_count > 0:
                 return jsonify({'success': False, 'error': 'Нельзя удалить категорию с подкатегориями'}), 400
 
@@ -3395,6 +3009,102 @@ def admin_category_tree_detail(id):
     finally:
         db.close()
 
+
+@app.route('/api/apply-discounts', methods=['POST'])
+def apply_discounts():
+    """Рассчитать скидки для товаров"""
+    try:
+        data = request.json
+        items = data.get('items', [])
+
+        if not items:
+            return jsonify({'discounted_items': [], 'total_discount': 0, 'final_total': 0})
+
+        db = get_db()
+
+        # Получаем все активные скидки
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        discounts = db.execute('''
+                               SELECT *
+                               FROM discounts
+                               WHERE is_active = 1
+                                 AND (start_date IS NULL OR start_date <= ?)
+                                 AND (end_date IS NULL OR end_date >= ?)
+                               ''', (now, now)).fetchall()
+
+        discounted_items = []
+        total_discount = 0
+        original_total = 0
+
+        for item in items:
+            product_id = item.get('id')
+            quantity = item.get('quantity', 1)
+            price = item.get('price', 0)
+
+            # Ищем скидку для товара
+            best_discount = None
+            best_discount_value = 0
+
+            for discount in discounts:
+                discount_dict = dict(discount)
+
+                # Проверяем применение скидки
+                applies = False
+
+                if discount_dict['apply_to'] == 'all':
+                    applies = True
+                elif discount_dict['apply_to'] == 'category':
+                    # Получаем категорию товара
+                    product = db.execute('SELECT category FROM products WHERE id = ?', (product_id,)).fetchone()
+                    if product and product['category'] == discount_dict['target_category']:
+                        applies = True
+                elif discount_dict['apply_to'] == 'product':
+                    if product_id == discount_dict['target_product_id']:
+                        applies = True
+
+                if applies:
+                    # Рассчитываем скидку
+                    discount_value = 0
+                    if discount_dict['discount_type'] == 'percentage':
+                        discount_value = price * quantity * (discount_dict['value'] / 100)
+                    elif discount_dict['discount_type'] == 'fixed':
+                        discount_value = discount_dict['value'] * quantity
+
+                    # Если это лучшая скидка для товара
+                    if discount_value > best_discount_value:
+                        best_discount_value = discount_value
+                        best_discount = discount_dict
+
+            discounted_price = price - (best_discount_value / quantity) if best_discount_value > 0 else price
+            item_discount = best_discount_value
+
+            discounted_items.append({
+                'id': product_id,
+                'name': item.get('name'),
+                'original_price': price,
+                'discounted_price': discounted_price,
+                'quantity': quantity,
+                'discount': item_discount,
+                'discount_info': best_discount
+            })
+
+            total_discount += item_discount
+            original_total += price * quantity
+
+        final_total = original_total - total_discount
+
+        db.close()
+
+        return jsonify({
+            'discounted_items': discounted_items,
+            'total_discount': total_discount,
+            'original_total': original_total,
+            'final_total': final_total
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка расчета скидок: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ========== ЗАПУСК ==========
 if __name__ == '__main__':

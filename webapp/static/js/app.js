@@ -131,15 +131,10 @@ class TelegramShop {
     async loadDiscounts() {
         try {
             console.log('🏷️ Загрузка скидок...');
-            const response = await fetch('/api/discounts');
+            const response = await fetch('/api/discounts');  // Измененный путь
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             this.discounts = await response.json();
             console.log(`✅ Загружено ${this.discounts.length} скидок`);
-
-            // После загрузки скидок обновляем отображение товаров
-            if (this.products.length > 0) {
-                this.renderProducts();
-            }
         } catch (error) {
             console.error('❌ Ошибка загрузки скидок:', error);
             this.discounts = [];
@@ -149,7 +144,7 @@ class TelegramShop {
     async loadPromoCodes() {
         try {
             console.log('🎟️ Загрузка промокодов...');
-            const response = await fetch('/api/promo-codes');
+            const response = await fetch('/api/promo-codes');  // Измененный путь
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             this.promo_codes = await response.json();
             console.log(`✅ Загружено ${this.promo_codes.length} промокодов`);
