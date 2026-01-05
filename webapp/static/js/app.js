@@ -1297,7 +1297,7 @@ class TelegramShop {
         // Генерируем HTML для товаров
         let itemsHTML = '';
 
-        cartItems.forEach(item => {
+        this.cartItems.forEach(item => {
             const priceToShow = item.discounted_price || item.price;
             const totalPrice = priceToShow * item.quantity;
 
