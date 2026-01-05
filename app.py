@@ -3164,67 +3164,6 @@ def uploaded_file(filename):
         return jsonify({'error': 'Файл не найден'}), 404
 
 
-
-# ========== API ДЛЯ ПРОМОКОДОВ ==========
-@app.route('/api/admin/promo-codes', methods=['GET', 'POST'])
-def admin_promo_codes_api():
-    """Управление промокодами - получение списка и создание"""
-    db = get_db()
-    try:
-        if request.method == 'GET':
-            # Получить все промокоды
-            promo_codes = db.execute('SELECT * FROM promo_codes ORDER BY created_at DESC').fetchall()
-            return jsonify([dict(pc) for pc in promo_codes])
-
-        elif request.method == 'POST':
-            # Создать новый промокод
-            data = request.json
-
-            # Валидация
-            if not data.get('code'):
-                return jsonify({'success': False, 'error': 'Введите код промокода'}), 400
-
-            if not data.get('discount_type'):
-                return jsonify({'success': False, 'error': 'Выберите тип скидки'}), 400
-
-            if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
-                return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
-
-            # Проверяем уникальность кода
-            existing = db.execute('SELECT id FROM promo_codes WHERE code = ?', (data['code'].upper(),)).fetchone()
-            if existing:
-                return jsonify({'success': False, 'error': 'Такой промокод уже существует'}), 400
-
-            # Создаем промокод
-            cursor = db.execute('''
-                INSERT INTO promo_codes (
-                    code, discount_type, value, usage_limit,
-                    min_order_amount, start_date, end_date,
-                    is_active, one_per_customer, exclude_sale_items
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data.get('code').upper(),
-                data.get('discount_type'),
-                data.get('value', 0),
-                data.get('usage_limit'),
-                data.get('min_order_amount', 0),
-                data.get('start_date'),
-                data.get('end_date'),
-                data.get('is_active', True),
-                data.get('one_per_customer', False),
-                data.get('exclude_sale_items', False)
-            ))
-
-            promo_id = cursor.lastrowid
-            db.commit()
-
-            return jsonify({'success': True, 'id': promo_id})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
 @app.route('/api/admin/promo-codes/<int:id>', methods=['GET', 'PUT', 'DELETE'])
 def admin_promo_code_detail(id):
     """Управление конкретным промокодом"""

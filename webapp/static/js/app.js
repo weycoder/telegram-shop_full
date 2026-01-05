@@ -449,52 +449,11 @@ class TelegramShop {
             return;
         }
 
-        // Рассчитываем стоимость доставки
-        const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        let deliveryCost = 0;
-        let deliveryInfo = '';
-
-        // Если корзина не пуста, рассчитываем доставку
-        if (this.cart.length > 0) {
-            if (this.deliveryData.type === 'courier') {
-                if (itemsTotal < 1000) {
-                    deliveryCost = 100;
-                    deliveryInfo = `
-                        <div class="delivery-warning" style="
-                            background: #fff3cd;
-                            border: 1px solid #ffeaa7;
-                            border-radius: 8px;
-                            padding: 10px;
-                            margin: 10px 0;
-                            color: #856404;
-                        ">
-                            <i class="fas fa-info-circle"></i>
-                            <strong>Доставка:</strong> 100 ₽
-                            <span style="font-size: 12px;">(бесплатно от 1000 ₽)</span>
-                        </div>
-                    `;
-                } else {
-                    deliveryInfo = `
-                        <div class="delivery-success" style="
-                            background: #d4edda;
-                            border: 1px solid #c3e6cb;
-                            border-radius: 8px;
-                            padding: 10px;
-                            margin: 10px 0;
-                            color: #155724;
-                        ">
-                            <i class="fas fa-check-circle"></i>
-                            <strong>Доставка:</strong> Бесплатно 🎉
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        const totalWithDelivery = itemsTotal + deliveryCost;
-
         // ЕСЛИ КОРЗИНА ПУСТА
         if (this.cart.length === 0) {
+            console.log('🛒 Корзина пуста - показываем сообщение');
+
+            // Просто показываем сообщение прямо в cartItems
             cartItems.innerHTML = `
                 <div class="empty-cart">
                     <i class="fas fa-shopping-cart"></i>
@@ -503,7 +462,15 @@ class TelegramShop {
                 </div>
             `;
 
+            // Обнуляем сумму
             cartTotal.textContent = '0 ₽';
+
+            // Скрываем footer корзины если есть
+            const cartFooter = document.querySelector('.cart-footer');
+            if (cartFooter) {
+                cartFooter.style.display = 'none';
+            }
+
             return;
         }
 
@@ -513,65 +480,51 @@ class TelegramShop {
         // Генерируем HTML для товаров
         let itemsHTML = '';
 
+        // ИСПРАВЛЕНИЕ: используем this.cart вместо this.cartItems
         this.cart.forEach(item => {
-            // Для весовых товаров показываем вес
-            const weightInfo = item.is_weight && item.weight ?
-                `<div class="cart-item-weight" style="
-                    background: #e3f2fd;
-                    color: #1976d2;
-                    padding: 4px 8px;
-                    border-radius: 12px;
-                    font-size: 12px;
-                    font-weight: 600;
-                    margin: 5px 0;
-                    display: inline-block;
-                ">
-                    <i class="fas fa-weight-hanging"></i> ${item.weight.toFixed(2)} ${item.weight_unit || 'кг'}
-                </div>` : '';
-
-            // Для весовых товаров показываем цену за единицу
-            const unitPrice = item.is_weight ?
-                `${this.formatPrice(item.price)} ₽` :
-                `${this.formatPrice(item.price)} ₽/шт`;
-
-            // Управление количеством (для весовых товаров нельзя менять количество)
-            const quantityControls = item.is_weight ?
-                `<div class="quantity-display">1 шт.</div>` :
-                `<div class="quantity-selector small">
-                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
-                            ${item.quantity <= 1 ? 'disabled' : ''}>
-                        <i class="fas fa-minus"></i>
-                    </button>
-                    <span class="quantity">${item.quantity} шт.</span>
-                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>`;
+            const priceToShow = item.discounted_price || item.price;
+            const totalPrice = priceToShow * item.quantity;
 
             itemsHTML += `
                 <div class="cart-item" data-id="${item.id}">
+                    ${item.discount_info ? `
+                        <div class="cart-item-discount">
+                            <span class="discount-tag-cart">-${this.formatDiscountInfo(item.discount_info)}</span>
+                        </div>
+                    ` : ''}
                     <img src="${item.image || 'https://via.placeholder.com/80'}"
                          alt="${item.name}"
-                         class="cart-item-image"
-                         style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
-                    <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
-                        <div class="cart-item-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                            <h4 class="cart-item-name" style="margin: 0; font-size: 16px; color: #2c3e50; flex: 1;">
-                                ${item.name}
-                            </h4>
-                            <button class="remove-item" onclick="shop.removeFromCart('${item.id}')"
-                                    style="background: #ffebee; border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #f44336;">
+                         class="cart-item-image">
+                    <div class="cart-item-info">
+                        <div class="cart-item-header">
+                            <h4 class="cart-item-name">${item.name}</h4>
+                            <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
-                        ${weightInfo}
-                        <div class="cart-item-price" style="font-weight: 600; color: #27ae60; margin: 5px 0; font-size: 15px;">
-                            ${unitPrice}
+                        <div class="cart-item-pricing">
+                            ${item.discounted_price && item.discounted_price < item.price ? `
+                                <div class="cart-price-discounted">
+                                    <span class="cart-item-original-price">${this.formatPrice(item.price)} ₽</span>
+                                    <span class="cart-item-price">${this.formatPrice(item.discounted_price)} ₽</span>
+                                </div>
+                            ` : `
+                                <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                            `}
                         </div>
-                        <div class="cart-item-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                            ${quantityControls}
-                            <div class="cart-item-total" style="font-weight: 700; color: #2c3e50; font-size: 16px;">
-                                ${this.formatPrice(item.price * item.quantity)} ₽
+                        <div class="cart-item-controls">
+                            <div class="quantity-selector small">
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
+                                        ${item.quantity <= 1 ? 'disabled' : ''}>
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="quantity">${item.quantity} шт.</span>
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="cart-item-total">
+                                ${this.formatPrice(totalPrice)} ₽
                             </div>
                         </div>
                     </div>
@@ -579,85 +532,17 @@ class TelegramShop {
             `;
         });
 
-        // Добавляем информацию о доставке ПОД товарами
-        itemsHTML += deliveryInfo;
-
         // Вставляем HTML
         cartItems.innerHTML = itemsHTML;
 
-        // Обновляем сумму С УЧЕТОМ ДОСТАВКИ
-        cartTotal.textContent = `${this.formatPrice(totalWithDelivery)} ₽`;
+        // Обновляем сумму
+        const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        cartTotal.textContent = `${this.formatPrice(total)} ₽`;
 
-        // Показываем разбивку стоимости
-        const cartFooter = document.querySelector('.cart-summary');
+        // Показываем footer корзины
+        const cartFooter = document.querySelector('.cart-footer');
         if (cartFooter) {
-            const summaryHTML = `
-                <div class="cart-summary">
-                    <div class="price-breakdown">
-                        <div class="price-item" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
-                            <span style="color: #666;">Товары:</span>
-                            <span style="font-weight: 600;">${this.formatPrice(itemsTotal)} ₽</span>
-                        </div>
-                        ${deliveryCost > 0 ? `
-                            <div class="price-item" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
-                                <span style="color: #666;">Доставка:</span>
-                                <span style="font-weight: 600; color: #e74c3c;">${this.formatPrice(deliveryCost)} ₽</span>
-                            </div>
-                        ` : `
-                            <div class="price-item" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
-                                <span style="color: #666;">Доставка:</span>
-                                <span style="font-weight: 600; color: #27ae60;">Бесплатно</span>
-                            </div>
-                        `}
-                        <div class="price-total" style="display: flex; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 2px solid #f0f0f0; font-size: 18px;">
-                            <span style="font-weight: 700; color: #2c3e50;">Итого:</span>
-                            <span class="total-price" style="font-weight: 700; color: #27ae60;">${this.formatPrice(totalWithDelivery)} ₽</span>
-                        </div>
-                    </div>
-                    <div class="cart-actions" style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="btn btn-outline" id="clearCart" style="
-                            flex: 1;
-                            background: white;
-                            border: 2px solid #e74c3c;
-                            color: #e74c3c;
-                            padding: 12px;
-                            border-radius: 8px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 8px;
-                            transition: all 0.2s;
-                        ">
-                            <i class="fas fa-trash"></i> Очистить
-                        </button>
-                        <button class="btn btn-primary" id="checkoutBtn" style="
-                            flex: 2;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: white;
-                            border: none;
-                            padding: 12px;
-                            border-radius: 8px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 8px;
-                            transition: all 0.2s;
-                        ">
-                            <i class="fas fa-paper-plane"></i> Купить
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            cartFooter.innerHTML = summaryHTML;
-
-            // Назначаем обработчики
-            this.bindEvent('clearCart', 'click', () => this.clearCart());
-            this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+            cartFooter.style.display = 'block';
         }
 
         console.log('✅ Корзина обновлена');
@@ -1701,7 +1586,7 @@ class TelegramShop {
         // Генерируем HTML для товаров
         let itemsHTML = '';
 
-        this.cartItems.forEach(item => {
+        this.cart.forEach(item => {
             const priceToShow = item.discounted_price || item.price;
             const totalPrice = priceToShow * item.quantity;
 
