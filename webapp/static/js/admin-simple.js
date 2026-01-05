@@ -372,15 +372,177 @@ class AdminPanel {
         }
     }
 
-   // Методы управления товарами
+       // Методы управления товарами
     showAddProduct() {
         this.isEditing = false;
         this.editingProductId = null;
         this.showPage('add-product');
-        // Используем setTimeout чтобы убедиться что DOM обновился
+
         setTimeout(() => {
-            this.resetProductForm();
+            const container = document.getElementById('add-product');
+            if (container) {
+                container.innerHTML = `
+                    <div class="add-product-header">
+                        <h2>Добавить новый товар</h2>
+                    </div>
+
+                    <div class="product-type-selector">
+                        <button class="type-btn active" data-type="piece" onclick="admin.selectProductType('piece')">
+                            <i class="fas fa-cube"></i>
+                            <span>Штучный товар</span>
+                        </button>
+                        <button class="type-btn" data-type="weight" onclick="admin.selectProductType('weight')">
+                            <i class="fas fa-weight-hanging"></i>
+                            <span>Весовой товар</span>
+                        </button>
+                    </div>
+
+                    <form class="add-product-form" id="addProductForm">
+                        <!-- Основная информация -->
+                        <div class="form-section">
+                            <h3>Основная информация</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="productName">Название товара *</label>
+                                    <input type="text" id="productName" required placeholder="Например: Яблоки">
+                                </div>
+
+                                <!-- Для штучных товаров -->
+                                <div class="form-group product-type-piece">
+                                    <label for="productPrice">Цена (₽) *</label>
+                                    <input type="number" id="productPrice" step="0.01" required placeholder="100">
+                                </div>
+
+                                <!-- Для весовых товаров -->
+                                <div class="form-group product-type-weight" style="display: none;">
+                                    <label for="pricePerKg">Цена за кг (₽) *</label>
+                                    <input type="number" id="pricePerKg" step="0.01" placeholder="300">
+                                </div>
+
+                                <div class="form-group product-type-piece">
+                                    <label for="productStock">Количество (шт) *</label>
+                                    <input type="number" id="productStock" required placeholder="10">
+                                </div>
+
+                                <div class="form-group product-type-weight" style="display: none;">
+                                    <label for="stockWeight">Вес в наличии (кг)</label>
+                                    <input type="number" id="stockWeight" step="0.01" placeholder="50">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="productCategory">Категория</label>
+                                    <select id="productCategory">
+                                        <option value="">Выберите категорию</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Настройки весового товара -->
+                        <div class="form-section product-type-weight" style="display: none;">
+                            <h3>Настройки весового товара</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="unit">Единица измерения</label>
+                                    <select id="unit">
+                                        <option value="кг">Килограммы (кг)</option>
+                                        <option value="г">Граммы (г)</option>
+                                        <option value="л">Литры (л)</option>
+                                        <option value="м">Метры (м)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="minWeight">Минимальный вес (кг)</label>
+                                    <input type="number" id="minWeight" step="0.01" value="0.1" min="0.01">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="maxWeight">Максимальный вес (кг)</label>
+                                    <input type="number" id="maxWeight" step="0.01" value="5.0" min="0.1">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="stepWeight">Шаг изменения (кг)</label>
+                                    <select id="stepWeight">
+                                        <option value="0.01">10 грамм</option>
+                                        <option value="0.05">50 грамм</option>
+                                        <option value="0.1">100 грамм</option>
+                                        <option value="0.25">250 грамм</option>
+                                        <option value="0.5">500 грамм</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Описание -->
+                        <div class="form-section">
+                            <h3>Описание</h3>
+                            <div class="form-group">
+                                <label for="productDescription">Описание товара</label>
+                                <textarea id="productDescription" rows="4" placeholder="Подробное описание товара..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Изображение -->
+                        <div class="form-section">
+                            <h3>Изображение товара</h3>
+                            <div class="form-group">
+                                <label for="imageUrl">URL изображения</label>
+                                <input type="url" id="imageUrl" placeholder="https://example.com/image.jpg">
+                                <small>Или загрузите файл ниже</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="productImageFile">Загрузить с компьютера</label>
+                                <input type="file" id="productImageFile" accept="image/*">
+                                <div id="filePreview" style="margin-top: 10px;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Кнопки действий -->
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="admin.showPage('products')">
+                                Отмена
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Сохранить товар
+                            </button>
+                        </div>
+                    </form>
+                `;
+
+                // Обновляем категории
+                this.updateCategorySelect();
+
+                // Назначаем обработчики
+                document.getElementById('addProductForm').addEventListener('submit', (e) => this.handleProductSubmit(e));
+                document.getElementById('productImageFile').addEventListener('change', (e) => this.handleImageUpload(e));
+            }
         }, 100);
+    }
+
+        // Добавьте метод выбора типа товара
+    selectProductType(type) {
+        document.querySelectorAll('.type-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-type="${type}"]`).classList.add('active');
+
+        // Показываем/скрываем соответствующие поля
+        document.querySelectorAll('.product-type-piece, .product-type-weight').forEach(el => {
+            el.style.display = 'none';
+        });
+
+        if (type === 'piece') {
+            document.querySelectorAll('.product-type-piece').forEach(el => {
+                el.style.display = 'block';
+            });
+        } else {
+            document.querySelectorAll('.product-type-weight').forEach(el => {
+                el.style.display = 'block';
+            });
+        }
     }
 
     editProduct(productId) {
@@ -456,30 +618,41 @@ class AdminPanel {
     async handleProductSubmit(e) {
         e.preventDefault();
 
-        const productName = document.getElementById('productName');
-        const productDescription = document.getElementById('productDescription');
-        const productPrice = document.getElementById('productPrice');
-        const productStock = document.getElementById('productStock');
-        const imageUrl = document.getElementById('imageUrl');
-        const productCategory = document.getElementById('productCategory');
+        const productType = document.querySelector('.type-btn.active')?.dataset.type || 'piece';
+        const productName = document.getElementById('productName').value;
+        const productDescription = document.getElementById('productDescription').value;
+        const imageUrl = document.getElementById('imageUrl').value;
+        const category = document.getElementById('productCategory').value;
 
-        if (!productName || !productPrice) {
-            this.showAlert('❌ Форма товара не найдена', 'error');
-            return;
-        }
+        let formData;
 
-        const formData = {
-            name: productName.value,
-            description: productDescription ? productDescription.value : '',
-            price: parseFloat(productPrice.value) || 0,
-            stock: productStock ? parseInt(productStock.value) || 0 : 0,
-            image_url: imageUrl ? imageUrl.value : '',
-            category: productCategory ? productCategory.value : ''
-        };
-
-        if (!formData.name || !formData.price) {
-            this.showAlert('❌ Заполните обязательные поля (название и цена)', 'error');
-            return;
+        if (productType === 'piece') {
+            // Штучный товар
+            formData = {
+                name: productName,
+                description: productDescription,
+                price: parseFloat(document.getElementById('productPrice').value) || 0,
+                stock: parseInt(document.getElementById('productStock').value) || 0,
+                image_url: imageUrl,
+                category: category,
+                product_type: 'piece'
+            };
+        } else {
+            // Весовой товар
+            formData = {
+                name: productName,
+                description: productDescription,
+                price_per_kg: parseFloat(document.getElementById('pricePerKg').value) || 0,
+                stock_weight: parseFloat(document.getElementById('stockWeight').value) || 0,
+                image_url: imageUrl,
+                category: category,
+                product_type: 'weight',
+                unit: document.getElementById('unit').value,
+                weight_unit: document.getElementById('unit').value,
+                min_weight: parseFloat(document.getElementById('minWeight').value) || 0.1,
+                max_weight: parseFloat(document.getElementById('maxWeight').value) || 5.0,
+                step_weight: parseFloat(document.getElementById('stepWeight').value) || 0.1
+            };
         }
 
         try {

@@ -51,279 +51,613 @@ def init_db():
         db = get_db()
         cursor = db.cursor()
 
-        # УДАЛЯЕМ старые проблемные таблицы если они существуют
-        cursor.execute("DROP TABLE IF EXISTS discount_applications")
-        cursor.execute("DROP TABLE IF EXISTS product_categories")
-        cursor.execute("DROP TABLE IF EXISTS promo_codes")
-        cursor.execute("DROP TABLE IF EXISTS discounts")
+        # ========== СНАЧАЛА СОЗДАЕМ ВСЕ ТАБЛИЦЫ С ПРАВИЛЬНОЙ СТРУКТУРОЙ ==========
 
-        # Существующие таблицы (НЕ ТРОГАЕМ)
+        # 1. Курьеры
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS couriers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                full_name TEXT NOT NULL,
-                phone TEXT NOT NULL,
-                vehicle_type TEXT,
-                is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS couriers
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           username
+                           TEXT
+                           UNIQUE
+                           NOT
+                           NULL,
+                           password
+                           TEXT
+                           NOT
+                           NULL,
+                           full_name
+                           TEXT
+                           NOT
+                           NULL,
+                           phone
+                           TEXT
+                           NOT
+                           NULL,
+                           vehicle_type
+                           TEXT,
+                           is_active
+                           INTEGER
+                           DEFAULT
+                           1,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
 
+        # 2. Заказы (сначала, чтобы другие таблицы могли ссылаться)
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS order_assignments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                order_id INTEGER NOT NULL,
-                courier_id INTEGER NOT NULL,
-                assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                status TEXT DEFAULT 'assigned',
-                delivery_started TIMESTAMP,
-                delivered_at TIMESTAMP,
-                photo_proof TEXT,
-                customer_signature TEXT,
-                delivery_notes TEXT,
-                FOREIGN KEY (order_id) REFERENCES orders (id),
-                FOREIGN KEY (courier_id) REFERENCES couriers (id)
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS orders
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           user_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           username
+                           TEXT,
+                           items
+                           TEXT
+                           NOT
+                           NULL,
+                           total_price
+                           REAL
+                           NOT
+                           NULL,
+                           delivery_cost
+                           REAL
+                           DEFAULT
+                           0,
+                           status
+                           TEXT
+                           DEFAULT
+                           'pending',
+                           delivery_type
+                           TEXT,
+                           delivery_address
+                           TEXT,
+                           pickup_point
+                           TEXT,
+                           payment_method
+                           TEXT
+                           DEFAULT
+                           'cash',
+                           recipient_name
+                           TEXT,
+                           phone_number
+                           TEXT,
+                           discount_id
+                           INTEGER,
+                           promo_code_id
+                           INTEGER,
+                           discount_amount
+                           DECIMAL
+                       (
+                           10,
+                           2
+                       ) DEFAULT 0,
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                           )
+                       ''')
 
+        # 3. Назначения заказов
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS pending_notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                telegram_id BIGINT NOT NULL,
-                order_id INTEGER NOT NULL,
-                status TEXT NOT NULL,
-                courier_name TEXT,
-                courier_phone TEXT,
-                sent INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS order_assignments
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           order_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           courier_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           assigned_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           status
+                           TEXT
+                           DEFAULT
+                           'assigned',
+                           delivery_started
+                           TIMESTAMP,
+                           delivered_at
+                           TIMESTAMP,
+                           photo_proof
+                           TEXT,
+                           customer_signature
+                           TEXT,
+                           delivery_notes
+                           TEXT,
+                           FOREIGN
+                           KEY
+                       (
+                           order_id
+                       ) REFERENCES orders
+                       (
+                           id
+                       ),
+                           FOREIGN KEY
+                       (
+                           courier_id
+                       ) REFERENCES couriers
+                       (
+                           id
+                       )
+                           )
+                       ''')
 
+        # 4. Уведомления
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT,
-                price REAL NOT NULL,
-                image_url TEXT,
-                category TEXT,
-                category_id INTEGER,
-                stock INTEGER DEFAULT 0,
-                product_type TEXT DEFAULT 'piece',
-                unit TEXT DEFAULT 'шт',
-                weight_unit TEXT DEFAULT 'кг',
-                price_per_unit DECIMAL(10, 2),
-                min_weight DECIMAL(10, 3) DEFAULT 0.1,
-                step_weight DECIMAL(10, 3) DEFAULT 0.1,
-                stock_weight DECIMAL(10, 3),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS pending_notifications
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           telegram_id
+                           BIGINT
+                           NOT
+                           NULL,
+                           order_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           status
+                           TEXT
+                           NOT
+                           NULL,
+                           courier_name
+                           TEXT,
+                           courier_phone
+                           TEXT,
+                           sent
+                           INTEGER
+                           DEFAULT
+                           0,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
 
-        # ========== ИСПРАВЛЕННАЯ ТАБЛИЦА ORDERS ==========
+        # 5. СКИДКИ (очень важно - создаем ДО продуктов)
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                username TEXT,
-                items TEXT NOT NULL,
-                total_price REAL NOT NULL,
-                delivery_cost REAL DEFAULT 0,
-                status TEXT DEFAULT 'pending',
-                delivery_type TEXT,
-                delivery_address TEXT,
-                pickup_point TEXT,
-                payment_method TEXT DEFAULT 'cash',
-                recipient_name TEXT,
-                phone_number TEXT,
-                discount_id INTEGER,
-                promo_code_id INTEGER,
-                discount_amount DECIMAL(10, 2) DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS discounts
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           name
+                           TEXT
+                           NOT
+                           NULL,
+                           discount_type
+                           TEXT
+                           CHECK (
+                           discount_type
+                           IN
+                       (
+                           'percentage',
+                           'fixed',
+                           'free_delivery',
+                           'bogo'
+                       )),
+                           value DECIMAL
+                       (
+                           10,
+                           2
+                       ),
+                           min_order_amount DECIMAL
+                       (
+                           10,
+                           2
+                       ) DEFAULT 0,
+                           apply_to TEXT CHECK
+                       (
+                           apply_to
+                           IN
+                       (
+                           'all',
+                           'category',
+                           'product'
+                       )),
+                           target_category TEXT,
+                           target_product_id INTEGER,
+                           start_date TIMESTAMP,
+                           end_date TIMESTAMP,
+                           is_active BOOLEAN DEFAULT 1,
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           used_count INTEGER DEFAULT 0
+                           )
+                       ''')
 
+        # 6. ПРОМОКОДЫ
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_addresses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                city TEXT NOT NULL,
-                street TEXT NOT NULL,
-                house TEXT NOT NULL,
-                apartment TEXT,
-                floor TEXT,
-                doorcode TEXT,
-                recipient_name TEXT NOT NULL,
-                phone TEXT,
-                is_default INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS promo_codes
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           code
+                           TEXT
+                           UNIQUE
+                           NOT
+                           NULL,
+                           discount_type
+                           TEXT
+                           CHECK (
+                           discount_type
+                           IN
+                       (
+                           'percentage',
+                           'fixed',
+                           'free_delivery',
+                           'bogo'
+                       )),
+                           value DECIMAL
+                       (
+                           10,
+                           2
+                       ),
+                           usage_limit INTEGER,
+                           used_count INTEGER DEFAULT 0,
+                           min_order_amount DECIMAL
+                       (
+                           10,
+                           2
+                       ) DEFAULT 0,
+                           start_date TIMESTAMP,
+                           end_date TIMESTAMP,
+                           is_active BOOLEAN DEFAULT 1,
+                           one_per_customer BOOLEAN DEFAULT 0,
+                           exclude_sale_items BOOLEAN DEFAULT 0,
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                           )
+                       ''')
 
+        # 7. КАТЕГОРИИ товаров
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_push_tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                device_type TEXT,
-                token TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS product_categories
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           name
+                           TEXT
+                           NOT
+                           NULL
+                           UNIQUE,
+                           parent_id
+                           INTEGER,
+                           discount_id
+                           INTEGER,
+                           sort_order
+                           INTEGER
+                           DEFAULT
+                           0,
+                           description
+                           TEXT,
+                           icon
+                           TEXT,
+                           color
+                           TEXT
+                           DEFAULT
+                           '#667eea',
+                           seo_title
+                           TEXT,
+                           seo_description
+                           TEXT,
+                           seo_keywords
+                           TEXT,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           parent_id
+                       ) REFERENCES product_categories
+                       (
+                           id
+                       ),
+                           FOREIGN KEY
+                       (
+                           discount_id
+                       ) REFERENCES discounts
+                       (
+                           id
+                       )
+                           )
+                       ''')
 
+        # 8. ТОВАРЫ (с поддержкой весовых товаров)
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS pickup_points (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                address TEXT NOT NULL,
-                working_hours TEXT,
-                phone TEXT,
-                latitude REAL,
-                longitude REAL,
-                is_active INTEGER DEFAULT 1
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS products
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           name
+                           TEXT
+                           NOT
+                           NULL,
+                           description
+                           TEXT,
+                           price
+                           REAL
+                           NOT
+                           NULL,
+                           image_url
+                           TEXT,
+                           category
+                           TEXT,
+                           category_id
+                           INTEGER,
+                           stock
+                           INTEGER
+                           DEFAULT
+                           0,
+                           product_type
+                           TEXT
+                           DEFAULT
+                           'piece',
+                           unit
+                           TEXT
+                           DEFAULT
+                           'шт',
+                           weight_unit
+                           TEXT
+                           DEFAULT
+                           'кг',
+                           price_per_kg
+                           DECIMAL
+                       (
+                           10,
+                           2
+                       ),
+                           min_weight DECIMAL
+                       (
+                           10,
+                           3
+                       ) DEFAULT 0.1,
+                           max_weight DECIMAL
+                       (
+                           10,
+                           3
+                       ) DEFAULT 5.0,
+                           step_weight DECIMAL
+                       (
+                           10,
+                           3
+                       ) DEFAULT 0.1,
+                           stock_weight DECIMAL
+                       (
+                           10,
+                           3
+                       ),
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                           )
+                       ''')
 
-        # ========== НОВЫЕ ТАБЛИЦЫ ДЛЯ УВЕДОМЛЕНИЙ ==========
+        # 9. Адреса пользователей
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS telegram_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                telegram_id BIGINT UNIQUE NOT NULL,
-                username TEXT,
-                first_name TEXT,
-                last_name TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS user_addresses
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           user_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           city
+                           TEXT
+                           NOT
+                           NULL,
+                           street
+                           TEXT
+                           NOT
+                           NULL,
+                           house
+                           TEXT
+                           NOT
+                           NULL,
+                           apartment
+                           TEXT,
+                           floor
+                           TEXT,
+                           doorcode
+                           TEXT,
+                           recipient_name
+                           TEXT
+                           NOT
+                           NULL,
+                           phone
+                           TEXT,
+                           is_default
+                           INTEGER
+                           DEFAULT
+                           0,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
 
+        # 10. Токены для уведомлений
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS notification_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                order_id INTEGER NOT NULL,
-                telegram_id BIGINT NOT NULL,
-                status TEXT NOT NULL,
-                message TEXT,
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                success INTEGER DEFAULT 0,
-                error_message TEXT
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS user_push_tokens
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           user_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           device_type
+                           TEXT,
+                           token
+                           TEXT
+                           NOT
+                           NULL,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
 
-        # ========== ИСПРАВЛЕННЫЕ ТАБЛИЦЫ ДЛЯ СКИДОК И ПРОМОКОДОВ ==========
-
-        # 1. Таблица скидок с правильной структурой
+        # 11. Точки самовывоза
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS discounts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                discount_type TEXT CHECK (discount_type IN ('percentage', 'fixed', 'free_delivery', 'bogo')),
-                value DECIMAL(10, 2),
-                min_order_amount DECIMAL(10, 2) DEFAULT 0,
-                apply_to TEXT CHECK (apply_to IN ('all', 'category', 'product')),
-                target_category TEXT,
-                target_product_id INTEGER,
-                start_date TIMESTAMP,
-                end_date TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                used_count INTEGER DEFAULT 0
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS pickup_points
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           name
+                           TEXT
+                           NOT
+                           NULL,
+                           address
+                           TEXT
+                           NOT
+                           NULL,
+                           working_hours
+                           TEXT,
+                           phone
+                           TEXT,
+                           latitude
+                           REAL,
+                           longitude
+                           REAL,
+                           is_active
+                           INTEGER
+                           DEFAULT
+                           1
+                       )
+                       ''')
 
-        # 2. Таблица промокодов с правильной структурой
+        # 12. Пользователи Telegram
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS promo_codes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                code TEXT UNIQUE NOT NULL,
-                discount_type TEXT CHECK (discount_type IN ('percentage', 'fixed', 'free_delivery', 'bogo')),
-                value DECIMAL(10, 2),
-                usage_limit INTEGER,
-                used_count INTEGER DEFAULT 0,
-                min_order_amount DECIMAL(10, 2) DEFAULT 0,
-                start_date TIMESTAMP,
-                end_date TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1,
-                one_per_customer BOOLEAN DEFAULT 0,
-                exclude_sale_items BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS telegram_users
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           telegram_id
+                           BIGINT
+                           UNIQUE
+                           NOT
+                           NULL,
+                           username
+                           TEXT,
+                           first_name
+                           TEXT,
+                           last_name
+                           TEXT,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           last_seen
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
 
-        # 3. Таблица категорий с древовидной структурой
+        # 13. Логи уведомлений
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS product_categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                parent_id INTEGER,
-                discount_id INTEGER,
-                sort_order INTEGER DEFAULT 0,
-                description TEXT,
-                icon TEXT,
-                color TEXT DEFAULT '#667eea',
-                seo_title TEXT,
-                seo_description TEXT,
-                seo_keywords TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (parent_id) REFERENCES product_categories (id),
-                FOREIGN KEY (discount_id) REFERENCES discounts (id)
-            )
-        ''')
+                       CREATE TABLE IF NOT EXISTS notification_logs
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           order_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           telegram_id
+                           BIGINT
+                           NOT
+                           NULL,
+                           status
+                           TEXT
+                           NOT
+                           NULL,
+                           message
+                           TEXT,
+                           sent_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           success
+                           INTEGER
+                           DEFAULT
+                           0,
+                           error_message
+                           TEXT
+                       )
+                       ''')
 
-        # Тестовые курьеры
+        # ========== ДОБАВЛЯЕМ ТЕСТОВЫЕ ДАННЫЕ ==========
+
+        # 1. Курьеры
         if cursor.execute("SELECT COUNT(*) FROM couriers").fetchone()[0] == 0:
             cursor.executemany('''
-                INSERT INTO couriers (username, password, full_name, phone, vehicle_type)
-                VALUES (?, ?, ?, ?, ?)
-            ''', [
-                ('courier1', '123456', 'Иван Курьеров', '+79991112233', 'car'),
-                ('courier2', '123456', 'Петр Доставкин', '+79992223344', 'bike'),
-                ('courier3', '123456', 'Сергей Экспрессов', '+79993334455', 'car')
-            ])
+                               INSERT INTO couriers (username, password, full_name, phone, vehicle_type)
+                               VALUES (?, ?, ?, ?, ?)
+                               ''', [
+                                   ('courier1', '123456', 'Иван Курьеров', '+79991112233', 'car'),
+                                   ('courier2', '123456', 'Петр Доставкин', '+79992223344', 'bike'),
+                                   ('courier3', '123456', 'Сергей Экспрессов', '+79993334455', 'car')
+                               ])
 
-        # Тестовые товары
-        if cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
-            test_products = [
-                ('iPhone 15 Pro', 'Новый Apple смартфон с камерой 48 Мп', 99999,
-                 'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/iphone-15-pro-finish-select-202309-6-7inch?wid=5120&hei=2880&fmt=webp&qlt=70&.v=1693009279096',
-                 'Телефоны', 10),
-                ('Samsung Galaxy S23', 'Флагман Samsung с камерой 200 Мп', 89999,
-                 'https://images.samsung.com/is/image/samsung/p6pim/ru/2302/gallery/ru-galaxy-s23-s911-sm-s911bzadeub-534866168',
-                 'Телефоны', 15),
-                ('Наушники Sony WH-1000XM5', 'Беспровные с шумоподавлением, 30 часов работы', 34999,
-                 'https://sony.scene7.com/is/image/sonyglobalsolutions/WH-1000XM5-B_primary-image', 'Аксессуары', 20),
-                ('MacBook Air M2', 'Ультратонкий ноутбук Apple, 13.6 дюймов', 129999,
-                 'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/macbook-air-midnight-select-20220606',
-                 'Ноутбуки', 8),
-                ('Клавиатура Logitech', 'Игровая клавиатура с RGB подсветкой', 8999,
-                 'https://resource.logitechg.com/w_386,ar_1.0,c_limit,f_auto,q_auto,dpr_2.0/d_transparent.gif/content/dam/gaming/en/products/pro-x/pro-x-keyboard-gallery-1.png',
-                 'Аксессуары', 30),
-                ('Мышь Razer DeathAdder', 'Игровая мышь, 20000 DPI, 8 кнопок', 6999,
-                 'https://assets2.razerzone.com/images/og-image/razer-deathadder-v3-pro-og-1200x630.jpg', 'Аксессуары', 25),
-                ('Монитор Samsung 27"', 'Игровой монитор 144 Гц, 4K', 45999,
-                 'https://images.samsung.com/is/image/samsung/p6pim/ru/ls27bg402eixci/gallery/ru-odyssey-g4-gaming-ls27bg402eixci-533006960',
-                 'Мониторы', 12),
-                ('Ноутбук ASUS ROG', 'Игровой ноутбук, RTX 4060, 16 ГБ ОЗУ', 149999,
-                 'https://dlcdnwebimgs.asus.com/gain/CFCAFBB1-3CF8-4036-B9F0-79D36C0725E8/w1000/h732', 'Ноутбуки', 7)
-            ]
-            cursor.executemany(
-                'INSERT INTO products (name, description, price, image_url, category, stock) VALUES (?, ?, ?, ?, ?, ?)',
-                test_products)
-
-        # Тестовые точки самовывоза
-        if cursor.execute("SELECT COUNT(*) FROM pickup_points").fetchone()[0] == 0:
-            pickup_points = [
-                ('Магазин на Ленина', 'ул. Ленина, 15', '09:00-21:00', '+7 (999) 123-45-67'),
-                ('ТЦ Центральный', 'пр. Мира, 42, 2 этаж', '10:00-22:00', '+7 (999) 765-43-21'),
-                ('Склад на Заводской', 'ул. Заводская, 7', '08:00-20:00', '+7 (999) 555-55-55')
-            ]
-            cursor.executemany('INSERT INTO pickup_points (name, address, working_hours, phone) VALUES (?, ?, ?, ?)',
-                               pickup_points)
-
-        # Тестовые категории
+        # 2. Категории
         if cursor.execute("SELECT COUNT(*) FROM product_categories").fetchone()[0] == 0:
             test_categories = [
+                # id, name, parent_id, discount_id, sort_order, description, icon, color, seo_title, seo_description, seo_keywords
                 ('Телефоны', None, None, 1, 'Мобильные телефоны и смартфоны', 'fas fa-mobile-alt', '#4CAF50',
                  'Купить телефон недорого', 'Лучшие телефоны по выгодным ценам', 'телефоны, смартфоны, купить телефон'),
                 ('Ноутбуки', None, None, 2, 'Ноутбуки и ультрабуки', 'fas fa-laptop', '#2196F3',
@@ -331,16 +665,29 @@ def init_db():
                 ('Аксессуары', None, None, 3, 'Аксессуары для техники', 'fas fa-headphones', '#FF9800',
                  'Аксессуары для гаджетов', 'Чехлы, наушники, зарядные устройства', 'аксессуары, наушники, чехлы'),
                 ('Мониторы', None, None, 4, 'Мониторы и дисплеи', 'fas fa-desktop', '#9C27B0',
-                 'Мониторы для игр и работы', 'Игровые и профессиональные мониторы', 'мониторы, игровые мониторы, купить монитор')
+                 'Мониторы для игр и работы', 'Игровые и профессиональные мониторы',
+                 'мониторы, игровые мониторы, купить монитор'),
+                ('Продукты', None, None, 5, 'Продукты питания', 'fas fa-utensils', '#8BC34A',
+                 'Продукты питания', 'Свежие продукты', 'продукты, еда, продукты питания'),
+                ('Фрукты', 5, None, 1, 'Свежие фрукты', 'fas fa-apple-alt', '#FF9800',
+                 'Купить фрукты', 'Свежие фрукты и ягоды', 'фрукты, ягоды, свежие фрукты'),
+                ('Овощи', 5, None, 2, 'Свежие овощи', 'fas fa-carrot', '#4CAF50',
+                 'Купить овощи', 'Свежие овощи', 'овощи, свежие овощи'),
+                ('Мясо', 5, None, 3, 'Мясные продукты', 'fas fa-drumstick-bite', '#F44336',
+                 'Купить мясо', 'Свежее мясо', 'мясо, курица, говядина'),
+                ('Электроника', None, None, 6, 'Электроника и техника', 'fas fa-plug', '#673AB7',
+                 'Электроника', 'Техника и электроника', 'электроника, техника, гаджеты')
             ]
             cursor.executemany('''
-                INSERT INTO product_categories (name, parent_id, discount_id, sort_order, description, icon, color, seo_title, seo_description, seo_keywords)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', test_categories)
+                               INSERT INTO product_categories (name, parent_id, discount_id, sort_order, description,
+                                                               icon, color, seo_title, seo_description, seo_keywords)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               ''', test_categories)
 
-        # Тестовые скидки
+        # 3. Скидки
         if cursor.execute("SELECT COUNT(*) FROM discounts").fetchone()[0] == 0:
             test_discounts = [
+                # name, discount_type, value, min_order_amount, apply_to, target_category, target_product_id, start_date, end_date, is_active
                 ('Летняя распродажа', 'percentage', 15.00, 1000.00, 'all', None, None,
                  '2025-06-01 00:00:00', '2025-08-31 23:59:59', 1),
                 ('Скидка на телефоны', 'percentage', 10.00, 0.00, 'category', 'Телефоны', None,
@@ -348,16 +695,21 @@ def init_db():
                 ('Фиксированная скидка', 'fixed', 5000.00, 20000.00, 'all', None, None,
                  None, None, 1),
                 ('Бесплатная доставка', 'free_delivery', 0.00, 1000.00, 'all', None, None,
+                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1),
+                ('Скидка на аксессуары', 'percentage', 20.00, 0.00, 'category', 'Аксессуары', None,
                  '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1)
             ]
             cursor.executemany('''
-                INSERT INTO discounts (name, discount_type, value, min_order_amount, apply_to, target_category, target_product_id, start_date, end_date, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', test_discounts)
+                               INSERT INTO discounts (name, discount_type, value, min_order_amount, apply_to,
+                                                      target_category, target_product_id, start_date, end_date,
+                                                      is_active)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               ''', test_discounts)
 
-        # Тестовые промокоды
+        # 4. Промокоды
         if cursor.execute("SELECT COUNT(*) FROM promo_codes").fetchone()[0] == 0:
             test_promo_codes = [
+                # code, discount_type, value, usage_limit, used_count, min_order_amount, start_date, end_date, is_active, one_per_customer, exclude_sale_items
                 ('SUMMER2025', 'percentage', 20.00, 100, 0, 0.00,
                  '2025-06-01 00:00:00', '2025-08-31 23:59:59', 1, 0, 0),
                 ('WELCOME10', 'percentage', 10.00, 1000, 0, 0.00,
@@ -365,22 +717,129 @@ def init_db():
                 ('FREESHIP', 'free_delivery', 0.00, 500, 0, 0.00,
                  None, None, 1, 0, 0),
                 ('SALE5000', 'fixed', 5000.00, 200, 0, 50000.00,
-                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1, 0, 1)
+                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1, 0, 1),
+                ('NEWYEAR2025', 'percentage', 25.00, 50, 0, 5000.00,
+                 '2024-12-20 00:00:00', '2025-01-10 23:59:59', 1, 1, 0)
             ]
             cursor.executemany('''
-                INSERT INTO promo_codes (code, discount_type, value, usage_limit, used_count, min_order_amount, start_date, end_date, is_active, one_per_customer, exclude_sale_items)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', test_promo_codes)
+                               INSERT INTO promo_codes (code, discount_type, value, usage_limit, used_count,
+                                                        min_order_amount, start_date, end_date, is_active,
+                                                        one_per_customer, exclude_sale_items)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               ''', test_promo_codes)
+
+        # 5. Товары (штучные и весовые)
+        if cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
+            test_products = [
+                # ШТУЧНЫЕ ТОВАРЫ
+                # name, description, price, image_url, category, stock, product_type, unit, weight_unit, price_per_kg, min_weight, max_weight, step_weight, stock_weight
+                ('iPhone 15 Pro', 'Новый Apple смартфон с камерой 48 Мп', 99999,
+                 'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/iphone-15-pro-finish-select-202309-6-7inch?wid=5120&hei=2880&fmt=webp&qlt=70&.v=1693009279096',
+                 'Телефоны', 10, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+                ('Samsung Galaxy S23', 'Флагман Samsung с камерой 200 Мп', 89999,
+                 'https://images.samsung.com/is/image/samsung/p6pim/ru/2302/gallery/ru-galaxy-s23-s911-sm-s911bzadeub-534866168',
+                 'Телефоны', 15, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+                ('Наушники Sony WH-1000XM5', 'Беспровные с шумоподавлением, 30 часов работы', 34999,
+                 'https://sony.scene7.com/is/image/sonyglobalsolutions/WH-1000XM5-B_primary-image',
+                 'Аксессуары', 20, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+                ('MacBook Air M2', 'Ультратонкий ноутбук Apple, 13.6 дюймов', 129999,
+                 'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/macbook-air-midnight-select-20220606',
+                 'Ноутбуки', 8, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+                ('Клавиатура Logitech', 'Игровая клавиатура с RGB подсветкой', 8999,
+                 'https://resource.logitechg.com/w_386,ar_1.0,c_limit,f_auto,q_auto,dpr_2.0/d_transparent.gif/content/dam/gaming/en/products/pro-x/pro-x-keyboard-gallery-1.png',
+                 'Аксессуары', 30, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+                ('Мышь Razer DeathAdder', 'Игровая мышь, 20000 DPI, 8 кнопок', 6999,
+                 'https://assets2.razerzone.com/images/og-image/razer-deathadder-v3-pro-og-1200x630.jpg',
+                 'Аксессуары', 25, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+                ('Монитор Samsung 27"', 'Игровой монитор 144 Гц, 4K', 45999,
+                 'https://images.samsung.com/is/image/samsung/p6pim/ru/ls27bg402eixci/gallery/ru-odyssey-g4-gaming-ls27bg402eixci-533006960',
+                 'Мониторы', 12, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+                ('Ноутбук ASUS ROG', 'Игровой ноутбук, RTX 4060, 16 ГБ ОЗУ', 149999,
+                 'https://dlcdnwebimgs.asus.com/gain/CFCAFBB1-3CF8-4036-B9F0-79D36C0725E8/w1000/h732',
+                 'Ноутбуки', 7, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
+
+                # ВЕСОВЫЕ ТОВАРЫ
+                ('Яблоки Голден', 'Сладкие желтые яблоки', 0,
+                 'https://cdn.pixabay.com/photo/2014/02/01/17/28/apple-256261_1280.jpg',
+                 'Фрукты', 0, 'weight', 'кг', 'кг', 199.90, 0.1, 5.0, 0.1, 50.0),
+                ('Бананы', 'Свежие спелые бананы', 0,
+                 'https://cdn.pixabay.com/photo/2016/01/03/17/59/bananas-1119790_1280.jpg',
+                 'Фрукты', 0, 'weight', 'кг', 'кг', 129.90, 0.1, 3.0, 0.1, 30.0),
+                ('Помидоры', 'Свежие красные помидоры', 0,
+                 'https://cdn.pixabay.com/photo/2014/04/10/11/24/tomatoes-320860_1280.jpg',
+                 'Овощи', 0, 'weight', 'кг', 'кг', 189.90, 0.1, 5.0, 0.1, 40.0),
+                ('Картофель', 'Молодой картофель', 0,
+                 'https://cdn.pixabay.com/photo/2014/08/06/20/32/potatoes-411975_1280.jpg',
+                 'Овощи', 0, 'weight', 'кг', 'кг', 79.90, 0.5, 10.0, 0.5, 100.0),
+                ('Куриное филе', 'Свежее куриное филе', 0,
+                 'https://cdn.pixabay.com/photo/2018/04/13/17/14/vegetable-skewer-3317060_1280.jpg',
+                 'Мясо', 0, 'weight', 'кг', 'кг', 449.90, 0.1, 3.0, 0.1, 25.0),
+                ('Говядина', 'Говядина вырезка', 0,
+                 'https://cdn.pixabay.com/photo/2018/02/25/21/21/meat-3181738_1280.jpg',
+                 'Мясо', 0, 'weight', 'кг', 'кг', 899.90, 0.1, 2.0, 0.1, 15.0),
+                ('Клубника', 'Свежая клубника', 0,
+                 'https://cdn.pixabay.com/photo/2017/11/18/17/09/strawberry-2960533_1280.jpg',
+                 'Фрукты', 0, 'weight', 'кг', 'кг', 399.90, 0.1, 2.0, 0.05, 10.0),
+                ('Виноград', 'Виноград зеленый без косточек', 0,
+                 'https://cdn.pixabay.com/photo/2016/07/22/09/59/grapes-1534304_1280.jpg',
+                 'Фрукты', 0, 'weight', 'кг', 'кг', 299.90, 0.1, 2.0, 0.1, 20.0),
+                ('Морковь', 'Свежая морковь', 0,
+                 'https://cdn.pixabay.com/photo/2017/06/09/17/51/carrots-2387394_1280.jpg',
+                 'Овощи', 0, 'weight', 'кг', 'кг', 89.90, 0.1, 5.0, 0.1, 60.0),
+                ('Лук репчатый', 'Репчатый лук', 0,
+                 'https://cdn.pixabay.com/photo/2016/10/07/14/11/onion-1721872_1280.jpg',
+                 'Овощи', 0, 'weight', 'кг', 'кг', 69.90, 0.1, 5.0, 0.1, 80.0)
+            ]
+
+            cursor.executemany('''
+                               INSERT INTO products (name, description, price, image_url, category, stock,
+                                                     product_type, unit, weight_unit, price_per_kg,
+                                                     min_weight, max_weight, step_weight, stock_weight)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               ''', test_products)
+
+        # 6. Точки самовывоза
+        if cursor.execute("SELECT COUNT(*) FROM pickup_points").fetchone()[0] == 0:
+            pickup_points = [
+                ('Магазин на Ленина', 'ул. Ленина, 15', '09:00-21:00', '+7 (999) 123-45-67', None, None),
+                ('ТЦ Центральный', 'пр. Мира, 42, 2 этаж', '10:00-22:00', '+7 (999) 765-43-21', None, None),
+                ('Склад на Заводской', 'ул. Заводская, 7', '08:00-20:00', '+7 (999) 555-55-55', None, None)
+            ]
+            cursor.executemany('''
+                               INSERT INTO pickup_points (name, address, working_hours, phone, latitude, longitude)
+                               VALUES (?, ?, ?, ?, ?, ?)
+                               ''', pickup_points)
+
+        # ========== ОБНОВЛЯЕМ СВЯЗИ МЕЖДУ ТАБЛИЦАМИ ==========
 
         # Обновляем товары, чтобы связать их с категориями
-        cursor.execute("UPDATE products SET category_id = 1 WHERE category = 'Телефоны'")
-        cursor.execute("UPDATE products SET category_id = 2 WHERE category = 'Ноутбуки'")
-        cursor.execute("UPDATE products SET category_id = 3 WHERE category = 'Аксессуары'")
-        cursor.execute("UPDATE products SET category_id = 4 WHERE category = 'Мониторы'")
+        categories_map = {
+            'Телефоны': 1,
+            'Ноутбуки': 2,
+            'Аксессуары': 3,
+            'Мониторы': 4,
+            'Фрукты': 6,
+            'Овощи': 7,
+            'Мясо': 8
+        }
+
+        for category_name, category_id in categories_map.items():
+            cursor.execute(
+                'UPDATE products SET category_id = ? WHERE category = ?',
+                (category_id, category_name)
+            )
 
         db.commit()
         db.close()
-        print("✅ База данных инициализирована с исправленной структурой")
+        print("✅ База данных инициализирована с полной поддержкой весовых товаров!")
+        print("📊 Создано:")
+        print("   - 3 курьера")
+        print("   - 9 категорий товаров")
+        print("   - 5 скидок")
+        print("   - 5 промокодов")
+        print("   - 10 штучных товаров")
+        print("   - 10 весовых товаров")
+        print("   - 3 точки самовывоза")
 
 init_db()
 
@@ -1812,6 +2271,95 @@ def admin_update_product():
         db.close()
 
 
+@app.route('/api/products/weight', methods=['POST'])
+def create_weight_product():
+    """Создать весовой товар"""
+    db = get_db()
+    try:
+        data = request.json
+
+        if not data.get('name') or data.get('price_per_kg') is None:
+            return jsonify({'success': False, 'error': 'Заполните обязательные поля'}), 400
+
+        cursor = db.execute('''
+                            INSERT INTO products (name, description, price, image_url, category,
+                                                  product_type, unit, weight_unit, price_per_kg,
+                                                  min_weight, max_weight, step_weight, stock, stock_weight)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (
+                                data.get('name', ''),
+                                data.get('description', ''),
+                                0,  # Цена будет рассчитываться динамически
+                                data.get('image_url', ''),
+                                data.get('category', ''),
+                                'weight',  # Тип товара
+                                data.get('unit', 'кг'),
+                                data.get('weight_unit', 'кг'),
+                                data.get('price_per_kg', 0),
+                                data.get('min_weight', 0.1),
+                                data.get('max_weight', 5.0),
+                                data.get('step_weight', 0.1),
+                                data.get('stock', 0),
+                                data.get('stock_weight', 0)
+                            ))
+
+        product_id = cursor.lastrowid
+        db.commit()
+
+        return jsonify({'success': True, 'id': product_id})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/products/<int:product_id>/weight', methods=['PUT'])
+def update_weight_product(product_id):
+    """Обновить весовой товар"""
+    db = get_db()
+    try:
+        data = request.json
+
+        db.execute('''
+                   UPDATE products
+                   SET name         = ?,
+                       description  = ?,
+                       image_url    = ?,
+                       category     = ?,
+                       unit         = ?,
+                       weight_unit  = ?,
+                       price_per_kg = ?,
+                       min_weight   = ?,
+                       max_weight   = ?,
+                       step_weight  = ?,
+                       stock        = ?,
+                       stock_weight = ?
+                   WHERE id = ?
+                   ''', (
+                       data.get('name', ''),
+                       data.get('description', ''),
+                       data.get('image_url', ''),
+                       data.get('category', ''),
+                       data.get('unit', 'кг'),
+                       data.get('weight_unit', 'кг'),
+                       data.get('price_per_kg', 0),
+                       data.get('min_weight', 0.1),
+                       data.get('max_weight', 5.0),
+                       data.get('step_weight', 0.1),
+                       data.get('stock', 0),
+                       data.get('stock_weight', 0),
+                       product_id
+                   ))
+
+        db.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
 @app.route('/api/admin/products/create', methods=['POST'])
 def admin_create_product():
     """Создать товар с поддержкой весовых товаров"""
@@ -2955,9 +3503,9 @@ def admin_category_tree_detail_api(id):
             # Обновляем категорию
             db.execute('''
                 UPDATE product_categories
-                SET name = ?, parent_id = ?, discount_id = ?, sort_order = ?,
-                    description = ?, icon = ?, color = ?,
-                    seo_title = ?, seo_description = ?, seo_keywords = ?
+                SET name        = ?,parent_id = ?,discount_id = ?,sort_order = ?,
+                    description = ?,icon = ?,color = ?,
+                    seo_title   = ?,seo_description = ?,seo_keywords = ?
                 WHERE id = ?
             ''', (
                 data.get('name'),

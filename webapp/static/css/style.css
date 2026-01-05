@@ -3044,3 +3044,278 @@ html {
         opacity: 1;
     }
 }
+
+/* Стили для весовых товаров */
+.weight-product-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.weight-product-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    color: white;
+    padding: 6px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.weight-selector-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.weight-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: #666;
+}
+
+.weight-limits {
+    display: flex;
+    gap: 20px;
+}
+
+.stock-weight {
+    color: #27ae60;
+    font-weight: 600;
+}
+
+.weight-slider-container {
+    margin: 20px 0;
+}
+
+.weight-slider {
+    width: 100%;
+    height: 10px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #e0e0e0;
+    border-radius: 5px;
+    outline: none;
+}
+
+.weight-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: #667eea;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
+}
+
+.weight-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    background: #667eea;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 13px;
+    color: #666;
+}
+
+#currentWeightValue {
+    font-weight: 700;
+    color: #667eea;
+    font-size: 16px;
+}
+
+.weight-input-container {
+    margin: 20px 0;
+}
+
+.weight-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.weight-input-group input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    text-align: center;
+    font-weight: 600;
+}
+
+.weight-input-group input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+.weight-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid #667eea;
+    background: white;
+    color: #667eea;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.weight-btn:hover {
+    background: #667eea;
+    color: white;
+}
+
+.quick-weight-selection {
+    margin-top: 20px;
+}
+
+.quick-weight-selection h5 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.quick-weights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.quick-weight-btn {
+    padding: 8px 15px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-weight-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+    transform: translateY(-2px);
+}
+
+.weight-price-summary {
+    background: white;
+    border: 2px solid #667eea;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.weight-selected, .price-calculated {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+.weight-selected span:first-child,
+.price-calculated span:first-child {
+    color: #666;
+}
+
+#selectedWeight {
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+.price-note {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+}
+
+.price-per-unit {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f0f7ff;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
+
+.price-label {
+    font-size: 14px;
+    color: #666;
+}
+
+.price-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #27ae60;
+}
+
+/* Стили для админки */
+.product-type-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+}
+
+.type-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.type-btn i {
+    font-size: 32px;
+    color: #667eea;
+}
+
+.type-btn span {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.type-btn.active {
+    border-color: #667eea;
+    background: linear-gradient(135deg, #667eea15, #764ba215);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.15);
+}
+
+.type-btn.active i {
+    color: #667eea;
+}

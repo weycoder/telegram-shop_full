@@ -436,7 +436,6 @@ class TelegramShop {
         }
     }
 
-        // Добавляем в класс TelegramShop, в метод updateCartDisplay()
     updateCartDisplay() {
         console.log('🔄 Обновление корзины...');
 
@@ -513,31 +512,63 @@ class TelegramShop {
         let itemsHTML = '';
 
         this.cart.forEach(item => {
+            // Для весовых товаров показываем вес
+            const weightInfo = item.is_weight && item.weight ?
+                `<div class="cart-item-weight" style="
+                    background: #e3f2fd;
+                    color: #1976d2;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    margin: 5px 0;
+                    display: inline-block;
+                ">
+                    <i class="fas fa-weight-hanging"></i> ${item.weight.toFixed(2)} ${item.weight_unit || 'кг'}
+                </div>` : '';
+
+            // Для весовых товаров показываем цену за единицу
+            const unitPrice = item.is_weight ?
+                `${this.formatPrice(item.price)} ₽` :
+                `${this.formatPrice(item.price)} ₽/шт`;
+
+            // Управление количеством (для весовых товаров нельзя менять количество)
+            const quantityControls = item.is_weight ?
+                `<div class="quantity-display">1 шт.</div>` :
+                `<div class="quantity-selector small">
+                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
+                            ${item.quantity <= 1 ? 'disabled' : ''}>
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <span class="quantity">${item.quantity} шт.</span>
+                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>`;
+
             itemsHTML += `
                 <div class="cart-item" data-id="${item.id}">
                     <img src="${item.image || 'https://via.placeholder.com/80'}"
                          alt="${item.name}"
-                         class="cart-item-image">
-                    <div class="cart-item-info">
-                        <div class="cart-item-header">
-                            <h4 class="cart-item-name">${item.name}</h4>
-                            <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
+                         class="cart-item-image"
+                         style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
+                    <div class="cart-item-info" style="flex: 1; margin-left: 15px;">
+                        <div class="cart-item-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <h4 class="cart-item-name" style="margin: 0; font-size: 16px; color: #2c3e50; flex: 1;">
+                                ${item.name}
+                            </h4>
+                            <button class="remove-item" onclick="shop.removeFromCart('${item.id}')"
+                                    style="background: #ffebee; border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #f44336;">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
-                        <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
-                        <div class="cart-item-controls">
-                            <div class="quantity-selector small">
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
-                                        ${item.quantity <= 1 ? 'disabled' : ''}>
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                            <div class="cart-item-total">
+                        ${weightInfo}
+                        <div class="cart-item-price" style="font-weight: 600; color: #27ae60; margin: 5px 0; font-size: 15px;">
+                            ${unitPrice}
+                        </div>
+                        <div class="cart-item-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                            ${quantityControls}
+                            <div class="cart-item-total" style="font-weight: 700; color: #2c3e50; font-size: 16px;">
                                 ${this.formatPrice(item.price * item.quantity)} ₽
                             </div>
                         </div>
@@ -561,31 +592,59 @@ class TelegramShop {
             const summaryHTML = `
                 <div class="cart-summary">
                     <div class="price-breakdown">
-                        <div class="price-item">
-                            <span>Товары:</span>
-                            <span>${this.formatPrice(itemsTotal)} ₽</span>
+                        <div class="price-item" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
+                            <span style="color: #666;">Товары:</span>
+                            <span style="font-weight: 600;">${this.formatPrice(itemsTotal)} ₽</span>
                         </div>
                         ${deliveryCost > 0 ? `
-                            <div class="price-item">
-                                <span>Доставка:</span>
-                                <span>${this.formatPrice(deliveryCost)} ₽</span>
+                            <div class="price-item" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
+                                <span style="color: #666;">Доставка:</span>
+                                <span style="font-weight: 600; color: #e74c3c;">${this.formatPrice(deliveryCost)} ₽</span>
                             </div>
                         ` : `
-                            <div class="price-item" style="color: #27ae60;">
-                                <span>Доставка:</span>
-                                <span>Бесплатно</span>
+                            <div class="price-item" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
+                                <span style="color: #666;">Доставка:</span>
+                                <span style="font-weight: 600; color: #27ae60;">Бесплатно</span>
                             </div>
                         `}
-                        <div class="price-total">
-                            <span>Итого:</span>
-                            <span class="total-price">${this.formatPrice(totalWithDelivery)} ₽</span>
+                        <div class="price-total" style="display: flex; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 2px solid #f0f0f0; font-size: 18px;">
+                            <span style="font-weight: 700; color: #2c3e50;">Итого:</span>
+                            <span class="total-price" style="font-weight: 700; color: #27ae60;">${this.formatPrice(totalWithDelivery)} ₽</span>
                         </div>
                     </div>
-                    <div class="cart-actions">
-                        <button class="btn btn-outline" id="clearCart">
+                    <div class="cart-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button class="btn btn-outline" id="clearCart" style="
+                            flex: 1;
+                            background: white;
+                            border: 2px solid #e74c3c;
+                            color: #e74c3c;
+                            padding: 12px;
+                            border-radius: 8px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 8px;
+                            transition: all 0.2s;
+                        ">
                             <i class="fas fa-trash"></i> Очистить
                         </button>
-                        <button class="btn btn-primary" id="checkoutBtn">
+                        <button class="btn btn-primary" id="checkoutBtn" style="
+                            flex: 2;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            border: none;
+                            padding: 12px;
+                            border-radius: 8px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 8px;
+                            transition: all 0.2s;
+                        ">
                             <i class="fas fa-paper-plane"></i> Купить
                         </button>
                     </div>
@@ -721,14 +780,44 @@ class TelegramShop {
     }
 
     createProductCard(product) {
-        const inStock = product.stock > 0;
+        const inStock = product.stock > 0 || product.stock_weight > 0;
+        const isWeightProduct = product.product_type === 'weight';
         const discount = this.calculateProductDiscount(product);
-        const discountedPrice = discount ? this.calculateDiscountedPrice(product.price, discount) : product.price;
-        const hasDiscount = discount && discountedPrice < product.price;
+
+        let priceText, buttonText;
+
+        if (isWeightProduct) {
+            // Для весовых товаров показываем цену за кг
+            const pricePerKg = product.price_per_kg || product.price || 0;
+            priceText = `
+                <div class="product-price">
+                    ${this.formatPrice(pricePerKg)} ₽/кг
+                </div>
+            `;
+            buttonText = 'Выбрать вес';
+        } else {
+            // Для штучных товаров
+            const discountedPrice = discount ? this.calculateDiscountedPrice(product.price, discount) : product.price;
+            const hasDiscount = discount && discountedPrice < product.price;
+
+            priceText = hasDiscount ? `
+                <div class="price-container">
+                    <div class="original-price">${this.formatPrice(product.price)} ₽</div>
+                    <div class="discounted-price">${this.formatPrice(discountedPrice)} ₽</div>
+                </div>
+            ` : `
+                <div class="product-price">${this.formatPrice(product.price)} ₽</div>
+            `;
+            buttonText = 'Подробнее';
+        }
+
+        const stockText = isWeightProduct
+            ? `В наличии: ${product.stock_weight || 0} кг`
+            : `В наличии: ${product.stock} шт.`;
 
         return `
-            <div class="product-card ${hasDiscount ? 'has-discount' : ''}">
-                ${hasDiscount ? `
+            <div class="product-card ${discount ? 'has-discount' : ''}">
+                ${discount ? `
                     <div class="discount-badge">
                         ${this.formatDiscountInfo(discount)}
                     </div>
@@ -743,29 +832,24 @@ class TelegramShop {
                 </div>
                 <div class="product-info">
                     <h3 class="product-title">${product.name}</h3>
+                    ${product.product_type === 'weight' ? `
+                        <div class="weight-product-badge">
+                            <i class="fas fa-weight-hanging"></i> Весовой товар
+                        </div>
+                    ` : ''}
 
                     <div class="product-pricing">
-                        ${hasDiscount ? `
-                            <div class="price-container">
-                                <div class="original-price">
-                                    ${this.formatPrice(product.price)} ₽
-                                </div>
-                                <div class="discounted-price">
-                                    ${this.formatPrice(discountedPrice)} ₽
-                                </div>
-                            </div>
-                        ` : `
-                            <div class="product-price">${this.formatPrice(product.price)} ₽</div>
-                        `}
+                        ${priceText}
                     </div>
 
                     <div class="product-stock ${inStock ? '' : 'stock-unavailable'}">
                         <i class="fas ${inStock ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                        ${inStock ? `В наличии: ${product.stock} шт.` : 'Нет в наличии'}
+                        ${stockText}
                     </div>
                     <button class="btn-block" onclick="shop.viewProduct(${product.id})"
                             ${!inStock ? 'disabled' : ''}>
-                        <i class="fas fa-eye"></i> Подробнее
+                        <i class="fas ${isWeightProduct ? 'fa-weight' : 'fa-eye'}"></i>
+                        ${buttonText}
                     </button>
                 </div>
             </div>
@@ -805,26 +889,296 @@ class TelegramShop {
         this.loadProducts(category);
     }
 
+    setExactWeight(weight) {
+        const input = document.getElementById('exactWeight');
+        const slider = document.getElementById('weightSlider');
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
+
+        if (weight < min) weight = min;
+        if (weight > max) weight = max;
+
+        input.value = weight.toFixed(2);
+        slider.value = weight;
+        this.updateWeightFromInput();
+    }
+
+
+    updateWeightFromInput() {
+        const input = document.getElementById('exactWeight');
+        const slider = document.getElementById('weightSlider');
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
+
+        let value = parseFloat(input.value) || min;
+        if (value < min) value = min;
+        if (value > max) value = max;
+
+        input.value = value.toFixed(2);
+        slider.value = value;
+
+        const currentWeightSpan = document.getElementById('currentWeightValue');
+        const selectedWeightSpan = document.getElementById('selectedWeight');
+        const calculatedPriceSpan = document.getElementById('calculatedPrice');
+
+        const unit = this.currentProduct?.unit || 'кг';
+        const pricePerKg = this.currentProduct?.price_per_kg || 0;
+        const price = Math.floor(value * pricePerKg); // Округляем вниз
+
+        currentWeightSpan.textContent = value.toFixed(2) + ' ' + unit;
+        selectedWeightSpan.textContent = value.toFixed(2) + ' ' + unit;
+        calculatedPriceSpan.textContent = this.formatPrice(price) + ' ₽';
+
+        this.selectedWeight = value;
+        this.selectedWeightPrice = price;
+    }
+
+    // Метод добавления весового товара в корзину
+    addWeightProductToCart(productId) {
+        if (!this.currentProduct) return;
+
+        const weight = this.selectedWeight || this.currentProduct.min_weight || 0.1;
+        const price = this.selectedWeightPrice || 0;
+
+        if (weight <= 0) {
+            this.showNotification('❌ Выберите вес товара', 'error');
+            return;
+        }
+
+        this.addToCart(
+            productId,
+            `${this.currentProduct.name} (${weight.toFixed(2)} ${this.currentProduct.unit || 'кг'})`,
+            price,
+            1, // Количество всегда 1 для весового товара
+            this.currentProduct.image_url
+        );
+
+        this.closeProductModal();
+    }
+
+
+
+
+        // Методы для работы с весом
+    adjustWeight(delta) {
+        const input = document.getElementById('exactWeight');
+        const slider = document.getElementById('weightSlider');
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
+
+        let currentValue = parseFloat(input.value) || min;
+        let newValue = currentValue + delta;
+
+        if (newValue < min) newValue = min;
+        if (newValue > max) newValue = max;
+
+        input.value = newValue.toFixed(2);
+        slider.value = newValue;
+
+        this.updateWeightFromInput();
+    }
+
+
+
+        // Новый метод для отображения весового товара
+    renderWeightProductModal(product) {
+        const modal = document.getElementById('productModal');
+        if (!modal) {
+            console.error('❌ Модальное окно не найдено');
+            return;
+        }
+
+        const pricePerKg = product.price_per_kg || 0;
+        const minWeight = product.min_weight || 0.1;
+        const maxWeight = product.max_weight || 5.0;
+        const stepWeight = product.step_weight || 0.1;
+        const stockWeight = product.stock_weight || 0;
+        const unit = product.unit || 'кг';
+
+        // Округляем до целых рублей
+        const calculatePrice = (weight) => {
+            const exactPrice = weight * pricePerKg;
+            return Math.floor(exactPrice); // Округляем вниз до целых рублей
+        };
+
+        modal.innerHTML = `
+            <div class="product-modal">
+                <button class="close-product-modal" id="closeProductModal">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="product-modal-content">
+                    <div class="product-modal-image-container">
+                        <img src="${product.image_url || 'https://via.placeholder.com/400x300'}"
+                             alt="${product.name}"
+                             class="product-modal-image"
+                             onerror="this.src='https://via.placeholder.com/400x300'">
+                    </div>
+                    <div class="product-modal-info">
+                        <h3 class="product-modal-title">${product.name}</h3>
+
+                        <div class="weight-product-label">
+                            <i class="fas fa-weight-hanging"></i> Весовой товар
+                        </div>
+
+                        <div class="product-modal-pricing">
+                            <div class="price-per-unit">
+                                <span class="price-label">Цена за ${unit}:</span>
+                                <span class="price-value">${this.formatPrice(pricePerKg)} ₽</span>
+                            </div>
+                        </div>
+
+                        <div class="product-modal-description">
+                            <h4><i class="fas fa-info-circle"></i> Описание:</h4>
+                            <p>${product.description || 'Описание отсутствует'}</p>
+                        </div>
+
+                        <div class="weight-selector-section">
+                            <h4><i class="fas fa-balance-scale"></i> Выберите вес:</h4>
+
+                            <div class="weight-info">
+                                <div class="weight-limits">
+                                    <span>От: ${minWeight} ${unit}</span>
+                                    <span>До: ${Math.min(maxWeight, stockWeight)} ${unit}</span>
+                                </div>
+                                ${stockWeight > 0 ? `
+                                    <div class="stock-weight">
+                                        <i class="fas fa-box"></i>
+                                        В наличии: ${stockWeight} ${unit}
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <!-- Ползунок для выбора веса -->
+                            <div class="weight-slider-container">
+                                <input type="range"
+                                       id="weightSlider"
+                                       min="${minWeight}"
+                                       max="${Math.min(maxWeight, stockWeight)}"
+                                       step="${stepWeight}"
+                                       value="${minWeight}"
+                                       class="weight-slider">
+                                <div class="slider-labels">
+                                    <span>${minWeight} ${unit}</span>
+                                    <span id="currentWeightValue">${minWeight} ${unit}</span>
+                                    <span>${Math.min(maxWeight, stockWeight)} ${unit}</span>
+                                </div>
+                            </div>
+
+                            <!-- Точный ввод веса -->
+                            <div class="weight-input-container">
+                                <label for="exactWeight">Точный вес (${unit}):</label>
+                                <div class="weight-input-group">
+                                    <button class="weight-btn" onclick="shop.adjustWeight(-${stepWeight})">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <input type="number"
+                                           id="exactWeight"
+                                           value="${minWeight}"
+                                           min="${minWeight}"
+                                           max="${Math.min(maxWeight, stockWeight)}"
+                                           step="${stepWeight}"
+                                           onchange="shop.updateWeightFromInput()">
+                                    <button class="weight-btn" onclick="shop.adjustWeight(${stepWeight})">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Быстрый выбор -->
+                            <div class="quick-weight-selection">
+                                <h5>Быстрый выбор:</h5>
+                                <div class="quick-weights">
+                                    ${[0.1, 0.25, 0.5, 1, 2, 3, 5]
+                                        .filter(w => w >= minWeight && w <= Math.min(maxWeight, stockWeight))
+                                        .map(w => `
+                                        <button class="quick-weight-btn" onclick="shop.setExactWeight(${w})">
+                                            ${w} ${unit}
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="weight-price-summary">
+                            <div class="weight-selected">
+                                <span>Выбрано:</span>
+                                <span id="selectedWeight">${minWeight} ${unit}</span>
+                            </div>
+                            <div class="price-calculated">
+                                <span>Стоимость:</span>
+                                <span id="calculatedPrice" class="total-price">${this.formatPrice(calculatePrice(minWeight))} ₽</span>
+                            </div>
+                            <div class="price-note">
+                                <small><i class="fas fa-info-circle"></i> Цена округляется до целых рублей</small>
+                            </div>
+                        </div>
+
+                        ${stockWeight > 0 ? `
+                            <button class="btn btn-primary" id="addWeightToCart" onclick="shop.addWeightProductToCart(${product.id})">
+                                <i class="fas fa-cart-plus"></i> Добавить в корзину
+                            </button>
+                        ` : `
+                            <button class="btn btn-secondary" disabled>
+                                <i class="fas fa-times-circle"></i> Товар закончился
+                            </button>
+                        `}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.style.display = 'flex';
+
+        // Инициализация ползунка
+        const weightSlider = document.getElementById('weightSlider');
+        const exactWeightInput = document.getElementById('exactWeight');
+        const currentWeightSpan = document.getElementById('currentWeightValue');
+        const selectedWeightSpan = document.getElementById('selectedWeight');
+        const calculatedPriceSpan = document.getElementById('calculatedPrice');
+
+        const updateDisplay = () => {
+            const weight = parseFloat(weightSlider.value);
+            const price = calculatePrice(weight);
+
+            currentWeightSpan.textContent = weight.toFixed(2) + ' ' + unit;
+            selectedWeightSpan.textContent = weight.toFixed(2) + ' ' + unit;
+            calculatedPriceSpan.textContent = this.formatPrice(price) + ' ₽';
+            exactWeightInput.value = weight.toFixed(2);
+
+            // Сохраняем выбранный вес
+            this.selectedWeight = weight;
+            this.selectedWeightPrice = price;
+        };
+
+        weightSlider.addEventListener('input', () => {
+            exactWeightInput.value = weightSlider.value;
+            updateDisplay();
+        });
+
+        exactWeightInput.addEventListener('input', () => {
+            let value = parseFloat(exactWeightInput.value) || minWeight;
+            if (value < minWeight) value = minWeight;
+            if (value > Math.min(maxWeight, stockWeight)) value = Math.min(maxWeight, stockWeight);
+
+            weightSlider.value = value;
+            updateDisplay();
+        });
+
+        // Инициализация
+        updateDisplay();
+
+        // Назначаем обработчики
+        this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
+    }
+
+
+
     async viewProduct(productId) {
         try {
             console.log(`👁️ Загрузка товара #${productId}...`);
-
-            // Показываем загрузку в модальном окне
             this.openProductModalLoading();
 
             const response = await fetch(`/api/products/${productId}`);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Сервер вернул:', response.status, errorText);
-
-                if (response.status === 404) {
-                    console.log('🛠️ Проверяем доступность API...');
-                }
-
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
             const product = await response.json();
 
             if (product.error) {
@@ -834,8 +1188,12 @@ class TelegramShop {
             console.log('✅ Товар загружен:', product);
             this.currentProduct = product;
 
-            // ВЫЗЫВАЕМ метод рендеринга модального окна
-            this.renderProductModal(product);
+            // Если это весовой товар, показываем специальное модальное окно
+            if (product.product_type === 'weight') {
+                this.renderWeightProductModal(product);
+            } else {
+                this.renderProductModal(product);
+            }
 
         } catch (error) {
             console.error('❌ Ошибка загрузки товара:', error);
@@ -1070,31 +1428,55 @@ class TelegramShop {
         this.updateBackButton();
     }
 
-    // ========== КОРЗИНА ==========
+        // ========== КОРЗИНА ==========
+        // В методе addToCart добавьте обработку весовых товаров:
     addToCart(productId, name, price, quantity = 1, image = null) {
-        // Рассчитываем скидку для этого товара
+        // Для весовых товаров проверяем тип
         const product = this.products.find(p => p.id === productId);
+        const isWeightProduct = product?.product_type === 'weight';
+
         const discount = product ? this.calculateProductDiscount(product) : null;
         const discountedPrice = discount ? this.calculateDiscountedPrice(price, discount) : price;
 
-        // Ищем товар в корзине
-        const existingIndex = this.cart.findIndex(item => item.id === productId);
+        // Для весовых товаров создаем уникальный ID с весом
+        const cartItemId = isWeightProduct ? `${productId}_${Date.now()}` : productId;
+
+        const existingIndex = this.cart.findIndex(item => item.id === cartItemId);
 
         if (existingIndex !== -1) {
-            // Обновляем количество существующего товара
-            this.cart[existingIndex].quantity += quantity;
-            this.cart[existingIndex].discounted_price = discountedPrice;
-            this.cart[existingIndex].discount_info = discount;
+            // Для весовых товаров не увеличиваем количество, а создаем новую запись
+            if (isWeightProduct) {
+                this.cart.push({
+                    id: `${productId}_${Date.now() + 1}`, // Уникальный ID
+                    name: name,
+                    price: price,
+                    discounted_price: discountedPrice,
+                    discount_info: discount,
+                    quantity: 1,
+                    image: image || 'https://via.placeholder.com/100',
+                    weight: this.selectedWeight,
+                    is_weight: true,
+                    original_product_id: productId,
+                    addedAt: new Date().toISOString()
+                });
+            } else {
+                // Для штучных товаров увеличиваем количество
+                this.cart[existingIndex].quantity += quantity;
+                this.cart[existingIndex].discounted_price = discountedPrice;
+                this.cart[existingIndex].discount_info = discount;
+            }
         } else {
-            // Добавляем новый товар
             this.cart.push({
-                id: productId,
+                id: cartItemId,
                 name: name,
                 price: price,
                 discounted_price: discountedPrice,
                 discount_info: discount,
-                quantity: quantity,
+                quantity: isWeightProduct ? 1 : quantity,
                 image: image || 'https://via.placeholder.com/100',
+                weight: isWeightProduct ? this.selectedWeight : null,
+                is_weight: isWeightProduct,
+                original_product_id: productId,
                 addedAt: new Date().toISOString()
             });
         }
@@ -1102,13 +1484,11 @@ class TelegramShop {
         this.saveCart();
         this.updateCartCount();
 
-        // Обновляем отображение корзины
         if (this.isCartOpen()) {
             this.updateCartDisplay();
         }
 
-        // Показываем уведомление с учетом скидки
-        this.showCartNotification(name, quantity, discountedPrice);
+        this.showCartNotification(name, isWeightProduct ? 1 : quantity);
     }
 
     showCartNotification(name, quantity) {
@@ -2405,6 +2785,10 @@ class TelegramShop {
             loading.style.display = show ? 'block' : 'none';
         }
     }
+
+
+
+
 
     showNotification(message, type = 'info') {
         console.log(`💬 [${type.toUpperCase()}] ${message}`);
