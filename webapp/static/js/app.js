@@ -66,14 +66,16 @@ class TelegramShop {
         this.discounts = [];
         this.promo_codes = [];
 
-        // Получаем параметры Telegram при создании
+        // Новые свойства для весовых товаров
+        this.selectedWeight = 0.1;
+        this.selectedWeightPrice = 0;
+
+        // Получаем параметры Telegram
         const params = getTelegramParams();
         this.userId = params.userId;
         this.username = params.username;
 
-        // ⚠️ ВАЖНО: Сохраняем в localStorage для перезагрузки страницы
         this.saveUserToLocalStorage();
-
         console.log('🛍️ Telegram Shop создан для пользователя:', this.username, 'ID:', this.userId);
     }
 
@@ -690,7 +692,6 @@ class TelegramShop {
     async loadProducts(category = 'all') {
         try {
             console.log(`📥 Загрузка товаров${category !== 'all' ? ` категории "${category}"` : ''}...`);
-
             this.showLoading(true);
 
             const url = category !== 'all'
@@ -698,13 +699,13 @@ class TelegramShop {
                 : '/api/products';
 
             const response = await fetch(url);
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
             this.products = await response.json();
             console.log(`✅ Загружено ${this.products.length} товаров`);
+
+            // СРАЗУ применяем скидки к товарам
+            await this.applyDiscountsToProducts();
 
             this.renderProducts();
 
@@ -729,6 +730,36 @@ class TelegramShop {
         // Проверяем состояние
         console.log(`Состояние корзины: ${this.cart.length} товаров`);
         console.log('Содержимое корзины:', this.cart);
+    }
+
+    async applyDiscountsToProducts() {
+        try {
+            // Загружаем активные скидки
+            if (this.discounts.length === 0) {
+                await this.loadDiscounts();
+            }
+
+            // Применяем скидки к каждому товару
+            this.products = this.products.map(product => {
+                const discount = this.calculateProductDiscount(product);
+                if (discount) {
+                    // Добавляем информацию о скидке в объект товара
+                    product.discount = discount;
+                    product.has_discount = true;
+                    product.discounted_price = this.calculateDiscountedPrice(product.price, discount);
+                    product.original_price = product.price;
+                } else {
+                    product.has_discount = false;
+                    product.discounted_price = product.price;
+                }
+                return product;
+            });
+
+            console.log(`🏷️ Скидки применены к ${this.products.length} товарам`);
+
+        } catch (error) {
+            console.error('❌ Ошибка применения скидок:', error);
+        }
     }
 
     async loadCategories() {
@@ -782,42 +813,16 @@ class TelegramShop {
     createProductCard(product) {
         const inStock = product.stock > 0 || product.stock_weight > 0;
         const isWeightProduct = product.product_type === 'weight';
-        const discount = this.calculateProductDiscount(product);
 
-        let priceText, buttonText;
-
-        if (isWeightProduct) {
-            // Для весовых товаров показываем цену за кг
-            const pricePerKg = product.price_per_kg || product.price || 0;
-            priceText = `
-                <div class="product-price">
-                    ${this.formatPrice(pricePerKg)} ₽/кг
-                </div>
-            `;
-            buttonText = 'Выбрать вес';
-        } else {
-            // Для штучных товаров
-            const discountedPrice = discount ? this.calculateDiscountedPrice(product.price, discount) : product.price;
-            const hasDiscount = discount && discountedPrice < product.price;
-
-            priceText = hasDiscount ? `
-                <div class="price-container">
-                    <div class="original-price">${this.formatPrice(product.price)} ₽</div>
-                    <div class="discounted-price">${this.formatPrice(discountedPrice)} ₽</div>
-                </div>
-            ` : `
-                <div class="product-price">${this.formatPrice(product.price)} ₽</div>
-            `;
-            buttonText = 'Подробнее';
-        }
-
-        const stockText = isWeightProduct
-            ? `В наличии: ${product.stock_weight || 0} кг`
-            : `В наличии: ${product.stock} шт.`;
+        // Используем уже рассчитанные значения скидки
+        const hasDiscount = product.has_discount === true;
+        const discount = product.discount;
+        const discountedPrice = product.discounted_price || product.price;
+        const originalPrice = product.original_price || product.price;
 
         return `
-            <div class="product-card ${discount ? 'has-discount' : ''}">
-                ${discount ? `
+            <div class="product-card ${hasDiscount ? 'has-discount' : ''}">
+                ${hasDiscount ? `
                     <div class="discount-badge">
                         ${this.formatDiscountInfo(discount)}
                     </div>
@@ -832,24 +837,43 @@ class TelegramShop {
                 </div>
                 <div class="product-info">
                     <h3 class="product-title">${product.name}</h3>
-                    ${product.product_type === 'weight' ? `
+                    ${isWeightProduct ? `
                         <div class="weight-product-badge">
                             <i class="fas fa-weight-hanging"></i> Весовой товар
                         </div>
                     ` : ''}
 
                     <div class="product-pricing">
-                        ${priceText}
+                        ${hasDiscount ? `
+                            <div class="price-container">
+                                <div class="original-price">
+                                    ${this.formatPrice(originalPrice)} ₽
+                                </div>
+                                <div class="discounted-price">
+                                    ${this.formatPrice(discountedPrice)} ₽
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="product-price">
+                                ${isWeightProduct ?
+                                    `${this.formatPrice(product.price_per_kg || product.price)} ₽/кг` :
+                                    `${this.formatPrice(product.price)} ₽`
+                                }
+                            </div>
+                        `}
                     </div>
 
                     <div class="product-stock ${inStock ? '' : 'stock-unavailable'}">
                         <i class="fas ${inStock ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                        ${stockText}
+                        ${isWeightProduct ?
+                            `В наличии: ${product.stock_weight || 0} кг` :
+                            `В наличии: ${product.stock} шт.`
+                        }
                     </div>
                     <button class="btn-block" onclick="shop.viewProduct(${product.id})"
                             ${!inStock ? 'disabled' : ''}>
                         <i class="fas ${isWeightProduct ? 'fa-weight' : 'fa-eye'}"></i>
-                        ${buttonText}
+                        ${isWeightProduct ? 'Выбрать вес' : 'Подробнее'}
                     </button>
                 </div>
             </div>
