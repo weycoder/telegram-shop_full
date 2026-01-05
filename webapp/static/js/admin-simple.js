@@ -121,8 +121,6 @@ class AdminPanel {
             if (data.success) {
                 this.showAlert('✅ Изображение успешно загружено', 'success');
                 document.getElementById('imageUrl').value = data.url;
-                document.getElementById('previewImage').src = data.url;
-                document.getElementById('previewImage').style.display = 'block';
             } else {
                 this.showAlert('❌ Ошибка загрузки: ' + (data.error || ''), 'error');
             }
@@ -132,7 +130,6 @@ class AdminPanel {
             this.showAlert('❌ Ошибка загрузки изображения', 'error');
         });
     }
-
     // Методы рендеринга товаров - исправленная версия
     renderProducts() {
         const container = document.getElementById('productsTableBody');
@@ -371,9 +368,11 @@ class AdminPanel {
     showAddProduct() {
         this.isEditing = false;
         this.editingProductId = null;
+
+        // Показываем страницу добавления товара
         this.showPage('add-product');
 
-        // Даем время на отрисовку страницы
+        // Ждем немного чтобы DOM обновился
         setTimeout(() => {
             const container = document.getElementById('add-product');
             if (!container) {
@@ -381,356 +380,358 @@ class AdminPanel {
                 return;
             }
 
+            // Создаем HTML для страницы добавления товара
             container.innerHTML = `
-                <div class="add-product-header">
-                    <h2>${this.isEditing ? 'Редактировать товар' : 'Добавить новый товар'}</h2>
-                </div>
+                <div class="add-product-container">
+                    <div class="form-header">
+                        <h2><i class="fas fa-plus"></i> Добавить новый товар</h2>
+                        <button class="btn btn-outline" onclick="admin.showPage('products')">
+                            <i class="fas fa-arrow-left"></i> Назад к товарам
+                        </button>
+                    </div>
 
-                <div class="product-type-selector" style="
-                    display: flex;
-                    gap: 15px;
-                    margin-bottom: 30px;
-                ">
-                    <button class="type-btn active" data-type="piece"
-                            onclick="admin.selectProductType('piece')"
-                            style="
-                                flex: 1;
-                                display: flex;
-                                flex-direction: column;
-                                align-items: center;
-                                gap: 10px;
-                                padding: 20px;
-                                background: white;
-                                border: 2px solid #667eea;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                transition: all 0.3s;
+                    <div class="product-type-selector" style="
+                        display: flex;
+                        gap: 15px;
+                        margin-bottom: 30px;
+                    ">
+                        <button class="type-btn active" data-type="piece"
+                                onclick="admin.selectProductType('piece')"
+                                style="
+                                    flex: 1;
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    gap: 10px;
+                                    padding: 20px;
+                                    background: white;
+                                    border: 2px solid #667eea;
+                                    border-radius: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                ">
+                            <i class="fas fa-cube" style="font-size: 32px; color: #667eea;"></i>
+                            <span style="font-weight: 600; color: #2c3e50;">Штучный товар</span>
+                        </button>
+                        <button class="type-btn" data-type="weight"
+                                onclick="admin.selectProductType('weight')"
+                                style="
+                                    flex: 1;
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    gap: 10px;
+                                    padding: 20px;
+                                    background: white;
+                                    border: 2px solid #e0e0e0;
+                                    border-radius: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                ">
+                            <i class="fas fa-weight-hanging" style="font-size: 32px; color: #667eea;"></i>
+                            <span style="font-weight: 600; color: #2c3e50;">Весовой товар</span>
+                        </button>
+                    </div>
+
+                    <form id="addProductForm" onsubmit="admin.handleProductSubmit(event)" style="
+                        background: white;
+                        border-radius: 12px;
+                        padding: 30px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+                    ">
+                        <!-- Основная информация -->
+                        <div class="form-section" style="margin-bottom: 30px;">
+                            <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Основная информация</h3>
+                            <div class="form-grid" style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                                gap: 20px;
                             ">
-                        <i class="fas fa-cube" style="font-size: 32px; color: #667eea;"></i>
-                        <span style="font-weight: 600; color: #2c3e50;">Штучный товар</span>
-                    </button>
-                    <button class="type-btn" data-type="weight"
-                            onclick="admin.selectProductType('weight')"
-                            style="
-                                flex: 1;
-                                display: flex;
-                                flex-direction: column;
-                                align-items: center;
-                                gap: 10px;
-                                padding: 20px;
-                                background: white;
-                                border: 2px solid #e0e0e0;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                transition: all 0.3s;
-                            ">
-                        <i class="fas fa-weight-hanging" style="font-size: 32px; color: #667eea;"></i>
-                        <span style="font-weight: 600; color: #2c3e50;">Весовой товар</span>
-                    </button>
-                </div>
+                                <div class="form-group">
+                                    <label for="productName" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Название товара *
+                                    </label>
+                                    <input type="text" id="productName" required
+                                           placeholder="Например: Яблоки или iPhone 15"
+                                           style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                           ">
+                                </div>
 
-                <form class="add-product-form" id="addProductForm" style="
-                    background: white;
-                    border-radius: 12px;
-                    padding: 30px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-                ">
-                    <!-- Основная информация -->
-                    <div class="form-section" style="margin-bottom: 30px;">
-                        <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Основная информация</h3>
-                        <div class="form-grid" style="
-                            display: grid;
-                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                            gap: 20px;
-                        ">
-                            <div class="form-group">
-                                <label for="productName" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Название товара *
-                                </label>
-                                <input type="text" id="productName" required
-                                       placeholder="Например: Яблоки или iPhone 15"
-                                       style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                       ">
-                            </div>
+                                <!-- Для штучных товаров -->
+                                <div class="form-group product-type-piece">
+                                    <label for="productPrice" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Цена (₽) *
+                                    </label>
+                                    <input type="number" id="productPrice" step="0.01" required
+                                           placeholder="100"
+                                           style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                           ">
+                                </div>
 
-                            <!-- Для штучных товаров -->
-                            <div class="form-group product-type-piece">
-                                <label for="productPrice" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Цена (₽) *
-                                </label>
-                                <input type="number" id="productPrice" step="0.01" required
-                                       placeholder="100"
-                                       style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                       ">
-                            </div>
+                                <!-- Для весовых товаров -->
+                                <div class="form-group product-type-weight" style="display: none;">
+                                    <label for="pricePerKg" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Цена за кг (₽) *
+                                    </label>
+                                    <input type="number" id="pricePerKg" step="0.01"
+                                           placeholder="300"
+                                           style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                           ">
+                                </div>
 
-                            <!-- Для весовых товаров -->
-                            <div class="form-group product-type-weight" style="display: none;">
-                                <label for="pricePerKg" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Цена за кг (₽) *
-                                </label>
-                                <input type="number" id="pricePerKg" step="0.01"
-                                       placeholder="300"
-                                       style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                       ">
-                            </div>
+                                <div class="form-group product-type-piece">
+                                    <label for="productStock" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Количество (шт) *
+                                    </label>
+                                    <input type="number" id="productStock" required
+                                           placeholder="10"
+                                           style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                           ">
+                                </div>
 
-                            <div class="form-group product-type-piece">
-                                <label for="productStock" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Количество (шт) *
-                                </label>
-                                <input type="number" id="productStock" required
-                                       placeholder="10"
-                                       style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                       ">
-                            </div>
+                                <div class="form-group product-type-weight" style="display: none;">
+                                    <label for="stockWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Вес в наличии (кг)
+                                    </label>
+                                    <input type="number" id="stockWeight" step="0.01"
+                                           placeholder="50"
+                                           style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                           ">
+                                </div>
 
-                            <div class="form-group product-type-weight" style="display: none;">
-                                <label for="stockWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Вес в наличии (кг)
-                                </label>
-                                <input type="number" id="stockWeight" step="0.01"
-                                       placeholder="50"
-                                       style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                       ">
-                            </div>
-
-                            <div class="form-group">
-                                <label for="productCategory" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Категория
-                                </label>
-                                <select id="productCategory" style="
-                                    width: 100%;
-                                    padding: 12px 15px;
-                                    border: 2px solid #e0e0e0;
-                                    border-radius: 8px;
-                                    font-size: 16px;
-                                    background: white;
-                                ">
-                                    <option value="">Выберите категорию</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Настройки весового товара -->
-                    <div class="form-section product-type-weight" style="display: none; margin-bottom: 30px;">
-                        <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Настройки весового товара</h3>
-                        <div class="form-grid" style="
-                            display: grid;
-                            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                            gap: 20px;
-                        ">
-                            <div class="form-group">
-                                <label for="unit" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Единица измерения
-                                </label>
-                                <select id="unit" style="
-                                    width: 100%;
-                                    padding: 12px 15px;
-                                    border: 2px solid #e0e0e0;
-                                    border-radius: 8px;
-                                    font-size: 16px;
-                                    background: white;
-                                ">
-                                    <option value="кг">Килограммы (кг)</option>
-                                    <option value="г">Граммы (г)</option>
-                                    <option value="л">Литры (л)</option>
-                                    <option value="м">Метры (м)</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="minWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Минимальный вес (кг)
-                                </label>
-                                <input type="number" id="minWeight" step="0.01" value="0.1" min="0.01"
-                                       style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                       ">
-                            </div>
-
-                            <div class="form-group">
-                                <label for="maxWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Максимальный вес (кг)
-                                </label>
-                                <input type="number" id="maxWeight" step="0.01" value="5.0" min="0.1"
-                                       style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                       ">
-                            </div>
-
-                            <div class="form-group">
-                                <label for="stepWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                    Шаг изменения
-                                </label>
-                                <select id="stepWeight" style="
-                                    width: 100%;
-                                    padding: 12px 15px;
-                                    border: 2px solid #e0e0e0;
-                                    border-radius: 8px;
-                                    font-size: 16px;
-                                    background: white;
-                                ">
-                                    <option value="0.01">10 грамм</option>
-                                    <option value="0.05">50 грамм</option>
-                                    <option value="0.1" selected>100 грамм</option>
-                                    <option value="0.25">250 грамм</option>
-                                    <option value="0.5">500 грамм</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Описание -->
-                    <div class="form-section" style="margin-bottom: 30px;">
-                        <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Описание</h3>
-                        <div class="form-group">
-                            <label for="productDescription" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                Описание товара
-                            </label>
-                            <textarea id="productDescription" rows="4"
-                                      placeholder="Подробное описание товара..."
-                                      style="
-                                            width: 100%;
-                                            padding: 12px 15px;
-                                            border: 2px solid #e0e0e0;
-                                            border-radius: 8px;
-                                            font-size: 16px;
-                                            resize: vertical;
-                                            font-family: inherit;
-                                      "></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Изображение -->
-                    <div class="form-section" style="margin-bottom: 30px;">
-                        <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Изображение товара</h3>
-                        <div class="form-group">
-                            <label for="imageUrl" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                URL изображения
-                            </label>
-                            <input type="url" id="imageUrl"
-                                   placeholder="https://example.com/image.jpg"
-                                   style="
+                                <div class="form-group">
+                                    <label for="productCategory" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Категория
+                                    </label>
+                                    <select id="productCategory" style="
                                         width: 100%;
                                         padding: 12px 15px;
                                         border: 2px solid #e0e0e0;
                                         border-radius: 8px;
                                         font-size: 16px;
-                                   ">
-                            <small style="color: #666; margin-top: 5px; display: block;">
-                                Или загрузите файл ниже
-                            </small>
+                                        background: white;
+                                    ">
+                                        <option value="">Выберите категорию</option>
+                                        <!-- Категории загружаются динамически -->
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="productImageFile" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
-                                Загрузить с компьютера
-                            </label>
-                            <input type="file" id="productImageFile" accept="image/*" style="
-                                width: 100%;
-                                padding: 12px 15px;
-                                border: 2px solid #e0e0e0;
-                                border-radius: 8px;
-                                font-size: 16px;
-                                background: white;
+                        <!-- Настройки весового товара -->
+                        <div class="form-section product-type-weight" style="display: none; margin-bottom: 30px;">
+                            <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Настройки весового товара</h3>
+                            <div class="form-grid" style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                                gap: 20px;
                             ">
-                            <div id="filePreview" style="margin-top: 10px;"></div>
-                        </div>
-                    </div>
+                                <div class="form-group">
+                                    <label for="unit" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Единица измерения
+                                    </label>
+                                    <select id="unit" style="
+                                        width: 100%;
+                                        padding: 12px 15px;
+                                        border: 2px solid #e0e0e0;
+                                        border-radius: 8px;
+                                        font-size: 16px;
+                                        background: white;
+                                    ">
+                                        <option value="кг">Килограммы (кг)</option>
+                                        <option value="г">Граммы (г)</option>
+                                        <option value="л">Литры (л)</option>
+                                        <option value="м">Метры (м)</option>
+                                    </select>
+                                </div>
 
-                    <!-- Кнопки действий -->
-                    <div class="form-actions" style="
-                        display: flex;
-                        gap: 15px;
-                        margin-top: 30px;
-                        padding-top: 20px;
-                        border-top: 2px solid #f0f0f0;
-                    ">
-                        <button type="button" class="btn btn-secondary"
-                                onclick="admin.showPage('products')"
-                                style="
-                                    flex: 1;
-                                    background: #6c757d;
-                                    color: white;
-                                    border: none;
-                                    padding: 15px;
+                                <div class="form-group">
+                                    <label for="minWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Минимальный вес (кг)
+                                    </label>
+                                    <input type="number" id="minWeight" step="0.01" value="0.1" min="0.01"
+                                           style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                           ">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="maxWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Максимальный вес (кг)
+                                    </label>
+                                    <input type="number" id="maxWeight" step="0.01" value="5.0" min="0.1"
+                                           style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                           ">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="stepWeight" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                        Шаг изменения
+                                    </label>
+                                    <select id="stepWeight" style="
+                                        width: 100%;
+                                        padding: 12px 15px;
+                                        border: 2px solid #e0e0e0;
+                                        border-radius: 8px;
+                                        font-size: 16px;
+                                        background: white;
+                                    ">
+                                        <option value="0.01">10 грамм</option>
+                                        <option value="0.05">50 грамм</option>
+                                        <option value="0.1" selected>100 грамм</option>
+                                        <option value="0.25">250 грамм</option>
+                                        <option value="0.5">500 грамм</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Описание -->
+                        <div class="form-section" style="margin-bottom: 30px;">
+                            <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Описание</h3>
+                            <div class="form-group">
+                                <label for="productDescription" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                    Описание товара
+                                </label>
+                                <textarea id="productDescription" rows="4"
+                                          placeholder="Подробное описание товара..."
+                                          style="
+                                                width: 100%;
+                                                padding: 12px 15px;
+                                                border: 2px solid #e0e0e0;
+                                                border-radius: 8px;
+                                                font-size: 16px;
+                                                resize: vertical;
+                                                font-family: inherit;
+                                          "></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Изображение -->
+                        <div class="form-section" style="margin-bottom: 30px;">
+                            <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 18px;">Изображение товара</h3>
+                            <div class="form-group">
+                                <label for="imageUrl" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                    URL изображения
+                                </label>
+                                <input type="url" id="imageUrl"
+                                       placeholder="https://example.com/image.jpg"
+                                       style="
+                                            width: 100%;
+                                            padding: 12px 15px;
+                                            border: 2px solid #e0e0e0;
+                                            border-radius: 8px;
+                                            font-size: 16px;
+                                       ">
+                                <small style="color: #666; margin-top: 5px; display: block;">
+                                    Или загрузите файл ниже
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="productImageFile" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">
+                                    Загрузить с компьютера
+                                </label>
+                                <input type="file" id="productImageFile" accept="image/*" style="
+                                    width: 100%;
+                                    padding: 12px 15px;
+                                    border: 2px solid #e0e0e0;
                                     border-radius: 8px;
                                     font-size: 16px;
-                                    font-weight: 600;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    gap: 10px;
+                                    background: white;
                                 ">
-                            <i class="fas fa-times"></i> Отмена
-                        </button>
-                        <button type="submit" class="btn btn-primary"
-                                style="
-                                    flex: 2;
-                                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                    color: white;
-                                    border: none;
-                                    padding: 15px;
-                                    border-radius: 8px;
-                                    font-size: 16px;
-                                    font-weight: 600;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    gap: 10px;
-                                ">
-                            <i class="fas fa-save"></i> Сохранить товар
-                        </button>
-                    </div>
-                </form>
+                                <div id="filePreview" style="margin-top: 10px;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Кнопки действий -->
+                        <div class="form-actions" style="
+                            display: flex;
+                            gap: 15px;
+                            margin-top: 30px;
+                            padding-top: 20px;
+                            border-top: 2px solid #f0f0f0;
+                        ">
+                            <button type="button" class="btn btn-secondary"
+                                    onclick="admin.showPage('products')"
+                                    style="
+                                        flex: 1;
+                                        background: #6c757d;
+                                        color: white;
+                                        border: none;
+                                        padding: 15px;
+                                        border-radius: 8px;
+                                        font-size: 16px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 10px;
+                                    ">
+                                <i class="fas fa-times"></i> Отмена
+                            </button>
+                            <button type="submit" class="btn btn-primary"
+                                    style="
+                                        flex: 2;
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        color: white;
+                                        border: none;
+                                        padding: 15px;
+                                        border-radius: 8px;
+                                        font-size: 16px;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 10px;
+                                    ">
+                                <i class="fas fa-save"></i> Сохранить товар
+                            </button>
+                        </div>
+                    </form>
+                </div>
             `;
 
-            // Обновляем категории
+            // Загружаем категории для выпадающего списка
             this.updateCategorySelect();
 
             // Назначаем обработчики
-            const form = document.getElementById('addProductForm');
-            if (form) {
-                form.addEventListener('submit', (e) => this.handleProductSubmit(e));
-            }
-
             const fileInput = document.getElementById('productImageFile');
             if (fileInput) {
                 fileInput.addEventListener('change', (e) => this.handleImageUpload(e));
@@ -742,7 +743,6 @@ class AdminPanel {
         }, 100);
     }
 
-        // Добавьте этот метод в класс AdminPanel:
     handleImageUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -750,14 +750,18 @@ class AdminPanel {
         // Показываем превью
         const preview = document.getElementById('filePreview');
         if (preview) {
-            preview.innerHTML = `
-                <img src="${URL.createObjectURL(file)}"
-                     style="max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 10px;">
-                <p style="color: #666; margin-top: 5px;">${file.name} (${(file.size / 1024).toFixed(2)} KB)</p>
-            `;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.innerHTML = `
+                    <img src="${e.target.result}"
+                         style="max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 10px;">
+                    <p style="color: #666; margin-top: 5px;">${file.name} (${(file.size / 1024).toFixed(2)} KB)</p>
+                `;
+            };
+            reader.readAsDataURL(file);
         }
 
-        // Автоматически загружаем файл
+        // Автоматически загружаем файл на сервер
         this.uploadFile(file);
     }
 
