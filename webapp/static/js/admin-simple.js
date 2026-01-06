@@ -28,18 +28,14 @@ class AdminPanel {
 
     init() {
         this.bindEvents();
+
         // Загружаем данные для всех страниц
         this.loadProducts();
         this.loadOrders();
         this.loadCategories();
         this.loadDashboardData();
 
-        // Инициализируем форму добавления товара если мы на этой странице
-        if (document.getElementById('add-product').style.display !== 'none') {
-            setTimeout(() => {
-                this.showAddProduct();
-            }, 100);
-        }
+        console.log('✅ Админ панель инициализирована');
     }
 
     bindEvents() {
@@ -88,30 +84,6 @@ class AdminPanel {
         if (fileInput) {
             fileInput.addEventListener('change', (e) => this.handleImageUpload(e));
         }
-    }
-
-
-    uploadFile(file) {
-        const formData = new FormData();
-        formData.append('image', file);
-
-        fetch('/api/upload-image', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                this.showAlert('✅ Изображение успешно загружено', 'success');
-                document.getElementById('imageUrl').value = data.url;
-            } else {
-                this.showAlert('❌ Ошибка загрузки: ' + (data.error || ''), 'error');
-            }
-        })
-        .catch(error => {
-            console.error('❌ Ошибка загрузки:', error);
-            this.showAlert('❌ Ошибка загрузки изображения', 'error');
-        });
     }
     // Методы рендеринга товаров - исправленная версия
     renderProducts() {
@@ -352,13 +324,18 @@ class AdminPanel {
         this.isEditing = false;
         this.editingProductId = null;
 
-        // Просто показываем страницу добавления товара
+        // Показываем страницу добавления товара
         this.showPage('add-product');
 
         // После отображения страницы инициализируем форму
         setTimeout(() => {
+            // Сбрасываем форму
             this.resetProductForm();
+
+            // Загружаем категории
             this.updateCategorySelect();
+
+            // Инициализируем тип товара
             this.selectProductType('piece');
 
             // Назначаем обработчики
@@ -397,6 +374,29 @@ class AdminPanel {
         this.uploadFile(file);
     }
 
+    uploadFile(file) {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        fetch('/api/upload-image', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showAlert('✅ Изображение успешно загружено', 'success');
+                document.getElementById('imageUrl').value = data.url;
+            } else {
+                this.showAlert('❌ Ошибка загрузки: ' + (data.error || ''), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Ошибка загрузки:', error);
+            this.showAlert('❌ Ошибка загрузки изображения', 'error');
+        });
+    }
+
     selectProductType(type) {
         console.log(`🎯 Выбран тип товара: ${type}`);
 
@@ -431,18 +431,6 @@ class AdminPanel {
             document.querySelectorAll('.product-type-weight').forEach(el => {
                 el.style.display = 'block';
             });
-        }
-
-        // Обновляем обязательные поля
-        const priceInput = document.getElementById('productPrice');
-        const pricePerKgInput = document.getElementById('pricePerKg');
-
-        if (type === 'piece') {
-            if (priceInput) priceInput.required = true;
-            if (pricePerKgInput) pricePerKgInput.required = false;
-        } else {
-            if (priceInput) priceInput.required = false;
-            if (pricePerKgInput) pricePerKgInput.required = true;
         }
     }
 
@@ -569,18 +557,18 @@ class AdminPanel {
                 formData = {
                     name: getValue('productName'),
                     description: getValue('productDescription'),
-                    price_per_kg: getNumberValue('pricePerKg', 0),
-                    stock_weight: getNumberValue('stockWeight', 0),
+                    price: 0, // Для весовых товаров цена = 0
+                    stock: 0,  // Для весовых товаров количество = 0
                     image_url: getValue('imageUrl'),
                     category: getValue('productCategory'),
                     product_type: 'weight',
                     unit: getValue('unit') || 'кг',
                     weight_unit: getValue('unit') || 'кг',
+                    price_per_kg: getNumberValue('pricePerKg', 0),
                     min_weight: getNumberValue('minWeight', 0.1),
                     max_weight: getNumberValue('maxWeight', 5.0),
                     step_weight: getNumberValue('stepWeight', 0.1),
-                    price: 0, // Для весовых товаров цена = 0
-                    stock: 0  // Для весовых товаров количество = 0
+                    stock_weight: getNumberValue('stockWeight', 0)
                 };
 
                 // Валидация

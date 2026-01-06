@@ -924,21 +924,23 @@
                         </table>
                     </div>
                 </div>
+                                <!-- ДОБАВЛЕНИЕ ТОВАРА -->
                 <div class="page" id="add-product">
                     <div class="add-product-header">
                         <h2>Добавить новый товар</h2>
-                        <button class="btn btn-outline" onclick="admin.showPage('products')" style="margin-left: auto;">
+                        <button type="button" class="btn btn-outline" onclick="admin.showPage('products')" style="margin-left: auto;">
                             <i class="fas fa-arrow-left"></i> Назад к товарам
                         </button>
                     </div>
 
+                    <!-- ВЫНЕСИТЕ СЕЛЕКТОР ТИПА ТОВАРА ЗА ПРЕДЕЛЫ ФОРМЫ -->
                     <div class="product-type-selector" style="
                         display: flex;
                         gap: 15px;
                         margin-bottom: 30px;
                         padding: 0 20px;
                     ">
-                        <button class="type-btn active" data-type="piece"
+                        <button type="button" class="type-btn active" data-type="piece"
                                 onclick="admin.selectProductType('piece')"
                                 style="
                                     flex: 1;
@@ -956,7 +958,7 @@
                             <i class="fas fa-cube" style="font-size: 32px; color: #667eea;"></i>
                             <span style="font-weight: 600; color: #2c3e50;">Штучный товар</span>
                         </button>
-                        <button class="type-btn" data-type="weight"
+                        <button type="button" class="type-btn" data-type="weight"
                                 onclick="admin.selectProductType('weight')"
                                 style="
                                     flex: 1;
@@ -976,6 +978,7 @@
                         </button>
                     </div>
 
+                    <!-- ФОРМА - ТОЛЬКО ФОРМОВЫЕ ЭЛЕМЕНТЫ -->
                     <form class="add-product-form" id="addProductForm" style="padding: 0 20px;">
                         <!-- Основная информация -->
                         <div class="form-section">
@@ -1068,36 +1071,18 @@
                         <div class="form-section">
                             <h3>Изображение товара</h3>
 
-                            <!-- Секция загрузки файла -->
-                            <div class="form-group">
-                                <label for="productImageFile">Загрузить с компьютера</label>
-                                <div class="file-upload-area" id="fileUploadArea">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                    <p>Перетащите изображение сюда или <span>выберите файл</span></p>
-                                    <input type="file" id="productImageFile" accept="image/*" style="display: none;">
-                                    <div class="file-info" id="fileInfo" style="display: none;">
-                                        <img id="filePreview" style="max-width: 100px; max-height: 100px;">
-                                        <div>
-                                            <span id="fileName"></span>
-                                            <button type="button" onclick="admin.removeFile()" style="margin-left: 10px;">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Или URL -->
                             <div class="form-group">
-                                <label for="imageUrl">Или укажите URL изображения</label>
+                                <label for="imageUrl">URL изображения</label>
                                 <input type="url" id="imageUrl" placeholder="https://example.com/image.jpg">
                             </div>
 
-                            <!-- Предпросмотр -->
-                            <div class="form-group" id="imagePreviewContainer" style="display: none;">
-                                <label>Предпросмотр:</label>
-                                <div class="image-preview">
-                                    <img id="imagePreview" style="max-width: 200px; max-height: 200px; border-radius: 10px; border: 2px solid #e9ecef;">
+                            <!-- Секция загрузки файла -->
+                            <div class="form-group">
+                                <label>Загрузить с компьютера</label>
+                                <div style="margin-top: 10px;">
+                                    <input type="file" id="productImageFile" accept="image/*" style="display: block; width: 100%; padding: 10px;">
+                                    <div id="filePreview" style="margin-top: 10px;"></div>
                                 </div>
                             </div>
                         </div>
