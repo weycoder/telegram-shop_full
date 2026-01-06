@@ -350,7 +350,7 @@ class AdminPanel {
                 form.onsubmit = (e) => this.handleProductSubmit(e);
             }
         }, 100);
-    }
+        }
 
     handleImageUpload(e) {
         const file = e.target.files[0];
@@ -396,6 +396,7 @@ class AdminPanel {
             this.showAlert('❌ Ошибка загрузки изображения', 'error');
         });
     }
+
 
     selectProductType(type) {
         console.log(`🎯 Выбран тип товара: ${type}`);
