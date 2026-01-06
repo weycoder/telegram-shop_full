@@ -639,18 +639,19 @@ class AdminPanel {
                     product_type: 'weight',
                     unit: getValue('unit') || 'кг',
                     weight_unit: getValue('unit') || 'кг',
-                    price_per_kg: getNumberValue('pricePerKg', 0),
+                    price_per_kg: getNumberValue('pricePerKg', 0), // <-- ДОБАВЬТЕ ЭТО!
                     min_weight: getNumberValue('minWeight', 0.1),
                     max_weight: getNumberValue('maxWeight', 5.0),
                     step_weight: getNumberValue('stepWeight', 0.1),
                     stock_weight: getNumberValue('stockWeight', 0)
                 };
 
-                // Валидация
+                // Валидация для весового товара
                 if (!formData.name || !formData.name.trim()) {
                     this.showAlert('❌ Введите название товара', 'error');
                     return;
                 }
+                // ВАЖНО: проверяем price_per_kg, а не price!
                 if (formData.price_per_kg <= 0) {
                     this.showAlert('❌ Укажите цену за кг', 'error');
                     return;
