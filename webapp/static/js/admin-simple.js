@@ -335,7 +335,14 @@ class AdminPanel {
                 // Сбрасываем форму
                 this.resetProductForm();
 
-                // Загружаем категории если еще не загружены
+                // ВАЖНО: Сначала снимаем все required
+                const allInputs = document.querySelectorAll('#addProductForm input');
+                allInputs.forEach(input => input.removeAttribute('required'));
+
+                // Затем устанавливаем тип товара (он сам установит нужные required)
+                this.selectProductType('piece');
+
+                // Загружаем категории
                 if (this.categories.length === 0) {
                     this.loadCategories().then(() => {
                         this.updateCategorySelect();
@@ -343,9 +350,6 @@ class AdminPanel {
                 } else {
                     this.updateCategorySelect();
                 }
-
-                // Инициализируем тип товара
-                this.selectProductType('piece');
 
                 // Назначаем обработчики
                 const fileInput = document.getElementById('productImageFile');
@@ -367,9 +371,8 @@ class AdminPanel {
             } catch (error) {
                 console.error('❌ Ошибка инициализации формы:', error);
             }
-        }, 300); // Увеличиваем задержку для гарантии загрузки DOM
+        }, 300);
     }
-
     handleImageUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -450,55 +453,60 @@ class AdminPanel {
                 }
             }
 
-            // Определяем какие поля нужны для каждого типа
-            const pieceTypeFields = ['productPrice', 'productStock'];
-            const weightTypeFields = ['pricePerKg'];
-            const commonFields = ['productName', 'productCategory'];
-
-            // Сбрасываем required для всех полей
-            const allFields = [...pieceTypeFields, ...weightTypeFields, ...commonFields];
-            allFields.forEach(fieldId => {
-                const field = document.getElementById(fieldId);
-                if (field) field.required = false;
+            // ВАЖНО: Сначала снимаем required со ВСЕХ полей
+            const allRequiredInputs = document.querySelectorAll('#addProductForm input[required]');
+            allRequiredInputs.forEach(input => {
+                input.removeAttribute('required');
             });
 
-            // Устанавливаем required для нужных полей
-            if (type === 'piece') {
-                // Показываем поля для штучного товара
-                document.querySelectorAll('.product-type-piece').forEach(el => {
-                    if (el) el.style.display = 'block';
-                });
-                document.querySelectorAll('.product-type-weight').forEach(el => {
-                    if (el) el.style.display = 'none';
-                });
+            // Показываем/скрываем соответствующие поля
+            const pieceFields = document.querySelectorAll('.product-type-piece');
+            const weightFields = document.querySelectorAll('.product-type-weight');
 
-                // Обязательные поля для штучного товара
-                pieceTypeFields.forEach(fieldId => {
-                    const field = document.getElementById(fieldId);
-                    if (field) field.required = true;
-                });
+            if (pieceFields.length > 0 && weightFields.length > 0) {
+                if (type === 'piece') {
+                    // Для штучного товара
+                    pieceFields.forEach(el => {
+                        if (el) el.style.display = 'block';
+                    });
+                    weightFields.forEach(el => {
+                        if (el) el.style.display = 'none';
+                    });
 
-            } else {
-                // Показываем поля для весового товара
-                document.querySelectorAll('.product-type-weight').forEach(el => {
-                    if (el) el.style.display = 'block';
-                });
-                document.querySelectorAll('.product-type-piece').forEach(el => {
-                    if (el) el.style.display = 'none';
-                });
+                    // Устанавливаем required ТОЛЬКО для видимых полей
+                    const priceInput = document.getElementById('productPrice');
+                    const stockInput = document.getElementById('productStock');
+                    if (priceInput) priceInput.setAttribute('required', 'required');
+                    if (stockInput) stockInput.setAttribute('required', 'required');
 
-                // Обязательные поля для весового товара
-                weightTypeFields.forEach(fieldId => {
-                    const field = document.getElementById(fieldId);
-                    if (field) field.required = true;
-                });
+                    // Снимаем required с полей весового товара (на всякий случай)
+                    const pricePerKgInput = document.getElementById('pricePerKg');
+                    if (pricePerKgInput) pricePerKgInput.removeAttribute('required');
+
+                } else {
+                    // Для весового товара
+                    weightFields.forEach(el => {
+                        if (el) el.style.display = 'block';
+                    });
+                    pieceFields.forEach(el => {
+                        if (el) el.style.display = 'none';
+                    });
+
+                    // Устанавливаем required ТОЛЬКО для видимых полей
+                    const pricePerKgInput = document.getElementById('pricePerKg');
+                    if (pricePerKgInput) pricePerKgInput.setAttribute('required', 'required');
+
+                    // Снимаем required с полей штучного товара (на всякий случай)
+                    const priceInput = document.getElementById('productPrice');
+                    const stockInput = document.getElementById('productStock');
+                    if (priceInput) priceInput.removeAttribute('required');
+                    if (stockInput) stockInput.removeAttribute('required');
+                }
             }
 
-            // Общие обязательные поля (для обоих типов)
-            commonFields.forEach(fieldId => {
-                const field = document.getElementById(fieldId);
-                if (field) field.required = true;
-            });
+            // Общее поле, которое всегда обязательно
+            const productNameInput = document.getElementById('productName');
+            if (productNameInput) productNameInput.setAttribute('required', 'required');
 
         } catch (error) {
             console.error('❌ Ошибка в selectProductType:', error);
