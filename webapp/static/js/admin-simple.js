@@ -324,37 +324,57 @@ class AdminPanel {
         this.isEditing = false;
         this.editingProductId = null;
 
+        console.log('📝 Открытие формы добавления товара');
+
         // Показываем страницу добавления товара
         this.showPage('add-product');
 
-        // После отображения страницы инициализируем форму
+        // Ждем пока DOM обновится
         setTimeout(() => {
-            // Сбрасываем форму
-            this.resetProductForm();
+            try {
+                // Сбрасываем форму
+                this.resetProductForm();
 
-            // Загружаем категории
-            this.updateCategorySelect();
+                // Загружаем категории если еще не загружены
+                if (this.categories.length === 0) {
+                    this.loadCategories().then(() => {
+                        this.updateCategorySelect();
+                    });
+                } else {
+                    this.updateCategorySelect();
+                }
 
-            // Инициализируем тип товара
-            this.selectProductType('piece');
+                // Инициализируем тип товара
+                this.selectProductType('piece');
 
-            // Назначаем обработчики
-            const fileInput = document.getElementById('productImageFile');
-            if (fileInput) {
-                fileInput.addEventListener('change', (e) => this.handleImageUpload(e));
+                // Назначаем обработчики
+                const fileInput = document.getElementById('productImageFile');
+                if (fileInput) {
+                    fileInput.addEventListener('change', (e) => this.handleImageUpload(e));
+                }
+
+                // Назначаем обработчик формы
+                const form = document.getElementById('addProductForm');
+                if (form) {
+                    form.onsubmit = (e) => {
+                        e.preventDefault();
+                        this.handleProductSubmit(e);
+                    };
+                }
+
+                console.log('✅ Форма добавления товара готова');
+
+            } catch (error) {
+                console.error('❌ Ошибка инициализации формы:', error);
             }
-
-            // Назначаем обработчик формы
-            const form = document.getElementById('addProductForm');
-            if (form) {
-                form.onsubmit = (e) => this.handleProductSubmit(e);
-            }
-        }, 100);
-        }
+        }, 300); // Увеличиваем задержку для гарантии загрузки DOM
+    }
 
     handleImageUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
+
+        console.log('📁 Загрузка файла:', file.name);
 
         // Показываем превью
         const preview = document.getElementById('filePreview');
@@ -375,6 +395,8 @@ class AdminPanel {
     }
 
     uploadFile(file) {
+        console.log('📤 Загрузка файла на сервер...');
+
         const formData = new FormData();
         formData.append('image', file);
 
@@ -386,7 +408,12 @@ class AdminPanel {
         .then(data => {
             if (data.success) {
                 this.showAlert('✅ Изображение успешно загружено', 'success');
-                document.getElementById('imageUrl').value = data.url;
+
+                // Заполняем поле URL
+                const imageUrlInput = document.getElementById('imageUrl');
+                if (imageUrlInput) {
+                    imageUrlInput.value = data.url;
+                }
             } else {
                 this.showAlert('❌ Ошибка загрузки: ' + (data.error || ''), 'error');
             }
@@ -401,37 +428,63 @@ class AdminPanel {
     selectProductType(type) {
         console.log(`🎯 Выбран тип товара: ${type}`);
 
-        // Обновляем активную кнопку
-        document.querySelectorAll('.type-btn').forEach(btn => {
-            btn.classList.remove('active');
-            btn.style.borderColor = '#e0e0e0';
-            btn.style.background = 'white';
-            btn.style.transform = 'none';
-            btn.style.boxShadow = 'none';
-        });
+        try {
+            // Обновляем активную кнопку
+            const typeButtons = document.querySelectorAll('.type-btn');
+            if (typeButtons.length > 0) {
+                typeButtons.forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.style.borderColor = '#e0e0e0';
+                    btn.style.background = 'white';
+                    btn.style.transform = 'none';
+                    btn.style.boxShadow = 'none';
+                });
 
-        const activeBtn = document.querySelector(`[data-type="${type}"]`);
-        if (activeBtn) {
-            activeBtn.classList.add('active');
-            activeBtn.style.borderColor = '#667eea';
-            activeBtn.style.background = 'linear-gradient(135deg, #667eea15, #764ba215)';
-            activeBtn.style.transform = 'translateY(-5px)';
-            activeBtn.style.boxShadow = '0 10px 20px rgba(102, 126, 234, 0.15)';
-        }
+                const activeBtn = document.querySelector(`[data-type="${type}"]`);
+                if (activeBtn) {
+                    activeBtn.classList.add('active');
+                    activeBtn.style.borderColor = '#667eea';
+                    activeBtn.style.background = 'linear-gradient(135deg, #667eea15, #764ba215)';
+                    activeBtn.style.transform = 'translateY(-5px)';
+                    activeBtn.style.boxShadow = '0 10px 20px rgba(102, 126, 234, 0.15)';
+                }
+            }
 
-        // Показываем/скрываем соответствующие поля
-        document.querySelectorAll('.product-type-piece, .product-type-weight').forEach(el => {
-            el.style.display = 'none';
-        });
+            // Показываем/скрываем соответствующие поля
+            const pieceFields = document.querySelectorAll('.product-type-piece');
+            const weightFields = document.querySelectorAll('.product-type-weight');
 
-        if (type === 'piece') {
-            document.querySelectorAll('.product-type-piece').forEach(el => {
-                el.style.display = 'block';
-            });
-        } else {
-            document.querySelectorAll('.product-type-weight').forEach(el => {
-                el.style.display = 'block';
-            });
+            if (pieceFields.length > 0 && weightFields.length > 0) {
+                if (type === 'piece') {
+                    pieceFields.forEach(el => {
+                        if (el) el.style.display = 'block';
+                    });
+                    weightFields.forEach(el => {
+                        if (el) el.style.display = 'none';
+                    });
+
+                    // Делаем обязательные поля для штучного товара
+                    const priceInput = document.getElementById('productPrice');
+                    const stockInput = document.getElementById('productStock');
+                    if (priceInput) priceInput.required = true;
+                    if (stockInput) stockInput.required = true;
+
+                } else {
+                    pieceFields.forEach(el => {
+                        if (el) el.style.display = 'none';
+                    });
+                    weightFields.forEach(el => {
+                        if (el) el.style.display = 'block';
+                    });
+
+                    // Делаем обязательные поля для весового товара
+                    const pricePerKgInput = document.getElementById('pricePerKg');
+                    if (pricePerKgInput) pricePerKgInput.required = true;
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Ошибка в selectProductType:', error);
         }
     }
 
@@ -481,27 +534,48 @@ class AdminPanel {
     }
 
     resetProductForm() {
-        // Сбрасываем все поля формы
-        document.getElementById('productName').value = '';
-        document.getElementById('productPrice').value = '';
-        document.getElementById('pricePerKg').value = '';
-        document.getElementById('productStock').value = '';
-        document.getElementById('stockWeight').value = '';
-        document.getElementById('productCategory').value = '';
-        document.getElementById('unit').value = 'кг';
-        document.getElementById('minWeight').value = '0.1';
-        document.getElementById('maxWeight').value = '5.0';
-        document.getElementById('stepWeight').value = '0.1';
-        document.getElementById('productDescription').value = '';
-        document.getElementById('imageUrl').value = '';
-        document.getElementById('fileInfo').style.display = 'none';
-        document.getElementById('imagePreviewContainer').style.display = 'none';
+        const fields = [
+            'productName', 'productPrice', 'pricePerKg', 'productStock',
+            'stockWeight', 'productCategory', 'unit', 'minWeight',
+            'maxWeight', 'stepWeight', 'productDescription', 'imageUrl'
+        ];
+
+        fields.forEach(fieldId => {
+            const element = document.getElementById(fieldId);
+            if (element) {
+                if (element.type === 'select-one') {
+                    element.value = fieldId === 'unit' ? 'кг' : '';
+                } else if (fieldId === 'minWeight') {
+                    element.value = '0.1';
+                } else if (fieldId === 'maxWeight') {
+                    element.value = '5.0';
+                } else if (fieldId === 'stepWeight') {
+                    element.value = '0.1';
+                } else {
+                    element.value = '';
+                }
+            }
+        });
+
+        // Сбрасываем превью файла
+        const filePreview = document.getElementById('filePreview');
+        if (filePreview) {
+            filePreview.innerHTML = '';
+        }
 
         // Сбрасываем загруженный файл
         const fileInput = document.getElementById('productImageFile');
         if (fileInput) {
             fileInput.value = '';
         }
+
+        // Скрываем контейнер превью если есть
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        if (imagePreviewContainer) {
+            imagePreviewContainer.style.display = 'none';
+        }
+
+        console.log('✅ Форма товара сброшена');
     }
 
     handleProductSubmit(e) {
