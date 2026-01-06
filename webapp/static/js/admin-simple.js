@@ -456,30 +456,50 @@ class AdminPanel {
 
             if (pieceFields.length > 0 && weightFields.length > 0) {
                 if (type === 'piece') {
+                    // Показываем поля для штучного товара
                     pieceFields.forEach(el => {
                         if (el) el.style.display = 'block';
                     });
+                    // Скрываем поля для весового товара
                     weightFields.forEach(el => {
                         if (el) el.style.display = 'none';
                     });
 
-                    // Делаем обязательные поля для штучного товара
+                    // Устанавливаем обязательные поля для штучного товара
                     const priceInput = document.getElementById('productPrice');
                     const stockInput = document.getElementById('productStock');
+                    const pricePerKgInput = document.getElementById('pricePerKg');
+
                     if (priceInput) priceInput.required = true;
                     if (stockInput) stockInput.required = true;
+                    if (pricePerKgInput) pricePerKgInput.required = false;
+
+                    // Снимаем required с полей весового товара, которые сейчас скрыты
+                    const weightInputs = document.querySelectorAll('.product-type-weight input[required]');
+                    weightInputs.forEach(input => input.required = false);
 
                 } else {
-                    pieceFields.forEach(el => {
-                        if (el) el.style.display = 'none';
-                    });
+                    // Показываем поля для весового товара
                     weightFields.forEach(el => {
                         if (el) el.style.display = 'block';
                     });
+                    // Скрываем поля для штучного товара
+                    pieceFields.forEach(el => {
+                        if (el) el.style.display = 'none';
+                    });
 
-                    // Делаем обязательные поля для весового товара
+                    // Устанавливаем обязательные поля для весового товара
                     const pricePerKgInput = document.getElementById('pricePerKg');
+                    const priceInput = document.getElementById('productPrice');
+                    const stockInput = document.getElementById('productStock');
+
                     if (pricePerKgInput) pricePerKgInput.required = true;
+                    if (priceInput) priceInput.required = false;
+                    if (stockInput) stockInput.required = false;
+
+                    // Снимаем required с полей штучного товара, которые сейчас скрыты
+                    const pieceInputs = document.querySelectorAll('.product-type-piece input[required]');
+                    pieceInputs.forEach(input => input.required = false);
                 }
             }
 
