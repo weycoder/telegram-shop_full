@@ -450,58 +450,55 @@ class AdminPanel {
                 }
             }
 
-            // Показываем/скрываем соответствующие поля
-            const pieceFields = document.querySelectorAll('.product-type-piece');
-            const weightFields = document.querySelectorAll('.product-type-weight');
+            // Определяем какие поля нужны для каждого типа
+            const pieceTypeFields = ['productPrice', 'productStock'];
+            const weightTypeFields = ['pricePerKg'];
+            const commonFields = ['productName', 'productCategory'];
 
-            if (pieceFields.length > 0 && weightFields.length > 0) {
-                if (type === 'piece') {
-                    // Показываем поля для штучного товара
-                    pieceFields.forEach(el => {
-                        if (el) el.style.display = 'block';
-                    });
-                    // Скрываем поля для весового товара
-                    weightFields.forEach(el => {
-                        if (el) el.style.display = 'none';
-                    });
+            // Сбрасываем required для всех полей
+            const allFields = [...pieceTypeFields, ...weightTypeFields, ...commonFields];
+            allFields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) field.required = false;
+            });
 
-                    // Устанавливаем обязательные поля для штучного товара
-                    const priceInput = document.getElementById('productPrice');
-                    const stockInput = document.getElementById('productStock');
-                    const pricePerKgInput = document.getElementById('pricePerKg');
+            // Устанавливаем required для нужных полей
+            if (type === 'piece') {
+                // Показываем поля для штучного товара
+                document.querySelectorAll('.product-type-piece').forEach(el => {
+                    if (el) el.style.display = 'block';
+                });
+                document.querySelectorAll('.product-type-weight').forEach(el => {
+                    if (el) el.style.display = 'none';
+                });
 
-                    if (priceInput) priceInput.required = true;
-                    if (stockInput) stockInput.required = true;
-                    if (pricePerKgInput) pricePerKgInput.required = false;
+                // Обязательные поля для штучного товара
+                pieceTypeFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) field.required = true;
+                });
 
-                    // Снимаем required с полей весового товара, которые сейчас скрыты
-                    const weightInputs = document.querySelectorAll('.product-type-weight input[required]');
-                    weightInputs.forEach(input => input.required = false);
+            } else {
+                // Показываем поля для весового товара
+                document.querySelectorAll('.product-type-weight').forEach(el => {
+                    if (el) el.style.display = 'block';
+                });
+                document.querySelectorAll('.product-type-piece').forEach(el => {
+                    if (el) el.style.display = 'none';
+                });
 
-                } else {
-                    // Показываем поля для весового товара
-                    weightFields.forEach(el => {
-                        if (el) el.style.display = 'block';
-                    });
-                    // Скрываем поля для штучного товара
-                    pieceFields.forEach(el => {
-                        if (el) el.style.display = 'none';
-                    });
-
-                    // Устанавливаем обязательные поля для весового товара
-                    const pricePerKgInput = document.getElementById('pricePerKg');
-                    const priceInput = document.getElementById('productPrice');
-                    const stockInput = document.getElementById('productStock');
-
-                    if (pricePerKgInput) pricePerKgInput.required = true;
-                    if (priceInput) priceInput.required = false;
-                    if (stockInput) stockInput.required = false;
-
-                    // Снимаем required с полей штучного товара, которые сейчас скрыты
-                    const pieceInputs = document.querySelectorAll('.product-type-piece input[required]');
-                    pieceInputs.forEach(input => input.required = false);
-                }
+                // Обязательные поля для весового товара
+                weightTypeFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) field.required = true;
+                });
             }
+
+            // Общие обязательные поля (для обоих типов)
+            commonFields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) field.required = true;
+            });
 
         } catch (error) {
             console.error('❌ Ошибка в selectProductType:', error);
