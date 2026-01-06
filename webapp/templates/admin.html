@@ -924,34 +924,132 @@
                         </table>
                     </div>
                 </div>
-
-                <!-- ДОБАВЛЕНИЕ ТОВАРА -->
                 <div class="page" id="add-product">
                     <div class="add-product-header">
                         <h2>Добавить новый товар</h2>
+                        <button class="btn btn-outline" onclick="admin.showPage('products')" style="margin-left: auto;">
+                            <i class="fas fa-arrow-left"></i> Назад к товарам
+                        </button>
                     </div>
 
-                    <form class="add-product-form" id="addProductForm">
+                    <div class="product-type-selector" style="
+                        display: flex;
+                        gap: 15px;
+                        margin-bottom: 30px;
+                        padding: 0 20px;
+                    ">
+                        <button class="type-btn active" data-type="piece"
+                                onclick="admin.selectProductType('piece')"
+                                style="
+                                    flex: 1;
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    gap: 10px;
+                                    padding: 20px;
+                                    background: white;
+                                    border: 2px solid #667eea;
+                                    border-radius: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                ">
+                            <i class="fas fa-cube" style="font-size: 32px; color: #667eea;"></i>
+                            <span style="font-weight: 600; color: #2c3e50;">Штучный товар</span>
+                        </button>
+                        <button class="type-btn" data-type="weight"
+                                onclick="admin.selectProductType('weight')"
+                                style="
+                                    flex: 1;
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    gap: 10px;
+                                    padding: 20px;
+                                    background: white;
+                                    border: 2px solid #e0e0e0;
+                                    border-radius: 12px;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                ">
+                            <i class="fas fa-weight-hanging" style="font-size: 32px; color: #667eea;"></i>
+                            <span style="font-weight: 600; color: #2c3e50;">Весовой товар</span>
+                        </button>
+                    </div>
+
+                    <form class="add-product-form" id="addProductForm" style="padding: 0 20px;">
                         <!-- Основная информация -->
                         <div class="form-section">
                             <h3>Основная информация</h3>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="productName">Название товара *</label>
-                                    <input type="text" id="productName" required placeholder="Например: MacBook Air M2">
+                                    <input type="text" id="productName" required placeholder="Например: Яблоки или iPhone 15">
                                 </div>
-                                <div class="form-group">
+
+                                <!-- Для штучных товаров -->
+                                <div class="form-group product-type-piece">
                                     <label for="productPrice">Цена (₽) *</label>
-                                    <input type="number" id="productPrice" step="0.01" required placeholder="129999">
+                                    <input type="number" id="productPrice" step="0.01" required placeholder="100">
                                 </div>
-                                <div class="form-group">
-                                    <label for="productStock">Количество *</label>
+
+                                <!-- Для весовых товаров -->
+                                <div class="form-group product-type-weight" style="display: none;">
+                                    <label for="pricePerKg">Цена за кг (₽) *</label>
+                                    <input type="number" id="pricePerKg" step="0.01" placeholder="300">
+                                </div>
+
+                                <div class="form-group product-type-piece">
+                                    <label for="productStock">Количество (шт) *</label>
                                     <input type="number" id="productStock" required placeholder="10">
                                 </div>
+
+                                <div class="form-group product-type-weight" style="display: none;">
+                                    <label for="stockWeight">Вес в наличии (кг)</label>
+                                    <input type="number" id="stockWeight" step="0.01" placeholder="50">
+                                </div>
+
                                 <div class="form-group">
                                     <label for="productCategory">Категория</label>
                                     <select id="productCategory">
                                         <option value="">Выберите категорию</option>
+                                        <!-- Категории загружаются динамически -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Настройки весового товара -->
+                        <div class="form-section product-type-weight" style="display: none;">
+                            <h3>Настройки весового товара</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="unit">Единица измерения</label>
+                                    <select id="unit">
+                                        <option value="кг">Килограммы (кг)</option>
+                                        <option value="г">Граммы (г)</option>
+                                        <option value="л">Литры (л)</option>
+                                        <option value="м">Метры (м)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="minWeight">Минимальный вес (кг)</label>
+                                    <input type="number" id="minWeight" step="0.01" value="0.1" min="0.01">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="maxWeight">Максимальный вес (кг)</label>
+                                    <input type="number" id="maxWeight" step="0.01" value="5.0" min="0.1">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="stepWeight">Шаг изменения</label>
+                                    <select id="stepWeight">
+                                        <option value="0.01">10 грамм</option>
+                                        <option value="0.05">50 грамм</option>
+                                        <option value="0.1" selected>100 грамм</option>
+                                        <option value="0.25">250 грамм</option>
+                                        <option value="0.5">500 грамм</option>
                                     </select>
                                 </div>
                             </div>
@@ -965,7 +1063,7 @@
                                 <textarea id="productDescription" rows="4" placeholder="Подробное описание товара..."></textarea>
                             </div>
                         </div>
-                        
+
                         <!-- Изображение -->
                         <div class="form-section">
                             <h3>Изображение товара</h3>
@@ -991,9 +1089,8 @@
 
                             <!-- Или URL -->
                             <div class="form-group">
-                                <label for="productImageUrl">Или укажите URL изображения</label>
-                                <input type="url" id="productImageUrl"
-                                       placeholder="https://example.com/image.jpg">
+                                <label for="imageUrl">Или укажите URL изображения</label>
+                                <input type="url" id="imageUrl" placeholder="https://example.com/image.jpg">
                             </div>
 
                             <!-- Предпросмотр -->
@@ -1007,8 +1104,8 @@
 
                         <!-- Кнопки действий -->
                         <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" id="cancelAdd">
-                                Отмена
+                            <button type="button" class="btn btn-secondary" onclick="admin.showPage('products')">
+                                <i class="fas fa-times"></i> Отмена
                             </button>
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-save"></i> Сохранить товар
@@ -1017,7 +1114,6 @@
                     </form>
                 </div>
 
-                <!-- КАТЕГОРИИ -->
                 <div class="page" id="categories">
                     <div class="add-product-header">
                         <h2>Управление категориями</h2>
