@@ -2202,8 +2202,8 @@ class TelegramShop {
         // Продолжаем оформление заказа с информацией о наличных
         this.confirmOrderWithCash();
     }
-    
-    confirmOrderWithCash() {
+
+    async confirmOrderWithCash() {
         try {
             console.log('💰 Информация об оплате наличными:', this.cashPaymentInfo);
 
