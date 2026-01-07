@@ -656,7 +656,6 @@ class AdminPanel {
                     step_weight: getNumberValue('stepWeight', 0.1)
                     // НЕ НУЖНО: price_per_kg и stock_weight - они уже в price и stock
                 };
-            }
 
                 console.log('📊 Данные весового товара:', formData);
 
