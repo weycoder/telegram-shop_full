@@ -2209,6 +2209,7 @@ class TelegramShop {
             payment_method: 'cash',
             cash_details: window.cashPaymentInfo || null
         };
+    }
 
 
     function calculateCashBreakdown(amount) {
