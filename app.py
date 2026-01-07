@@ -1090,42 +1090,55 @@ def courier_panel():
     return render_template('courier.html')
 
 
-# В методе получения товаров (/api/admin/products или /api/products)
 @app.route('/api/products')
 def get_products():
     """Получить товары для клиентского магазина"""
     db = get_db()
     try:
-        # Получаем товары с правильной логикой для весовых
-        products = db.execute('''
-                              SELECT id,
-                                     name,
-                                     description,
-                                     CASE
-                                         WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg
-                                         ELSE price
-                                         END as price,
-                                     image_url,
-                                     category,
-                                     CASE
-                                         WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight
-                                         ELSE stock
-                                         END as stock,
-                                     product_type,
-                                     unit,
-                                     weight_unit,
-                                     price_per_kg,
-                                     min_weight,
-                                     max_weight,
-                                     step_weight,
-                                     stock_weight
-                              FROM products
-                              WHERE (
-                                        (product_type = 'piece' AND stock > 0)
-                                            OR
-                                        (product_type = 'weight' AND stock_weight > 0)
-                                        )
-                              ''').fetchall()
+        # Получаем параметр категории из запроса
+        category = request.args.get('category', 'all')
+
+        # Базовый запрос
+        query = '''
+                SELECT id, \
+                       name, \
+                       description, \
+                       CASE \
+                           WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg \
+                           ELSE price \
+                           END as price, \
+                       image_url, \
+                       category, \
+                       CASE \
+                           WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight \
+                           ELSE stock \
+                           END as stock, \
+                       product_type, \
+                       unit, \
+                       weight_unit, \
+                       price_per_kg, \
+                       min_weight, \
+                       max_weight, \
+                       step_weight, \
+                       stock_weight
+                FROM products
+                WHERE (
+                          (product_type = 'piece' AND stock > 0)
+                              OR
+                          (product_type = 'weight' AND stock_weight > 0)
+                          ) \
+                '''
+
+        # Добавляем фильтр по категории если нужно
+        params = []
+        if category and category != 'all':
+            query += ' AND category = ?'
+            params.append(category)
+
+        # Сортируем по дате добавления
+        query += ' ORDER BY created_at DESC'
+
+        products = db.execute(query, params).fetchall()
 
         result = []
         for product in products:
@@ -1158,6 +1171,14 @@ def get_products():
             db.close()
         return jsonify([])
 
+    except Exception as e:
+        print(f"❌ Ошибка получения товаров: {e}")
+        import traceback
+        traceback.print_exc()
+        if db:
+            db.close()
+        return jsonify([])
+
 
 @app.route('/api/products/<int:product_id>')
 def api_product_detail(product_id):
@@ -1177,15 +1198,34 @@ def api_product_detail(product_id):
 
 @app.route('/api/categories')
 def api_categories():
+    """Получить список категорий"""
     db = get_db()
     try:
-        categories = db.execute(
-            'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category').fetchall()
-        return jsonify([row['category'] for row in categories])
-    except Exception as e:
-        return jsonify([])
-    finally:
+        # Получаем только категории, в которых есть товары
+        categories = db.execute('''
+                                SELECT DISTINCT category
+                                FROM products
+                                WHERE category IS NOT NULL
+                                  AND category != '' 
+              AND (
+                (product_type = 'piece' AND stock > 0) 
+                OR 
+                (product_type = 'weight' AND stock_weight > 0)
+              )
+                                ORDER BY category
+                                ''').fetchall()
+
+        # Преобразуем в список названий
+        category_list = [row['category'] for row in categories if row['category']]
+
         db.close()
+        return jsonify(category_list)
+
+    except Exception as e:
+        print(f"❌ Ошибка получения категорий: {e}")
+        if db:
+            db.close()
+        return jsonify([])
 
 @app.route('/api/categories/tree', methods=['GET'])
 def get_categories_tree():
