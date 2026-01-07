@@ -142,16 +142,11 @@ def init_db():
                            promo_code_id
                            INTEGER,
                            discount_amount
-                           DECIMAL
-                       (
-                           10,
-                           2
-                       ) DEFAULT 0,
+                           DECIMAL(10,2) DEFAULT 0,
                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                            cash_received DECIMAL(10,2),
                            cash_change DECIMAL(10,2),
-                           cash_details TEXT,
-                           )
+                           cash_details TEXT)
                        ''')
 
         # 3. Назначения заказов
