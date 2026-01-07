@@ -128,7 +128,11 @@ class AdminPanel {
         let html = '';
 
         this.products.forEach(product => {
-            const imageUrl = product.image_url || 'https://via.placeholder.com/50';
+            // Используем placeholder если нет изображения
+            const imageUrl = product.image_url && product.image_url.trim() !== ''
+                ? product.image_url
+                : 'https://via.placeholder.com/50x50?text=No+Image';
+
             const category = product.category || 'Без категории';
 
             html += `
@@ -138,12 +142,14 @@ class AdminPanel {
                         <img src="${imageUrl}"
                              alt="${product.name}"
                              style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;"
-                             onerror="this.src='https://via.placeholder.com/50'">
+                             onerror="this.src='https://via.placeholder.com/50x50?text=Error'">
                     </td>
                     <td>
                         <div>
                             <strong>${product.name}</strong>
-                            <small style="display: block; color: #666; margin-top: 5px;">${product.description ? product.description.substring(0, 50) + '...' : 'Нет описания'}</small>
+                            <small style="display: block; color: #666; margin-top: 5px;">
+                                ${product.description ? product.description.substring(0, 50) + '...' : 'Нет описания'}
+                            </small>
                         </div>
                     </td>
                     <td><strong>${this.formatPrice(product.price)} ₽</strong></td>
@@ -646,7 +652,7 @@ class AdminPanel {
                     description: getValue('productDescription'),
                     price: 0, // ВСЕГДА 0 для весовых (сервер так требует!)
                     stock: 0, // ВСЕГДА 0 для весовых (сервер так требует!)
-                    image_url: getValue('imageUrl'),
+                    image_url: getValue('imageUrl') || '',
                     category: getValue('productCategory'),
                     product_type: 'weight',
                     unit: getValue('unit') || 'кг',

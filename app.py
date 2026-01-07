@@ -1107,7 +1107,10 @@ def get_products():
                            WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg \
                            ELSE price \
                            END as price, \
-                       image_url, \
+                       CASE \
+                           WHEN image_url IS NOT NULL AND image_url != '' THEN image_url \
+                           ELSE 'https://via.placeholder.com/300x200?text=No+Image' \
+                           END as image_url, \
                        category, \
                        CASE \
                            WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight \
@@ -1179,22 +1182,73 @@ def get_products():
             db.close()
         return jsonify([])
 
+    except Exception as e:
+        print(f"❌ Ошибка получения товаров: {e}")
+        import traceback
+        traceback.print_exc()
+        if db:
+            db.close()
+        return jsonify([])
+
 
 @app.route('/api/products/<int:product_id>')
 def api_product_detail(product_id):
     """Получить детали товара по ID"""
     db = get_db()
     try:
-        product = db.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
+        product = db.execute('''
+                             SELECT id,
+                                    name,
+                                    description,
+                                    CASE
+                                        WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg
+                                        ELSE price
+                                        END as price,
+                                    CASE
+                                        WHEN image_url IS NOT NULL AND image_url != '' THEN image_url
+                                        ELSE 'https://via.placeholder.com/300x200?text=No+Image'
+                                        END as image_url,
+                                    category,
+                                    CASE
+                                        WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight
+                                        ELSE stock
+                                        END as stock,
+                                    product_type,
+                                    unit,
+                                    weight_unit,
+                                    price_per_kg,
+                                    min_weight,
+                                    max_weight,
+                                    step_weight,
+                                    stock_weight
+                             FROM products
+                             WHERE id = ?
+                             ''', (product_id,)).fetchone()
+
         if product:
-            return jsonify(dict(product))
+            product_dict = dict(product)
+
+            # Для весовых товаров
+            if product_dict.get('product_type') == 'weight':
+                product_dict['is_weight'] = True
+                product_dict['display_price'] = product_dict.get('price_per_kg', product_dict['price'])
+                product_dict['display_stock'] = product_dict.get('stock_weight', 0)
+            else:
+                product_dict['is_weight'] = False
+                product_dict['display_price'] = product_dict['price']
+                product_dict['display_stock'] = product_dict['stock']
+
+            db.close()
+            return jsonify(product_dict)
+
+        db.close()
         return jsonify({'error': 'Товар не найден'}), 404
+
     except Exception as e:
         print(f"❌ Ошибка получения товара {product_id}: {e}")
+        if db:
+            db.close()
         return jsonify({'error': str(e)}), 500
-    finally:
-        db.close()
-
 
 @app.route('/api/categories')
 def api_categories():
@@ -2938,7 +2992,6 @@ def get_products_with_discounts():
         db.close()
 
 
-# ========== API ДЛЯ АДМИНА ==========
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def admin_products():
     db = get_db()
@@ -2968,7 +3021,7 @@ def admin_products():
                     (data.get('name', ''),
                      data.get('description', ''),
                      data.get('price', 0),
-                     data.get('image_url', ''),
+                     data.get('image_url', ''),  # URL может быть пустым
                      data.get('category', ''),
                      data.get('stock', 0),
                      'piece',
@@ -2990,10 +3043,10 @@ def admin_products():
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (data.get('name', ''),
                      data.get('description', ''),
-                     price_per_kg,  # ИСПРАВЛЕНО: Используем price_per_kg как price для отображения!
-                     data.get('image_url', ''),
+                     price_per_kg,  # Используем price_per_kg как price для отображения!
+                     data.get('image_url', ''),  # URL может быть пустым
                      data.get('category', ''),
-                     stock_weight,  # ИСПРАВЛЕНО: Используем stock_weight как stock для отображения!
+                     stock_weight,  # Используем stock_weight как stock для отображения!
                      'weight',
                      data.get('unit', 'кг'),
                      data.get('weight_unit', 'кг'),
@@ -3032,7 +3085,7 @@ def admin_products():
                     (data.get('name', ''),
                      data.get('description', ''),
                      data.get('price', 0),
-                     data.get('image_url', ''),
+                     data.get('image_url', ''),  # URL может быть пустым
                      data.get('category', ''),
                      data.get('stock', 0),
                      'piece',
@@ -3049,10 +3102,10 @@ def admin_products():
                        SET name        = ?,
                            description = ?,
                            price       = ?,
-                           # ИСПРАВЛЕНО: Сохраняем price_per_kg в price!
-                           image_url    = ?,
+                           # Используем price_per_kg как price
+                           image_url    = ?,  # URL может быть пустым
                            category     = ?,
-                           stock        = ?,  # ИСПРАВЛЕНО: Сохраняем stock_weight в stock!
+                           stock        = ?,  # Используем stock_weight как stock
                            product_type = ?,
                            unit         = ?,
                            weight_unit  = ?,
@@ -3064,10 +3117,10 @@ def admin_products():
                        WHERE id = ?''',
                     (data.get('name', ''),
                      data.get('description', ''),
-                     price_per_kg,  # ИСПРАВЛЕНО: Сохраняем реальную цену за кг
-                     data.get('image_url', ''),
+                     price_per_kg,  # Используем реальную цену за кг
+                     data.get('image_url', ''),  # URL может быть пустым
                      data.get('category', ''),
-                     stock_weight,  # ИСПРАВЛЕНО: Сохраняем реальный вес в наличии
+                     stock_weight,  # Используем реальный вес в наличии
                      'weight',
                      data.get('unit', 'кг'),
                      data.get('weight_unit', 'кг'),
