@@ -1811,6 +1811,20 @@ class TelegramShop {
         await this.showDeliverySelection();
     }
 
+
+        if (unavailableItems.length > 0) {
+            let message = 'Некоторые товары недоступны в запрошенном количестве:\n';
+            unavailableItems.forEach(item => {
+                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
+            });
+            this.showNotification(message, 'error');
+            return;
+        }
+
+        // ЕСЛИ ВСЕ ТОВАРЫ ДОСТУПНЫ - ПОКАЗЫВАЕМ ВЫБОР ДОСТАВКИ
+        await this.showDeliverySelection();
+    }
+
     async showDeliverySelection() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
@@ -1946,6 +1960,308 @@ class TelegramShop {
             await this.showAddressSelection();
         } else if (type === 'pickup') {
             await this.showPickupPoints();
+        }
+    }
+
+        // TelegramShop class - добавьте этот метод
+    showCashPaymentModal(totalAmount) {
+        // Создаем модальное окно для оплаты наличными
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay cash-payment-modal';
+        modal.innerHTML = `
+            <div class="modal-content cash-payment-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-money-bill-wave"></i> Оплата наличными</h3>
+                    <button class="close-modal" onclick="this.parentElement.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="cash-payment-info">
+                        <div class="total-amount-display">
+                            <div class="total-label">Сумма к оплате:</div>
+                            <div class="total-value">${this.formatPrice(totalAmount)} ₽</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cashAmount">
+                                <i class="fas fa-money-bill"></i>
+                                Сколько дал клиент (₽):
+                            </label>
+                            <div class="cash-input-group">
+                                <button class="cash-btn minus" onclick="shop.adjustCashAmount(-100)">
+                                    <i class="fas fa-minus"></i> 100
+                                </button>
+                                <input
+                                    type="number"
+                                    id="cashAmount"
+                                    min="${totalAmount}"
+                                    step="1"
+                                    value="${Math.ceil(totalAmount / 100) * 100}"
+                                    oninput="shop.calculateChange()"
+                                    placeholder="Введите сумму">
+                                <button class="cash-btn plus" onclick="shop.adjustCashAmount(100)">
+                                    <i class="fas fa-plus"></i> 100
+                                </button>
+                            </div>
+                            <div class="cash-quick-buttons">
+                                <button class="quick-cash-btn" onclick="shop.setExactCashAmount(${Math.ceil(totalAmount / 100) * 100})">
+                                    ${Math.ceil(totalAmount / 100) * 100} ₽
+                                </button>
+                                <button class="quick-cash-btn" onclick="shop.setExactCashAmount(${Math.ceil(totalAmount / 500) * 500})">
+                                    ${Math.ceil(totalAmount / 500) * 500} ₽
+                                </button>
+                                <button class="quick-cash-btn" onclick="shop.setExactCashAmount(${Math.ceil(totalAmount / 1000) * 1000})">
+                                    ${Math.ceil(totalAmount / 1000) * 1000} ₽
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="change-result" id="changeResult">
+                            <div class="change-header">
+                                <i class="fas fa-calculator"></i>
+                                <h4>Сдача:</h4>
+                            </div>
+                            <div class="change-display">
+                                <div id="changeAmount" class="change-amount">0 ₽</div>
+                                <div class="change-breakdown" id="changeBreakdown"></div>
+                            </div>
+                            <div class="change-notes" id="changeNotes">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Выдайте клиенту следующее:</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" onclick="this.parentElement.parentElement.parentElement.remove()">
+                            <i class="fas fa-times"></i> Отмена
+                        </button>
+                        <button class="btn btn-primary" id="confirmCashPayment" disabled
+                                onclick="shop.confirmCashPayment(${totalAmount})">
+                            <i class="fas fa-check-circle"></i> Подтвердить оплату
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Сразу рассчитываем сдачу
+        setTimeout(() => this.calculateChange(), 100);
+    }
+
+        // Метод для корректировки суммы
+    adjustCashAmount(delta) {
+        const cashInput = document.getElementById('cashAmount');
+        if (!cashInput) return;
+
+        let currentValue = parseInt(cashInput.value) || 0;
+        const totalAmount = parseFloat(document.querySelector('.total-value').textContent.replace(/\s/g, '').replace('₽', '')) || 0;
+
+        let newValue = currentValue + delta;
+
+        // Не позволяем ввести сумму меньше суммы заказа
+        if (newValue < totalAmount) {
+            newValue = Math.ceil(totalAmount / delta) * delta;
+        }
+
+        cashInput.value = newValue;
+        this.calculateChange();
+    }
+
+        // Метод для установки точной суммы
+    setExactCashAmount(amount) {
+        const cashInput = document.getElementById('cashAmount');
+        if (cashInput) {
+            cashInput.value = amount;
+            this.calculateChange();
+        }
+    }
+
+
+        // Метод расчета сдачи
+    calculateChange() {
+        const totalElement = document.querySelector('.cash-payment-info .total-value');
+        const cashInput = document.getElementById('cashAmount');
+        const changeResult = document.getElementById('changeResult');
+        const changeAmount = document.getElementById('changeAmount');
+        const changeBreakdown = document.getElementById('changeBreakdown');
+        const changeNotes = document.getElementById('changeNotes');
+        const confirmBtn = document.getElementById('confirmCashPayment');
+
+        if (!totalElement || !cashInput || !changeResult) return;
+
+        // Получаем сумму заказа
+        const totalAmountText = totalElement.textContent.replace(/\s/g, '').replace('₽', '');
+        const totalAmount = parseFloat(totalAmountText) || 0;
+
+        // Получаем введенную сумму
+        const cashAmount = parseFloat(cashInput.value) || 0;
+
+        if (cashAmount >= totalAmount) {
+            const change = cashAmount - totalAmount;
+
+            // Показываем блок с сдачей
+            changeResult.style.display = 'block';
+            changeAmount.textContent = `${this.formatPrice(change)} ₽`;
+
+            if (change > 0) {
+                // Рассчитываем купюры для сдачи
+                const breakdown = this.calculateCashBreakdown(change);
+                changeBreakdown.innerHTML = breakdown;
+                changeNotes.style.display = 'flex';
+            } else {
+                changeBreakdown.innerHTML = '<div class="no-change">Сдачи не требуется</div>';
+                changeNotes.style.display = 'none';
+            }
+
+            // Активируем кнопку подтверждения
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `<i class="fas fa-check-circle"></i> Подтвердить (сдача: ${this.formatPrice(change)} ₽)`;
+        } else {
+            // Скрываем блок с сдачей
+            changeResult.style.display = 'none';
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = `<i class="fas fa-check-circle"></i> Подтвердить оплату`;
+        }
+    }
+
+        // Метод расчета разменных купюр
+    calculateCashBreakdown(amount) {
+        if (amount <= 0) return '';
+
+        const denominations = [
+            { value: 5000, name: '5000 ₽' },
+            { value: 2000, name: '2000 ₽' },
+            { value: 1000, name: '1000 ₽' },
+            { value: 500, name: '500 ₽' },
+            { value: 200, name: '200 ₽' },
+            { value: 100, name: '100 ₽' },
+            { value: 50, name: '50 ₽' },
+            { value: 10, name: '10 ₽' },
+            { value: 5, name: '5 ₽' },
+            { value: 2, name: '2 ₽' },
+            { value: 1, name: '1 ₽' }
+        ];
+
+        let remaining = Math.round(amount);
+        let result = [];
+        let html = '<div class="breakdown-grid">';
+
+        for (const denom of denominations) {
+            if (remaining >= denom.value) {
+                const count = Math.floor(remaining / denom.value);
+                remaining = remaining % denom.value;
+
+                if (count > 0) {
+                    result.push(`${count} × ${denom.name}`);
+
+                    // Добавляем в HTML с иконками
+                    const icon = denom.value >= 100 ? 'fa-money-bill' : 'fa-coins';
+                    html += `
+                        <div class="breakdown-item">
+                            <div class="denomination-icon">
+                                <i class="fas ${icon}"></i>
+                            </div>
+                            <div class="denomination-info">
+                                <span class="denomination-count">${count}</span>
+                                <span class="denomination-sign">×</span>
+                                <span class="denomination-value">${denom.name}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        html += '</div>';
+
+        // Если осталась мелочь (меньше рубля)
+        if (remaining > 0) {
+            html += `<div class="small-change">Мелкая сдача: ${remaining} коп.</div>`;
+        }
+
+        return html;
+    }
+
+    // Метод подтверждения оплаты наличными
+    confirmCashPayment(totalAmount) {
+        const cashInput = document.getElementById('cashAmount');
+        const changeElement = document.getElementById('changeAmount');
+
+        if (!cashInput || !changeElement) return;
+
+        const cashAmount = parseFloat(cashInput.value);
+        const changeText = changeElement.textContent.replace(/\s/g, '').replace('₽', '');
+        const change = parseFloat(changeText) || 0;
+
+        // Сохраняем информацию о наличной оплате
+        this.cashPaymentInfo = {
+            total: totalAmount,
+            received: cashAmount,
+            change: change,
+            payment_method: 'cash',
+            timestamp: new Date().toISOString(),
+            breakdown: this.calculateCashBreakdown(change)
+        };
+
+        // Закрываем модальное окно
+        const modal = document.querySelector('.cash-payment-modal');
+        if (modal) {
+            modal.remove();
+        }
+
+        // Продолжаем оформление заказа с информацией о наличных
+        this.confirmOrderWithCash();
+    }
+
+    function proceedWithOrder() {
+        // Добавляем информацию о наличной оплате к данным заказа
+        const orderData = {
+            payment_method: 'cash',
+            cash_details: window.cashPaymentInfo || null
+        };
+
+
+    function calculateCashBreakdown(amount) {
+        if (amount <= 0) return 'Сдачи не требуется';
+
+        const denominations = [5000, 2000, 1000, 500, 200, 100, 50, 10, 5, 2, 1];
+        let remaining = Math.round(amount);
+        let result = [];
+
+        for (const denom of denominations) {
+            if (remaining >= denom) {
+                const count = Math.floor(remaining / denom);
+                remaining = remaining % denom;
+
+                if (count > 0) {
+                    result.push(`${count} × ${denom} ₽`);
+                }
+            }
+        }
+
+        return result.length > 0
+            ? `Выдать: ${result.join(', ')}`
+            : 'Мелкая сдача';
+    }
+
+    async confirmOrderWithCash() {
+        try {
+            console.log('💰 Информация об оплате наличными:', this.cashPaymentInfo);
+
+            // Добавляем информацию о наличной оплате к данным заказа
+            this.deliveryData.cash_payment = this.cashPaymentInfo;
+            this.deliveryData.payment_method = 'cash';
+
+            // Продолжаем оформление заказа
+            await this.confirmOrder();
+
+        } catch (error) {
+            console.error('❌ Ошибка подтверждения оплаты наличными:', error);
+            this.showNotification('❌ Ошибка обработки оплаты', 'error');
         }
     }
 
@@ -2397,19 +2713,35 @@ class TelegramShop {
     }
 
     selectPaymentMethod(method) {
-        this.deliveryData.payment_method = method;
+        if (method === 'cash') {
+            // Рассчитываем общую сумму заказа
+            const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            let deliveryCost = 0;
 
-        // Показываем уведомление о выборе
-        const methodNames = {
-            'cash': 'Наличные',
-            'transfer': 'Перевод курьеру',
-            'terminal': 'Терминал'
-        };
+            // Добавляем стоимость доставки если нужно
+            if (this.deliveryData.type === 'courier' && itemsTotal < 1000) {
+                deliveryCost = 100;
+            }
 
-        this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
+            const totalWithDelivery = itemsTotal + deliveryCost;
 
-        // Переходим к оформлению заказа
-        this.confirmOrder();
+            // Показываем модальное окно для наличной оплаты
+            this.showCashPaymentModal(totalWithDelivery);
+        } else {
+            // Для других методов оплаты
+            this.deliveryData.payment_method = method;
+
+            const methodNames = {
+                'cash': 'Наличные',
+                'transfer': 'Перевод курьеру',
+                'terminal': 'Терминал'
+            };
+
+            this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
+
+            // Переходим к оформлению заказа
+            this.confirmOrder();
+        }
     }
 
     async selectAddress(addressId) {

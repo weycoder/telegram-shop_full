@@ -147,7 +147,10 @@ def init_db():
                            10,
                            2
                        ) DEFAULT 0,
-                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           cash_received DECIMAL(10,2),
+                           cash_change DECIMAL(10,2),
+                           cash_details TEXT,
                            )
                        ''')
 
@@ -1423,26 +1426,31 @@ def api_create_order():
         print(f"👤 Используемый user_id: {user_id}")
         print(f"👤 Используемый username: {username}")
 
-        # Сохраняем стоимость доставки в заказе
+        cash_payment = data.get('cash_payment', {})
+
+        # Вставляем заказ с дополнительными полями для наличных
         cursor = db.execute('''
                             INSERT INTO orders (user_id, username, items, total_price, delivery_cost, status,
-                                                delivery_type,
-                                                delivery_address, pickup_point, payment_method, recipient_name,
-                                                phone_number)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                delivery_type, delivery_address, pickup_point,
+                                                payment_method, recipient_name, phone_number,
+                                                cash_received, cash_change, cash_details)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 user_id,
                                 username,
                                 json.dumps(data['items'], ensure_ascii=False),
-                                order_total,  # Стоимость товаров
-                                delivery_cost,  # Стоимость доставки
+                                order_total,
+                                delivery_cost,
                                 'pending',
                                 delivery_type,
                                 json.dumps(address_obj if address_obj else {}, ensure_ascii=False),
                                 data.get('pickup_point'),
-                                payment_method,
+                                'cash',  # Всегда cash для наличных
                                 recipient_name,
-                                phone_number
+                                phone_number,
+                                cash_payment.get('received'),  # Сколько получили
+                                cash_payment.get('change'),  # Сдача
+                                json.dumps(cash_payment) if cash_payment else None  # Детали
                             ))
 
         for item in data['items']:
@@ -1466,8 +1474,7 @@ def api_create_order():
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
         print("=" * 50)
-        return jsonify({'success': True, 'order_id': order_id, 'delivery_cost': delivery_cost,
-                        'total_with_delivery': total_with_delivery})
+        return jsonify({'success': True, 'order_id': order_id, 'delivery_cost': delivery_cost, al_with_delivery:'total_with_delivery'})
 
     except Exception as e:
         db.close()
