@@ -2858,13 +2858,56 @@ def admin_products():
 
         elif request.method == 'POST':
             data = request.json
-            if not data or 'name' not in data or 'price' not in data:
-                return jsonify({'success': False, 'error': 'Отсутствуют обязательные поля'}), 400
 
-            db.execute(
-                'INSERT INTO products (name, description, price, image_url, category, stock) VALUES (?, ?, ?, ?, ?, ?)',
-                (data.get('name', ''), data.get('description', ''), data.get('price', 0),
-                 data.get('image_url', ''), data.get('category', ''), data.get('stock', 0)))
+            # Общие обязательные поля
+            if not data or 'name' not in data:
+                return jsonify({'success': False, 'error': 'Введите название товара'}), 400
+
+            product_type = data.get('product_type', 'piece')
+
+            if product_type == 'piece':
+                # ШТУЧНЫЙ ТОВАР
+                if 'price' not in data:
+                    return jsonify({'success': False, 'error': 'Укажите цену товара'}), 400
+
+                db.execute(
+                    '''INSERT INTO products (name, description, price, image_url, category, stock,
+                                             product_type, unit)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (data.get('name', ''),
+                     data.get('description', ''),
+                     data.get('price', 0),
+                     data.get('image_url', ''),
+                     data.get('category', ''),
+                     data.get('stock', 0),
+                     'piece',
+                     data.get('unit', 'шт')))
+
+            else:
+                # ВЕСОВОЙ ТОВАР
+                if 'price_per_kg' not in data:
+                    return jsonify({'success': False, 'error': 'Укажите цену за кг'}), 400
+
+                db.execute(
+                    '''INSERT INTO products (name, description, price, image_url, category, stock,
+                                             product_type, unit, weight_unit, price_per_kg,
+                                             min_weight, max_weight, step_weight, stock_weight)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (data.get('name', ''),
+                     data.get('description', ''),
+                     0,  # Для весовых товаров price = 0
+                     data.get('image_url', ''),
+                     data.get('category', ''),
+                     0,  # Для весовых товаров stock = 0
+                     'weight',
+                     data.get('unit', 'кг'),
+                     data.get('weight_unit', 'кг'),
+                     data.get('price_per_kg', 0),
+                     data.get('min_weight', 0.1),
+                     data.get('max_weight', 5.0),
+                     data.get('step_weight', 0.1),
+                     data.get('stock_weight', 0)))
+
             db.commit()
             product_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
             return jsonify({'success': True, 'id': product_id})
@@ -2876,10 +2919,65 @@ def admin_products():
             if not product_id:
                 return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
 
-            db.execute(
-                'UPDATE products SET name = ?, description = ?, price = ?, image_url = ?, category = ?, stock = ? WHERE id = ?',
-                (data.get('name', ''), data.get('description', ''), data.get('price', 0),
-                 data.get('image_url', ''), data.get('category', ''), data.get('stock', 0), product_id))
+            product_type = data.get('product_type', 'piece')
+
+            if product_type == 'piece':
+                # ШТУЧНЫЙ ТОВАР
+                db.execute(
+                    '''UPDATE products
+                       SET name         = ?,
+                           description  = ?,
+                           price        = ?,
+                           image_url    = ?,
+                           category     = ?,
+                           stock        = ?,
+                           product_type = ?,
+                           unit         = ?
+                       WHERE id = ?''',
+                    (data.get('name', ''),
+                     data.get('description', ''),
+                     data.get('price', 0),
+                     data.get('image_url', ''),
+                     data.get('category', ''),
+                     data.get('stock', 0),
+                     'piece',
+                     data.get('unit', 'шт'),
+                     product_id))
+            else:
+                # ВЕСОВОЙ ТОВАР
+                db.execute(
+                    '''UPDATE products
+                       SET name         = ?,
+                           description  = ?,
+                           price        = ?,
+                           image_url    = ?,
+                           category     = ?,
+                           stock        = ?,
+                           product_type = ?,
+                           unit         = ?,
+                           weight_unit  = ?,
+                           price_per_kg = ?,
+                           min_weight   = ?,
+                           max_weight   = ?,
+                           step_weight  = ?,
+                           stock_weight = ?
+                       WHERE id = ?''',
+                    (data.get('name', ''),
+                     data.get('description', ''),
+                     0,  # Для весовых товаров price = 0
+                     data.get('image_url', ''),
+                     data.get('category', ''),
+                     0,  # Для весовых товаров stock = 0
+                     'weight',
+                     data.get('unit', 'кг'),
+                     data.get('weight_unit', 'кг'),
+                     data.get('price_per_kg', 0),
+                     data.get('min_weight', 0.1),
+                     data.get('max_weight', 5.0),
+                     data.get('step_weight', 0.1),
+                     data.get('stock_weight', 0),
+                     product_id))
+
             db.commit()
             return jsonify({'success': True})
 
@@ -2895,7 +2993,6 @@ def admin_products():
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
-
 
 @app.route('/api/admin/orders', methods=['GET'])
 def admin_orders():
