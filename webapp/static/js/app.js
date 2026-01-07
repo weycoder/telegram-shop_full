@@ -1811,20 +1811,6 @@ class TelegramShop {
         await this.showDeliverySelection();
     }
 
-
-        if (unavailableItems.length > 0) {
-            let message = 'Некоторые товары недоступны в запрошенном количестве:\n';
-            unavailableItems.forEach(item => {
-                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
-            });
-            this.showNotification(message, 'error');
-            return;
-        }
-
-        // ЕСЛИ ВСЕ ТОВАРЫ ДОСТУПНЫ - ПОКАЗЫВАЕМ ВЫБОР ДОСТАВКИ
-        await this.showDeliverySelection();
-    }
-
     async showDeliverySelection() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
