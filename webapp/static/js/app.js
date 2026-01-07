@@ -242,7 +242,6 @@ class TelegramShop {
 
 
     async createOrder(orderData) {
-        // ⚠️ ВАЖНО: Перед отправкой проверяем и сохраняем user_id в localStorage
         if (this.userId && this.userId !== 0) {
             localStorage.setItem('telegram_user_id', this.userId);
             localStorage.setItem('telegram_username', this.username || 'Пользователь');
@@ -259,9 +258,24 @@ class TelegramShop {
             }
         }
 
-        // Добавляем данные из Telegram (используем актуальные значения)
+        // УБЕДИТЕСЬ, что total - это ЧИСЛО, а не строка
+        if (orderData.total && typeof orderData.total === 'string') {
+            orderData.total = parseFloat(orderData.total);
+        }
+
+        // Также преобразуем user_id в число
         orderData.user_id = parseInt(this.userId) || 0;
         orderData.username = this.username || 'Гость';
+
+        // Преобразуем все числа в товарах
+        if (orderData.items && Array.isArray(orderData.items)) {
+            orderData.items = orderData.items.map(item => ({
+                ...item,
+                id: parseInt(item.id) || 0,
+                quantity: parseInt(item.quantity) || 1,
+                price: parseFloat(item.price) || 0
+            }));
+        }
 
         console.log('📦 Создание заказа с данными:', orderData);
 
@@ -2784,6 +2798,7 @@ class TelegramShop {
             let deliveryDetails = {};
             let recipient_name = "";
             let phone_number = "";
+            let deliveryCost = 0; // ДОБАВЬТЕ ЭТО - объявите переменную!
 
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
                 if (this.deliveryData.address_id.toString().startsWith('guest_')) {
@@ -2817,25 +2832,33 @@ class TelegramShop {
                 phone_number = 'Будет указан при получении';
             }
 
-            // Формируем items для заказа
+            // Формируем items для заказа - УБЕДИТЕСЬ, что все числа
             const orderItems = this.cart.map(item => ({
                 id: item.id,
                 name: item.name,
-                price: item.price,
-                quantity: item.quantity
+                price: parseFloat(item.price) || 0, // ПРЕОБРАЗУЙТЕ в число
+                quantity: parseInt(item.quantity) || 1 // ПРЕОБРАЗУЙТЕ в число
             }));
 
             // Рассчитываем стоимость
-            const itemsTotal = this.cart.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.quantity)), 0);
+            const itemsTotal = this.cart.reduce((sum, item) => {
+                const price = parseFloat(item.price) || 0;
+                const quantity = parseInt(item.quantity) || 1;
+                return sum + (price * quantity);
+            }, 0);
+
+            console.log(`💰 Сумма товаров: ${itemsTotal} (тип: ${typeof itemsTotal})`);
 
             // ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
             if (this.deliveryData.type === 'courier') {
                 if (itemsTotal < 1000) {
-                    deliveryCost = 100;
+                    deliveryCost = 100; // Теперь переменная объявлена
                     console.log(`💰 Доставка платная: +${deliveryCost} руб (сумма заказа: ${itemsTotal} руб)`);
                 } else {
                     console.log(`✅ Доставка бесплатная (сумма заказа: ${itemsTotal} руб)`);
                 }
+            } else {
+                deliveryCost = 0; // Для самовывоза доставка бесплатная
             }
 
             const totalWithDelivery = itemsTotal + deliveryCost;
@@ -2846,7 +2869,7 @@ class TelegramShop {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
-                total: itemsTotal,  // Только стоимость товаров
+                total: itemsTotal,  // Теперь точно число
                 delivery_type: this.deliveryData.type,
                 delivery_address: JSON.stringify(deliveryDetails),
                 pickup_point: this.deliveryData.pickup_point,
@@ -2891,7 +2914,7 @@ class TelegramShop {
             this.showNotification(`❌ Ошибка: ${error.message}`, 'error');
             this.showPaymentSelection();
         }
-    }
+        }
 
     showOrderConfirmation(orderId, itemsTotal = 0, deliveryCost = 0, totalWithDelivery = 0) {
         const cartOverlay = document.getElementById('cartOverlay');
