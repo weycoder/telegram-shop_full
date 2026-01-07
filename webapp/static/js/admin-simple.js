@@ -644,19 +644,19 @@ class AdminPanel {
                 formData = {
                     name: getValue('productName'),
                     description: getValue('productDescription'),
-                    price: getNumberValue('pricePerKg', 0), // Цена за кг - ИСПОЛЬЗУЕМ КАК price
-                    stock: getNumberValue('stockWeight', 0), // Вес в наличии - ИСПОЛЬЗУЕМ КАК stock
+                    price: 0, // ВСЕГДА 0 для весовых (сервер так требует!)
+                    stock: 0, // ВСЕГДА 0 для весовых (сервер так требует!)
                     image_url: getValue('imageUrl'),
                     category: getValue('productCategory'),
                     product_type: 'weight',
-                    // Дополнительные поля для весового
                     unit: getValue('unit') || 'кг',
+                    weight_unit: getValue('unit') || 'кг',
+                    price_per_kg: getNumberValue('pricePerKg', 0), // ОБЯЗАТЕЛЬНОЕ поле!
                     min_weight: getNumberValue('minWeight', 0.1),
                     max_weight: getNumberValue('maxWeight', 5.0),
-                    step_weight: getNumberValue('stepWeight', 0.1)
-                    // НЕ НУЖНО: price_per_kg и stock_weight - они уже в price и stock
+                    step_weight: getNumberValue('stepWeight', 0.1),
+                    stock_weight: getNumberValue('stockWeight', 0) // ОБЯЗАТЕЛЬНОЕ поле!
                 };
-
                 console.log('📊 Данные весового товара:', formData);
 
                 // Валидация для весового товара
