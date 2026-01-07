@@ -2208,7 +2208,7 @@ class TelegramShop {
         const orderData = {
             payment_method: 'cash',
             cash_details: window.cashPaymentInfo || null
-        };
+        }
     }
 
 
