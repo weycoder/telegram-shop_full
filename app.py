@@ -1330,10 +1330,17 @@ def api_create_order():
     print("=" * 50)
     print("📦 ПОЛУЧЕН ЗАПРОС НА СОЗДАНИЕ ЗАКАЗА")
     print("=" * 50)
+
+    # ОБЯЗАТЕЛЬНО преобразуем total в float
+    try:
+        order_total = float(data.get('total', 0))
+    except (ValueError, TypeError):
+        order_total = 0.0
+
     print(f"📋 user_id: {data.get('user_id', 'НЕТ!')}")
     print(f"👤 username: {data.get('username', 'НЕТ!')}")
     print(f"📦 items: {len(data.get('items', []))} товаров")
-    print(f"💰 total: {data.get('total', 0)} руб.")
+    print(f"💰 total: {order_total} руб. (тип: {type(order_total)})")
     print(f"🚚 delivery_type: {data.get('delivery_type')}")
     print("=" * 50)
 
@@ -1344,15 +1351,12 @@ def api_create_order():
         delivery_address = data.get('delivery_address', '{}')
 
         # ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
-        # ОБЯЗАТЕЛЬНО преобразуем в float
-        order_total = float(data.get('total', 0))
         delivery_cost = 0.0
 
         if delivery_type == 'courier':
-            # Убедимся, что order_total - это число
             print(f"💰 Проверяем доставку: заказ {order_total} руб, тип {type(order_total)}")
 
-            if order_total < 1000.0:  # Явно указываем float
+            if order_total < 1000.0:  # Теперь order_total гарантированно float
                 delivery_cost = 100.0
                 print(f"💰 Доставка платная: +{delivery_cost} руб (сумма заказа: {order_total} руб)")
             else:
@@ -1362,7 +1366,7 @@ def api_create_order():
         total_with_delivery = order_total + delivery_cost
         print(f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} "
               f"руб + доставка: {delivery_cost} руб)")
-        # ИСПРАВЛЕННАЯ ОБРАБОТКА АДРЕСА (оставляем как было)
+
         address_obj = {}
         if isinstance(delivery_address, str):
             try:

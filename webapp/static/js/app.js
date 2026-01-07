@@ -2798,7 +2798,7 @@ class TelegramShop {
             let deliveryDetails = {};
             let recipient_name = "";
             let phone_number = "";
-            let deliveryCost = 0; // ДОБАВЬТЕ ЭТО - объявите переменную!
+            let deliveryCost = 0;
 
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
                 if (this.deliveryData.address_id.toString().startsWith('guest_')) {
@@ -2832,15 +2832,15 @@ class TelegramShop {
                 phone_number = 'Будет указан при получении';
             }
 
-            // Формируем items для заказа - УБЕДИТЕСЬ, что все числа
+            // Формируем items для заказа
             const orderItems = this.cart.map(item => ({
                 id: item.id,
                 name: item.name,
-                price: parseFloat(item.price) || 0, // ПРЕОБРАЗУЙТЕ в число
-                quantity: parseInt(item.quantity) || 1 // ПРЕОБРАЗУЙТЕ в число
+                price: parseFloat(item.price) || 0,
+                quantity: parseInt(item.quantity) || 1
             }));
 
-            // Рассчитываем стоимость
+            // Рассчитываем стоимость - ВАЖНО: преобразуем все к числам
             const itemsTotal = this.cart.reduce((sum, item) => {
                 const price = parseFloat(item.price) || 0;
                 const quantity = parseInt(item.quantity) || 1;
@@ -2850,23 +2850,26 @@ class TelegramShop {
             console.log(`💰 Сумма товаров: ${itemsTotal} (тип: ${typeof itemsTotal})`);
 
             // ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
+            // ЯВНО преобразуем itemsTotal к числу и сравниваем с числом
+            const numericItemsTotal = Number(itemsTotal) || 0;
+
             if (this.deliveryData.type === 'courier') {
-                if (itemsTotal < 1000) {
-                    deliveryCost = 100; // Теперь переменная объявлена
-                    console.log(`💰 Доставка платная: +${deliveryCost} руб (сумма заказа: ${itemsTotal} руб)`);
+                if (numericItemsTotal < 1000) {  // Теперь оба значения - числа
+                    deliveryCost = 100;
+                    console.log(`💰 Доставка платная: +${deliveryCost} руб (сумма заказа: ${numericItemsTotal} руб)`);
                 } else {
-                    console.log(`✅ Доставка бесплатная (сумма заказа: ${itemsTotal} руб)`);
+                    console.log(`✅ Доставка бесплатная (сумма заказа: ${numericItemsTotal} руб)`);
                 }
             } else {
-                deliveryCost = 0; // Для самовывоза доставка бесплатная
+                deliveryCost = 0;
             }
 
-            const totalWithDelivery = itemsTotal + deliveryCost;
+            const totalWithDelivery = numericItemsTotal + deliveryCost;
             const orderData = {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
-                total: itemsTotal,
+                total: numericItemsTotal,  // Используем числовое значение
                 delivery_type: this.deliveryData.type,
                 delivery_address: JSON.stringify(deliveryDetails),
                 pickup_point: this.deliveryData.pickup_point,
@@ -2881,7 +2884,7 @@ class TelegramShop {
             }
 
             console.log('📤 Отправка заказа на сервер:', orderData);
-            console.log(`💰 Итоговая сумма: ${totalWithDelivery} руб (товары: ${itemsTotal} руб + доставка: ${deliveryCost} руб)`);
+            console.log(`💰 Итоговая сумма: ${totalWithDelivery} руб (товары: ${numericItemsTotal} руб + доставка: ${deliveryCost} руб)`);
 
             // Используем метод createOrder класса
             const result = await this.createOrder(orderData);
@@ -2891,8 +2894,8 @@ class TelegramShop {
                 // Отправляем уведомление боту
                 await this.notifyBotAboutOrder(result.order_id, 'created');
 
-                // ========== ИЗМЕНЕННОЕ ПОДТВЕРЖДЕНИЕ ЗАКАЗА ==========
-                this.showOrderConfirmation(result.order_id, itemsTotal, deliveryCost, totalWithDelivery);
+                // Показываем подтверждение заказа
+                this.showOrderConfirmation(result.order_id, numericItemsTotal, deliveryCost, totalWithDelivery);
 
                 // Очищаем корзину ПОСЛЕ показа подтверждения
                 this.cart = [];
