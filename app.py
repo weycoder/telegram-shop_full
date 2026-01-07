@@ -1090,23 +1090,37 @@ def courier_panel():
     return render_template('courier.html')
 
 
-# ========== API ДЛЯ МАГАЗИНА ==========
+# В методе получения товаров (/api/admin/products или /api/products)
 @app.route('/api/products')
-def api_products():
-    db = get_db()
-    try:
-        category = request.args.get('category', 'all')
-        if category and category != 'all':
-            products = db.execute('SELECT * FROM products WHERE stock > 0 AND category = ? ORDER BY created_at DESC',
-                                  (category,)).fetchall()
-        else:
-            products = db.execute('SELECT * FROM products WHERE stock > 0 ORDER BY created_at DESC').fetchall()
-        return jsonify([dict(product) for product in products])
-    except Exception as e:
-        print(f"❌ Ошибка получения товаров: {e}")
-        return jsonify([])
-    finally:
-        db.close()
+def get_products():
+    products = db.execute('''
+                          SELECT id,
+                                 name,
+                                 description,
+                                 price,
+                                 image_url,
+                                 category,
+                                 stock,
+                                 product_type,
+                                 unit,
+                                 weight_unit,
+                                 price_per_kg,
+                                 min_weight,
+                                 max_weight,
+                                 step_weight,
+                                 stock_weight
+                          FROM products
+                          WHERE stock > 0 # ИСПРАВЛЕНО: Теперь stock содержит реальное значение для весовых
+                          ''').fetchall()
+
+    result = []
+    for product in products:
+        product_dict = dict(product)
+
+        # Убираем проверку на product_type - просто отображаем price и stock как есть
+        result.append(product_dict)
+
+    return jsonify(result)
 
 
 @app.route('/api/products/<int:product_id>')
@@ -2848,6 +2862,7 @@ def get_products_with_discounts():
         db.close()
 
 
+# ========== API ДЛЯ АДМИНА ==========
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def admin_products():
     db = get_db()
@@ -2884,9 +2899,13 @@ def admin_products():
                      data.get('unit', 'шт')))
 
             else:
-                # ВЕСОВОЙ ТОВАР
+                # ВЕСОВОЙ ТОВАР - ИСПРАВЛЕННАЯ ВЕРСИЯ
                 if 'price_per_kg' not in data:
                     return jsonify({'success': False, 'error': 'Укажите цену за кг'}), 400
+
+                # Получаем значения для весового товара
+                price_per_kg = float(data.get('price_per_kg', 0))
+                stock_weight = float(data.get('stock_weight', 0))
 
                 db.execute(
                     '''INSERT INTO products (name, description, price, image_url, category, stock,
@@ -2895,18 +2914,18 @@ def admin_products():
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (data.get('name', ''),
                      data.get('description', ''),
-                     0,  # Для весовых товаров price = 0
+                     price_per_kg,  # ИСПРАВЛЕНО: Используем price_per_kg как price для отображения!
                      data.get('image_url', ''),
                      data.get('category', ''),
-                     0,  # Для весовых товаров stock = 0
+                     stock_weight,  # ИСПРАВЛЕНО: Используем stock_weight как stock для отображения!
                      'weight',
                      data.get('unit', 'кг'),
                      data.get('weight_unit', 'кг'),
-                     data.get('price_per_kg', 0),
+                     price_per_kg,
                      data.get('min_weight', 0.1),
                      data.get('max_weight', 5.0),
                      data.get('step_weight', 0.1),
-                     data.get('stock_weight', 0)))
+                     stock_weight))
 
             db.commit()
             product_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -2944,15 +2963,20 @@ def admin_products():
                      data.get('unit', 'шт'),
                      product_id))
             else:
-                # ВЕСОВОЙ ТОВАР
+                # ВЕСОВОЙ ТОВАР - ИСПРАВЛЕНО ДЛЯ РЕДАКТИРОВАНИЯ
+                # Получаем значения для весового товара
+                price_per_kg = float(data.get('price_per_kg', 0))
+                stock_weight = float(data.get('stock_weight', 0))
+
                 db.execute(
                     '''UPDATE products
-                       SET name         = ?,
-                           description  = ?,
-                           price        = ?,
+                       SET name        = ?,
+                           description = ?,
+                           price       = ?,
+                           # ИСПРАВЛЕНО: Сохраняем price_per_kg в price!
                            image_url    = ?,
                            category     = ?,
-                           stock        = ?,
+                           stock        = ?,  # ИСПРАВЛЕНО: Сохраняем stock_weight в stock!
                            product_type = ?,
                            unit         = ?,
                            weight_unit  = ?,
@@ -2964,18 +2988,18 @@ def admin_products():
                        WHERE id = ?''',
                     (data.get('name', ''),
                      data.get('description', ''),
-                     0,  # Для весовых товаров price = 0
+                     price_per_kg,  # ИСПРАВЛЕНО: Сохраняем реальную цену за кг
                      data.get('image_url', ''),
                      data.get('category', ''),
-                     0,  # Для весовых товаров stock = 0
+                     stock_weight,  # ИСПРАВЛЕНО: Сохраняем реальный вес в наличии
                      'weight',
                      data.get('unit', 'кг'),
                      data.get('weight_unit', 'кг'),
-                     data.get('price_per_kg', 0),
+                     price_per_kg,
                      data.get('min_weight', 0.1),
                      data.get('max_weight', 5.0),
                      data.get('step_weight', 0.1),
-                     data.get('stock_weight', 0),
+                     stock_weight,
                      product_id))
 
             db.commit()
