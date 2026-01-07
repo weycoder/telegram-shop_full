@@ -598,7 +598,7 @@ class AdminPanel {
             // Получаем активный тип товара
             const activeTypeBtn = document.querySelector('.type-btn.active');
             const productType = activeTypeBtn ? activeTypeBtn.dataset.type : 'piece';
-
+    
             // Получаем значения
             const getValue = (id) => {
                 const element = document.getElementById(id);
@@ -730,7 +730,6 @@ class AdminPanel {
             this.showAlert('❌ Ошибка соединения с сервером: ' + error.message, 'error');
         }
     }
-
     async deleteProduct(productId) {
         if (!confirm('Вы уверены, что хотите удалить этот товар?')) return;
 
