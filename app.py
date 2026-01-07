@@ -1322,6 +1322,7 @@ def get_categories_tree():
         print(f"❌ Ошибка получения дерева категорий: {e}")
         return jsonify([])
 
+
 @app.route('/api/create-order', methods=['POST'])
 def api_create_order():
     data = request.json
@@ -1343,22 +1344,24 @@ def api_create_order():
         delivery_address = data.get('delivery_address', '{}')
 
         # ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
+        # ОБЯЗАТЕЛЬНО преобразуем в float
         order_total = float(data.get('total', 0))
         delivery_cost = 0.0
 
         if delivery_type == 'courier':
-            if order_total < 1000:
-                delivery_cost = 100.0  # Доставка 100 руб для заказов до 1000 руб
+            # Убедимся, что order_total - это число
+            print(f"💰 Проверяем доставку: заказ {order_total} руб, тип {type(order_total)}")
+
+            if order_total < 1000.0:  # Явно указываем float
+                delivery_cost = 100.0
                 print(f"💰 Доставка платная: +{delivery_cost} руб (сумма заказа: {order_total} руб)")
             else:
                 print(f"✅ Доставка бесплатная (сумма заказа: {order_total} руб)")
 
         # Общая сумма заказа с учетом доставки
         total_with_delivery = order_total + delivery_cost
-        print(
-            f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
-        # ========== КОНЕЦ РАСЧЕТА ==========
-
+        print(f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} "
+              f"руб + доставка: {delivery_cost} руб)")
         # ИСПРАВЛЕННАЯ ОБРАБОТКА АДРЕСА (оставляем как было)
         address_obj = {}
         if isinstance(delivery_address, str):
