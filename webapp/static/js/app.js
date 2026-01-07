@@ -2862,14 +2862,11 @@ class TelegramShop {
             }
 
             const totalWithDelivery = itemsTotal + deliveryCost;
-            // ========== КОНЕЦ РАСЧЕТА ==========
-
-            // Подготавливаем данные заказа
             const orderData = {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
-                total: itemsTotal,  // Теперь точно число
+                total: itemsTotal,
                 delivery_type: this.deliveryData.type,
                 delivery_address: JSON.stringify(deliveryDetails),
                 pickup_point: this.deliveryData.pickup_point,
@@ -2877,6 +2874,11 @@ class TelegramShop {
                 recipient_name: recipient_name,
                 phone_number: phone_number
             };
+
+            if (this.deliveryData.cash_payment) {
+                orderData.cash_details = this.deliveryData.cash_payment;
+                console.log('💰 Добавлены данные о наличных в заказ:', this.deliveryData.cash_payment);
+            }
 
             console.log('📤 Отправка заказа на сервер:', orderData);
             console.log(`💰 Итоговая сумма: ${totalWithDelivery} руб (товары: ${itemsTotal} руб + доставка: ${deliveryCost} руб)`);
@@ -2914,7 +2916,7 @@ class TelegramShop {
             this.showNotification(`❌ Ошибка: ${error.message}`, 'error');
             this.showPaymentSelection();
         }
-        }
+    }
 
     showOrderConfirmation(orderId, itemsTotal = 0, deliveryCost = 0, totalWithDelivery = 0) {
         const cartOverlay = document.getElementById('cartOverlay');
