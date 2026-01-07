@@ -2826,8 +2826,7 @@ class TelegramShop {
             }));
 
             // Рассчитываем стоимость
-            const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            let deliveryCost = 0;
+            const itemsTotal = this.cart.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.quantity)), 0);
 
             // ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
             if (this.deliveryData.type === 'courier') {
