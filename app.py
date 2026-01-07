@@ -1330,17 +1330,10 @@ def api_create_order():
     print("=" * 50)
     print("📦 ПОЛУЧЕН ЗАПРОС НА СОЗДАНИЕ ЗАКАЗА")
     print("=" * 50)
-
-    # ОБЯЗАТЕЛЬНО преобразуем total в float
-    try:
-        order_total = float(data.get('total', 0))
-    except (ValueError, TypeError):
-        order_total = 0.0
-
     print(f"📋 user_id: {data.get('user_id', 'НЕТ!')}")
     print(f"👤 username: {data.get('username', 'НЕТ!')}")
     print(f"📦 items: {len(data.get('items', []))} товаров")
-    print(f"💰 total: {order_total} руб. (тип: {type(order_total)})")
+    print(f"💰 total: {data.get('total', 0)} руб. (тип: {type(data.get('total'))})")
     print(f"🚚 delivery_type: {data.get('delivery_type')}")
     print("=" * 50)
 
@@ -1351,12 +1344,20 @@ def api_create_order():
         delivery_address = data.get('delivery_address', '{}')
 
         # ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
+        # ОБЯЗАТЕЛЬНО преобразуем в float
+        try:
+            order_total = float(data.get('total', 0))
+        except (ValueError, TypeError):
+            print("⚠️ Ошибка преобразования total в float, используем 0")
+            order_total = 0.0
+
         delivery_cost = 0.0
 
         if delivery_type == 'courier':
+            # Убедимся, что order_total - это число
             print(f"💰 Проверяем доставку: заказ {order_total} руб, тип {type(order_total)}")
 
-            if order_total < 1000.0:  # Теперь order_total гарантированно float
+            if order_total < 1000.0:  # Явно указываем float
                 delivery_cost = 100.0
                 print(f"💰 Доставка платная: +{delivery_cost} руб (сумма заказа: {order_total} руб)")
             else:
@@ -1367,6 +1368,7 @@ def api_create_order():
         print(f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} "
               f"руб + доставка: {delivery_cost} руб)")
 
+        # ИСПРАВЛЕННАЯ ОБРАБОТКА АДРЕСА
         address_obj = {}
         if isinstance(delivery_address, str):
             try:
@@ -1455,8 +1457,16 @@ def api_create_order():
                                 json.dumps(cash_payment) if cash_payment else None  # Детали
                             ))
 
+        # Обновляем остатки товаров
         for item in data['items']:
-            db.execute('UPDATE products SET stock = stock - ? WHERE id = ?', (item['quantity'], item['id']))
+            # Убедимся, что quantity - это число
+            try:
+                quantity = int(item.get('quantity', 1))
+            except (ValueError, TypeError):
+                quantity = 1
+
+            # Обновляем остатки
+            db.execute('UPDATE products SET stock = stock - ? WHERE id = ?', (quantity, item.get('id')))
 
         db.commit()
         order_id = cursor.lastrowid
@@ -1476,15 +1486,19 @@ def api_create_order():
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
         print("=" * 50)
-        return jsonify({'success': True, 'order_id': order_id, 'delivery_cost': delivery_cost, total_with_delivery:'total_with_delivery'})
+        return jsonify({
+            'success': True,
+            'order_id': order_id,
+            'delivery_cost': delivery_cost,
+            'total_with_delivery': total_with_delivery
+        })
 
     except Exception as e:
         db.close()
         print(f"❌ Ошибка создания заказа: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
+        return jsonify({'success': False, 'error': str(e)}), 100
 
 @app.route('/api/courier/available-orders', methods=['GET'])
 def get_available_orders():
