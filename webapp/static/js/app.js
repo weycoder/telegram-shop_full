@@ -2202,40 +2202,8 @@ class TelegramShop {
         // Продолжаем оформление заказа с информацией о наличных
         this.confirmOrderWithCash();
     }
-
-    function proceedWithOrder() {
-        // Добавляем информацию о наличной оплате к данным заказа
-        const orderData = {
-            payment_method: 'cash',
-            cash_details: window.cashPaymentInfo || null
-        }
-    }
-
-
-    function calculateCashBreakdown(amount) {
-        if (amount <= 0) return 'Сдачи не требуется';
-
-        const denominations = [5000, 2000, 1000, 500, 200, 100, 50, 10, 5, 2, 1];
-        let remaining = Math.round(amount);
-        let result = [];
-
-        for (const denom of denominations) {
-            if (remaining >= denom) {
-                const count = Math.floor(remaining / denom);
-                remaining = remaining % denom;
-
-                if (count > 0) {
-                    result.push(`${count} × ${denom} ₽`);
-                }
-            }
-        }
-
-        return result.length > 0
-            ? `Выдать: ${result.join(', ')}`
-            : 'Мелкая сдача';
-    }
-
-    async confirmOrderWithCash() {
+    
+    confirmOrderWithCash() {
         try {
             console.log('💰 Информация об оплате наличными:', this.cashPaymentInfo);
 
