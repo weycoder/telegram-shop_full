@@ -38,6 +38,7 @@ class AdminPanel {
         console.log('✅ Админ панель инициализирована');
     }
 
+
     bindEvents() {
         console.log('🔗 Назначаем обработчики...');
 
@@ -72,6 +73,19 @@ class AdminPanel {
             e.preventDefault();
             this.showAddProduct();
         });
+
+                // Кнопка добавления категории
+        document.getElementById('addCategoryBtn')?.addEventListener('click', () => {
+            this.addCategory();
+        });
+
+        // Поле ввода категории - добавляем обработчик нажатия Enter
+        document.getElementById('newCategoryName')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.addCategory();
+            }
+        });
+
 
         console.log('✅ Все обработчики назначены');
     }
@@ -242,78 +256,51 @@ class AdminPanel {
         container.innerHTML = html;
     }
 
-    // Методы рендеринга категорий
+
     renderCategories() {
-        const container = document.getElementById('categoriesContainer');
+        const container = document.getElementById('categoriesList');
         if (!container) return;
 
         if (this.categories.length === 0) {
             container.innerHTML = `
-                <div class="no-data">
-                    <i class="fas fa-tags" style="font-size: 48px; color: #ddd;"></i>
+                <div class="no-categories">
+                    <i class="fas fa-tags"></i>
                     <h3>Категории не найдены</h3>
                     <p>Создайте первую категорию</p>
-                    <div class="category-form">
-                        <div class="input-group">
-                            <input type="text" id="newCategory" placeholder="Название новой категории">
-                            <button class="btn btn-primary" onclick="admin.addCategory()">
-                                <i class="fas fa-plus"></i> Добавить
-                            </button>
-                        </div>
-                    </div>
                 </div>
             `;
             return;
         }
 
-        let html = `
-            <div class="categories-header">
-                <h2>Управление категориями (${this.categories.length})</h2>
-            </div>
-            <div class="categories-grid">
-        `;
+        let html = '<div class="categories-grid">';
 
         this.categories.forEach(category => {
-            const categoryName = typeof category === 'string' ? category : (category.name || category);
             html += `
                 <div class="category-card">
                     <div class="category-info">
                         <i class="fas fa-folder"></i>
-                        <h3>${categoryName}</h3>
+                        <span class="category-name">${category}</span>
                     </div>
                     <div class="category-actions">
-                        <button class="btn-small btn-delete" onclick="admin.deleteCategory('${categoryName}')">
-                            <i class="fas fa-trash"></i> Удалить
+                        <button class="btn-small btn-delete" onclick="admin.deleteCategory('${category}')">
+                            <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
             `;
         });
 
-        html += `
-                </div>
-                <div class="category-form">
-                    <h3>Добавить новую категорию</h3>
-                    <div class="input-group">
-                        <input type="text" id="newCategory" placeholder="Название новой категории">
-                        <button class="btn btn-primary" onclick="admin.addCategory()">
-                            <i class="fas fa-plus"></i> Добавить
-                        </button>
-                    </div>
-                    <p class="help-text">Категория появится в списке после создания</p>
-                </div>
-        `;
-
+        html += '</div>';
         container.innerHTML = html;
     }
+
 
     updateCategorySelect() {
         const select = document.getElementById('productCategory');
         if (select) {
             let options = '<option value="">Выберите категорию</option>';
             this.categories.forEach(category => {
-                const categoryName = typeof category === 'string' ? category : (category.name || category);
-                options += `<option value="${categoryName}">${categoryName}</option>`;
+                options += `<option value="${category}">${category}</option>`;
             });
             select.innerHTML = options;
         }
@@ -768,11 +755,17 @@ class AdminPanel {
 
     // Методы управления категориями
     async addCategory() {
-        const input = document.getElementById('newCategory');
+        const input = document.getElementById('newCategoryName');
         const categoryName = input?.value.trim();
 
         if (!categoryName) {
             this.showAlert('❌ Введите название категории', 'error');
+            return;
+        }
+
+        // Проверка на уникальность
+        if (this.categories.includes(categoryName)) {
+            this.showAlert('❌ Такая категория уже существует', 'error');
             return;
         }
 
@@ -788,9 +781,9 @@ class AdminPanel {
             const result = await response.json();
 
             if (result.success) {
-                this.showAlert('✅ Категория создана', 'success');
-                input.value = '';
-                this.loadCategories();
+                this.showAlert('✅ Категория успешно создана', 'success');
+                input.value = ''; // Очищаем поле ввода
+                await this.loadCategories(); // Перезагружаем список
             } else {
                 this.showAlert('❌ Ошибка: ' + (result.error || ''), 'error');
             }
@@ -812,7 +805,7 @@ class AdminPanel {
 
             if (result.success) {
                 this.showAlert('✅ Категория удалена', 'success');
-                this.loadCategories();
+                await this.loadCategories(); // Перезагружаем список
             } else {
                 this.showAlert('❌ Ошибка удаления категории: ' + (result.error || ''), 'error');
             }
@@ -929,6 +922,7 @@ class AdminPanel {
 
     async loadCategories() {
         try {
+            console.log('🏷️ Загрузка категорий...');
             const response = await fetch('/api/admin/categories/manage');
             const categories = await response.json();
             this.categories = categories;
@@ -2457,7 +2451,7 @@ class AdminPanel {
                 } else if (pageId === 'orders') {
                     this.loadOrders();
                 } else if (pageId === 'categories') {
-                    this.loadCategories();
+                    this.loadCategories(); // <-- ДОБАВЬТЕ ЭТО
                 } else if (pageId === 'discounts') {
                     this.loadDiscounts();
                 } else if (pageId === 'promo-codes') {

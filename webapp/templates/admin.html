@@ -1099,31 +1099,32 @@
                     </form>
                 </div>
 
+                <!-- КАТЕГОРИИ -->
                 <div class="page" id="categories">
-                    <div class="add-product-header">
+                    <div class="categories-header">
                         <h2>Управление категориями</h2>
                     </div>
 
-                    <div class="add-product-form">
-                        <!-- Добавление категории -->
-                        <div class="form-section">
+                    <div class="categories-container">
+                        <!-- Форма добавления категории -->
+                        <div class="category-form-section">
                             <h3>Добавить новую категорию</h3>
-                            <div class="form-group">
-                                <div class="category-input-group">
-                                    <input type="text" id="newCategory" placeholder="Введите название категории">
-                                    <button type="button" class="btn btn-primary" id="addCategoryBtn">
-                                        <i class="fas fa-plus"></i> Добавить
-                                    </button>
-                                </div>
+                            <div class="category-input-group">
+                                <input type="text" id="newCategoryName" placeholder="Введите название категории">
+                                <button type="button" class="btn btn-primary" id="addCategoryBtn">
+                                    <i class="fas fa-plus"></i> Добавить категорию
+                                </button>
                             </div>
+                            <p class="form-help">Название должно быть уникальным</p>
                         </div>
 
-                        <!-- Список категорий -->
-                        <div class="form-section">
+                        <!-- Список существующих категорий -->
+                        <div class="categories-list-section">
                             <h3>Существующие категории</h3>
-                            <div class="form-group">
-                                <div class="categories-list" id="categoriesList">
-                                    <p class="loading-text">Загрузка категорий...</p>
+                            <div class="categories-list" id="categoriesList">
+                                <div class="loading-state">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <p>Загрузка категорий...</p>
                                 </div>
                             </div>
                         </div>
