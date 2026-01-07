@@ -1093,34 +1093,70 @@ def courier_panel():
 # В методе получения товаров (/api/admin/products или /api/products)
 @app.route('/api/products')
 def get_products():
-    products = db.execute('''
-                          SELECT id,
-                                 name,
-                                 description,
-                                 price,
-                                 image_url,
-                                 category,
-                                 stock,
-                                 product_type,
-                                 unit,
-                                 weight_unit,
-                                 price_per_kg,
-                                 min_weight,
-                                 max_weight,
-                                 step_weight,
-                                 stock_weight
-                          FROM products
-                          WHERE stock > 0 # ИСПРАВЛЕНО: Теперь stock содержит реальное значение для весовых
-                          ''').fetchall()
+    """Получить товары для клиентского магазина"""
+    db = get_db()
+    try:
+        # Получаем товары с правильной логикой для весовых
+        products = db.execute('''
+                              SELECT id,
+                                     name,
+                                     description,
+                                     CASE
+                                         WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg
+                                         ELSE price
+                                         END as price,
+                                     image_url,
+                                     category,
+                                     CASE
+                                         WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight
+                                         ELSE stock
+                                         END as stock,
+                                     product_type,
+                                     unit,
+                                     weight_unit,
+                                     price_per_kg,
+                                     min_weight,
+                                     max_weight,
+                                     step_weight,
+                                     stock_weight
+                              FROM products
+                              WHERE (
+                                        (product_type = 'piece' AND stock > 0)
+                                            OR
+                                        (product_type = 'weight' AND stock_weight > 0)
+                                        )
+                              ''').fetchall()
 
-    result = []
-    for product in products:
-        product_dict = dict(product)
+        result = []
+        for product in products:
+            product_dict = dict(product)
 
-        # Убираем проверку на product_type - просто отображаем price и stock как есть
-        result.append(product_dict)
+            # Для весовых товаров устанавливаем правильные единицы измерения
+            if product_dict.get('product_type') == 'weight':
+                # Устанавливаем display_price как price_per_kg для отображения
+                product_dict['display_price'] = product_dict.get('price_per_kg', product_dict['price'])
+                # Устанавливаем display_stock как stock_weight
+                product_dict['display_stock'] = product_dict.get('stock_weight', 0)
+                # Для удобства фронтенда
+                product_dict['is_weight'] = True
+                product_dict['price_per_kg'] = product_dict.get('price_per_kg', 0)
+            else:
+                product_dict['display_price'] = product_dict['price']
+                product_dict['display_stock'] = product_dict['stock']
+                product_dict['is_weight'] = False
 
-    return jsonify(result)
+            result.append(product_dict)
+
+        db.close()
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"❌ Ошибка получения товаров: {e}")
+        import traceback
+        traceback.print_exc()
+        if db:
+            db.close()
+        return jsonify([])
 
 
 @app.route('/api/products/<int:product_id>')
