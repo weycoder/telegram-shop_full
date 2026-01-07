@@ -1469,7 +1469,7 @@ def api_create_order():
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
         print("=" * 50)
-        return jsonify({'success': True, 'order_id': order_id, 'delivery_cost': delivery_cost, al_with_delivery:'total_with_delivery'})
+        return jsonify({'success': True, 'order_id': order_id, 'delivery_cost': delivery_cost, total_with_delivery:'total_with_delivery'})
 
     except Exception as e:
         db.close()
