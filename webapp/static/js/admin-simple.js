@@ -344,7 +344,7 @@ class AdminPanel {
                     this.updateCategorySelect();
                 }
 
-                // Назначаем обработчики
+                // Назначаем обработчик файла
                 const fileInput = document.getElementById('productImageFile');
                 if (fileInput) {
                     fileInput.addEventListener('change', (e) => this.handleImageUpload(e));
@@ -366,11 +366,12 @@ class AdminPanel {
             }
         }, 300);
     }
+
     handleImageUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
 
-        console.log('📁 Загрузка файла:', file.name);
+        console.log('📁 Выбран файл:', file.name);
 
         // Показываем превью
         const preview = document.getElementById('filePreview');
@@ -386,8 +387,8 @@ class AdminPanel {
             reader.readAsDataURL(file);
         }
 
-        // Автоматически загружаем файл на сервер
-        this.uploadFile(file);
+        // Файл теперь загружается при отправке формы, а не заранее
+        console.log('📁 Файл готов к загрузке:', file.name);
     }
 
     uploadFile(file) {
@@ -526,23 +527,25 @@ class AdminPanel {
                 const productDescription = document.getElementById('productDescription');
                 const productPrice = document.getElementById('productPrice');
                 const productStock = document.getElementById('productStock');
-                const imageUrl = document.getElementById('imageUrl');
                 const categorySelect = document.getElementById('productCategory');
-                const previewImage = document.getElementById('previewImage');
+                const filePreview = document.getElementById('filePreview');
 
                 if (productName) productName.value = product.name || '';
                 if (productDescription) productDescription.value = product.description || '';
                 if (productPrice) productPrice.value = product.price || 0;
                 if (productStock) productStock.value = product.stock || 0;
-                if (imageUrl) imageUrl.value = product.image_url || '';
 
                 if (categorySelect && product.category) {
                     categorySelect.value = product.category;
                 }
 
-                if (previewImage && product.image_url) {
-                    previewImage.src = product.image_url;
-                    previewImage.style.display = 'block';
+                // Показываем существующее изображение
+                if (filePreview && product.image_url) {
+                    filePreview.innerHTML = `
+                        <img src="${product.image_url}"
+                             style="max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 10px;">
+                        <p style="color: #666; margin-top: 5px;">Текущее изображение</p>
+                    `;
                 }
             }
         } catch (error) {
@@ -555,7 +558,7 @@ class AdminPanel {
         const fields = [
             'productName', 'productPrice', 'pricePerKg', 'productStock',
             'stockWeight', 'productCategory', 'unit', 'minWeight',
-            'maxWeight', 'stepWeight', 'productDescription', 'imageUrl'
+            'maxWeight', 'stepWeight', 'productDescription'
         ];
 
         fields.forEach(fieldId => {
@@ -587,12 +590,6 @@ class AdminPanel {
             fileInput.value = '';
         }
 
-        // Скрываем контейнер превью если есть
-        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
-        if (imagePreviewContainer) {
-            imagePreviewContainer.style.display = 'none';
-        }
-
         console.log('✅ Форма товара сброшена');
     }
 
@@ -617,92 +614,138 @@ class AdminPanel {
                 return isNaN(value) ? defaultValue : value;
             };
 
-            let formData;
-
-            if (productType === 'piece') {
-                // ШТУЧНЫЙ ТОВАР
-                formData = {
-                    name: getValue('productName'),
-                    description: getValue('productDescription'),
-                    price: getNumberValue('productPrice', 0),
-                    stock: parseInt(getValue('productStock')) || 0,
-                    image_url: getValue('imageUrl'),
-                    category: getValue('productCategory'),
-                    product_type: 'piece'
-                };
-
-                // Валидация
-                if (!formData.name || !formData.name.trim()) {
-                    this.showAlert('❌ Введите название товара', 'error');
-                    return;
-                }
-                if (formData.price <= 0) {
-                    this.showAlert('❌ Укажите цену товара', 'error');
-                    return;
-                }
-                if (formData.stock < 0) {
-                    this.showAlert('❌ Укажите корректное количество', 'error');
-                    return;
-                }
-
-            } else {
-                // ВЕСОВОЙ ТОВАР
-                formData = {
-                    name: getValue('productName'),
-                    description: getValue('productDescription'),
-                    price: 0, // ВСЕГДА 0 для весовых (сервер так требует!)
-                    stock: 0, // ВСЕГДА 0 для весовых (сервер так требует!)
-                    image_url: getValue('imageUrl') || '',
-                    category: getValue('productCategory'),
-                    product_type: 'weight',
-                    unit: getValue('unit') || 'кг',
-                    weight_unit: getValue('unit') || 'кг',
-                    price_per_kg: getNumberValue('pricePerKg', 0), // ОБЯЗАТЕЛЬНОЕ поле!
-                    min_weight: getNumberValue('minWeight', 0.1),
-                    max_weight: getNumberValue('maxWeight', 5.0),
-                    step_weight: getNumberValue('stepWeight', 0.1),
-                    stock_weight: getNumberValue('stockWeight', 0) // ОБЯЗАТЕЛЬНОЕ поле!
-                };
-                console.log('📊 Данные весового товара:', formData);
-
-                // Валидация для весового товара
-                if (!formData.name || !formData.name.trim()) {
-                    this.showAlert('❌ Введите название товара', 'error');
-                    return;
-                }
-                if (formData.price_per_kg <= 0) {
-                    this.showAlert('❌ Укажите цену за кг', 'error');
-                    return;
-                }
-                if (formData.min_weight <= 0) {
-                    this.showAlert('❌ Укажите минимальный вес', 'error');
-                    return;
-                }
-                if (formData.max_weight <= formData.min_weight) {
-                    this.showAlert('❌ Максимальный вес должен быть больше минимального', 'error');
-                    return;
-                }
+            // Проверяем загружен ли файл
+            const fileInput = document.getElementById('productImageFile');
+            let imageFile = null;
+            if (fileInput && fileInput.files.length > 0) {
+                imageFile = fileInput.files[0];
             }
 
-            console.log('📤 Данные для отправки:', formData);
-
-            // Определяем URL и метод
-            let url = '/api/admin/products';
-            let method = 'POST';
-
-            if (this.isEditing && this.editingProductId) {
-                url = `/api/admin/products?id=${this.editingProductId}`;
-                method = 'PUT';
-                console.log(`✏️ Редактирование товара ID: ${this.editingProductId}`);
+            // Валидация файла
+            if (!imageFile) {
+                this.showAlert('❌ Загрузите изображение товара', 'error');
+                return;
             }
 
-            // Отправка запроса
-            fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData)
+            // Проверка типа файла
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+            if (!allowedTypes.includes(imageFile.type)) {
+                this.showAlert('❌ Неподдерживаемый формат файла. Используйте PNG, JPG, GIF или WEBP', 'error');
+                return;
+            }
+
+            // Проверка размера файла (максимум 10MB)
+            if (imageFile.size > 10 * 1024 * 1024) {
+                this.showAlert('❌ Файл слишком большой. Максимальный размер 10MB', 'error');
+                return;
+            }
+
+            console.log('📤 Начинаем загрузку файла...');
+
+            // Сначала загружаем файл на сервер
+            const formData = new FormData();
+            formData.append('image', imageFile);
+
+            fetch('/api/upload-image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(uploadResult => {
+                if (!uploadResult.success) {
+                    throw new Error(uploadResult.error || 'Ошибка загрузки файла');
+                }
+
+                const imageUrl = uploadResult.url;
+                console.log('✅ Файл загружен:', imageUrl);
+
+                // Теперь создаем объект с данными товара
+                let productData;
+
+                if (productType === 'piece') {
+                    // ШТУЧНЫЙ ТОВАР
+                    productData = {
+                        name: getValue('productName'),
+                        description: getValue('productDescription'),
+                        price: getNumberValue('productPrice', 0),
+                        stock: parseInt(getValue('productStock')) || 0,
+                        image_url: imageUrl, // Используем URL загруженного файла
+                        category: getValue('productCategory'),
+                        product_type: 'piece'
+                    };
+
+                    // Валидация
+                    if (!productData.name || !productData.name.trim()) {
+                        this.showAlert('❌ Введите название товара', 'error');
+                        return Promise.reject('Нет названия');
+                    }
+                    if (productData.price <= 0) {
+                        this.showAlert('❌ Укажите цену товара', 'error');
+                        return Promise.reject('Некорректная цена');
+                    }
+                    if (productData.stock < 0) {
+                        this.showAlert('❌ Укажите корректное количество', 'error');
+                        return Promise.reject('Некорректное количество');
+                    }
+
+                } else {
+                    // ВЕСОВОЙ ТОВАР
+                    productData = {
+                        name: getValue('productName'),
+                        description: getValue('productDescription'),
+                        price: 0,
+                        stock: 0,
+                        image_url: imageUrl, // Используем URL загруженного файла
+                        category: getValue('productCategory'),
+                        product_type: 'weight',
+                        unit: getValue('unit') || 'кг',
+                        weight_unit: getValue('unit') || 'кг',
+                        price_per_kg: getNumberValue('pricePerKg', 0),
+                        min_weight: getNumberValue('minWeight', 0.1),
+                        max_weight: getNumberValue('maxWeight', 5.0),
+                        step_weight: getNumberValue('stepWeight', 0.1),
+                        stock_weight: getNumberValue('stockWeight', 0)
+                    };
+
+                    // Валидация для весового товара
+                    if (!productData.name || !productData.name.trim()) {
+                        this.showAlert('❌ Введите название товара', 'error');
+                        return Promise.reject('Нет названия');
+                    }
+                    if (productData.price_per_kg <= 0) {
+                        this.showAlert('❌ Укажите цену за кг', 'error');
+                        return Promise.reject('Некорректная цена');
+                    }
+                    if (productData.min_weight <= 0) {
+                        this.showAlert('❌ Укажите минимальный вес', 'error');
+                        return Promise.reject('Некорректный вес');
+                    }
+                    if (productData.max_weight <= productData.min_weight) {
+                        this.showAlert('❌ Максимальный вес должен быть больше минимального', 'error');
+                        return Promise.reject('Некорректный вес');
+                    }
+                }
+
+                console.log('📤 Данные для отправки:', productData);
+
+                // Определяем URL и метод
+                let url = '/api/admin/products';
+                let method = 'POST';
+
+                if (this.isEditing && this.editingProductId) {
+                    url = `/api/admin/products?id=${this.editingProductId}`;
+                    method = 'PUT';
+                    console.log(`✏️ Редактирование товара ID: ${this.editingProductId}`);
+                }
+
+                // Отправка запроса с данными товара
+                return fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(productData)
+                });
             })
             .then(response => {
                 console.log('📥 Ответ сервера (статус):', response.status);
@@ -727,7 +770,12 @@ class AdminPanel {
             })
             .catch(error => {
                 console.error('❌ Ошибка сохранения товара:', error);
-                this.showAlert('❌ Ошибка соединения с сервером: ' + error.message, 'error');
+                if (error.message !== 'Нет названия' &&
+                    error.message !== 'Некорректная цена' &&
+                    error.message !== 'Некорректное количество' &&
+                    error.message !== 'Некорректный вес') {
+                    this.showAlert('❌ Ошибка соединения с сервером: ' + error.message, 'error');
+                }
             });
 
         } catch (error) {
@@ -735,6 +783,7 @@ class AdminPanel {
             this.showAlert('❌ Ошибка соединения с сервером: ' + error.message, 'error');
         }
     }
+
     async deleteProduct(productId) {
         if (!confirm('Вы уверены, что хотите удалить этот товар?')) return;
 

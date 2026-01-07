@@ -1066,23 +1066,18 @@
                                 <textarea id="productDescription" rows="4" placeholder="Подробное описание товара..."></textarea>
                             </div>
                         </div>
-
-                        <!-- Изображение -->
                         <div class="form-section">
                             <h3>Изображение товара</h3>
 
-                            <!-- Или URL -->
-                            <div class="form-group">
-                                <label for="imageUrl">URL изображения</label>
-                                <input type="url" id="imageUrl" placeholder="https://example.com/image.jpg">
-                            </div>
-
                             <!-- Секция загрузки файла -->
                             <div class="form-group">
-                                <label>Загрузить с компьютера</label>
+                                <label for="productImageFile">Загрузите изображение *</label>
                                 <div style="margin-top: 10px;">
                                     <input type="file" id="productImageFile" accept="image/*" style="display: block; width: 100%; padding: 10px;">
                                     <div id="filePreview" style="margin-top: 10px;"></div>
+                                    <small style="color: #666; display: block; margin-top: 5px;">
+                                        Поддерживаемые форматы: PNG, JPG, JPEG, GIF, WEBP (максимум 10MB)
+                                    </small>
                                 </div>
                             </div>
                         </div>
