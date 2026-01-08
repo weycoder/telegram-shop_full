@@ -2161,143 +2161,132 @@ class TelegramShop {
                 </div>
                 <div class="delivery-content" style="padding: 12px; max-height: calc(100vh - 140px); overflow-y: auto;">
                     <div class="compact-promo-section" style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; max-width: 100%; box-sizing: border-box;">
-                        <div style="margin-bottom: 15px; background: white; border-radius: 12px; border: 1px solid #e0e0e0; overflow: hidden;">
-                            <div style="padding: 12px 15px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0;">
-                                <div style="display: flex; align-items: center; justify-content: space-between;">
-                                    <span style="font-weight: 600; color: #333; font-size: 14px;">
-                                        <i class="fas fa-ticket-alt" style="color: #667eea; margin-right: 8px;"></i>
-                                        Промокод
-                                    </span>
-                                    ${this.appliedPromoCode ? `
-                                        <button id="removePromoBtnCompact"
-                                                style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 12px; padding: 2px 8px;">
-                                            <i class="fas fa-times"></i> Удалить
-                                        </button>
-                                    ` : ''}
+                        <div style="padding: 0; max-width: 100%; box-sizing: border-box;">
+                            <div style="margin-bottom: 16px; background: white; border-radius: 12px; padding: 12px; border: 1px solid #e0e0e0;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <i class="fas fa-ticket-alt" style="color: #667eea; font-size: 16px;"></i>
+                                    <span style="font-weight: 600; color: #333; font-size: 14px;">Промокод</span>
                                 </div>
-                            </div>
 
-                            <div style="padding: 15px;">
                                 ${!this.appliedPromoCode ? `
-                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="display: flex; gap: 8px;">
                                         <input type="text"
                                                id="compactPromoCodeInput"
                                                placeholder="Введите код"
-                                               style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; min-width: 0;">
+                                               style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; height: 40px; box-sizing: border-box;">
                                         <button id="applyPromoBtnCompact"
-                                                style="padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px; white-space: nowrap;">
+                                                style="width: 60px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px; height: 40px;">
                                             OK
                                         </button>
                                     </div>
                                 ` : `
-                                    <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; border-left: 4px solid #4CAF50;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; padding: 10px 12px; border-radius: 8px;">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-check-circle" style="color: #4CAF50;"></i>
                                             <div>
-                                                <div style="font-weight: 600; color: #2e7d32; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-                                                    <i class="fas fa-check-circle"></i>
-                                                    ${this.appliedPromoCode.code}
-                                                </div>
-                                                <div style="font-size: 12px; color: #388E3C; margin-top: 4px;">
+                                                <div style="font-weight: 600; color: #2e7d32; font-size: 14px;">${this.appliedPromoCode.code}</div>
+                                                <div style="font-size: 12px; color: #388E3C; margin-top: 2px;">
                                                     ${this.getPromoMessage(this.appliedPromoCode, promoDiscount)}
                                                 </div>
                                             </div>
                                         </div>
+                                        <button id="removePromoBtnCompact"
+                                                style="background: none; border: none; color: #dc3545; cursor: pointer; padding: 4px 8px;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
                                     </div>
                                 `}
 
-                                <div id="compactPromoMessage" style="margin-top: 8px; font-size: 13px; min-height: 18px;"></div>
-                            </div>
-                        </div>
-
-                        <!-- ВЫБОР ДОСТАВКИ -->
-                        <div style="margin-bottom: 20px;">
-                            <div style="margin-bottom: 10px; font-weight: 600; color: #333; font-size: 14px; padding: 0 2px;">
-                                <i class="fas fa-truck" style="color: #667eea; margin-right: 8px;"></i>
-                                Способ получения
+                                <div id="compactPromoMessage" style="margin-top: 6px; font-size: 12px; min-height: 16px;"></div>
                             </div>
 
-                            <!-- КУРЬЕР -->
-                            <div id="courierOption"
-                                 class="delivery-card ${this.deliveryData.type === 'courier' ? 'selected' : ''}"
-                                 style="margin-bottom: 10px; padding: 12px; border: ${this.deliveryData.type === 'courier' ? '2px solid #667eea' : '1px solid #e0e0e0'}; border-radius: 10px; background: ${this.deliveryData.type === 'courier' ? '#f8f9ff' : 'white'}; cursor: pointer; transition: all 0.2s;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="width: 36px; height: 36px; background: ${this.deliveryData.type === 'courier' ? '#667eea' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="fas fa-truck" style="color: white; font-size: 16px;"></i>
+                            <!-- СПОСОБ ДОСТАВКИ -->
+                            <div style="margin-bottom: 16px;">
+                                <div style="margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">
+                                    Способ получения
+                                </div>
+
+                                <!-- КУРЬЕР -->
+                                <div id="courierOption"
+                                     style="margin-bottom: 8px; padding: 12px; border: ${this.deliveryData.type === 'courier' ? '2px solid #667eea' : '1px solid #e0e0e0'};
+                                            border-radius: 10px; background: white; cursor: pointer;
+                                            ${this.deliveryData.type === 'courier' ? 'background: #f8f9ff;' : ''}">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'courier' ? '#667eea' : '#6c757d'};
+                                                 border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                                <i class="fas fa-truck" style="color: white; font-size: 18px;"></i>
+                                            </div>
+                                            <div>
+                                                <div style="font-weight: 600; color: #333; font-size: 16px;">Курьер</div>
+                                                <div style="font-size: 13px; color: #666; margin-top: 2px;">До двери, 30-60 мин</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div style="font-weight: 600; color: #333; font-size: 15px;">Курьер</div>
-                                            <div style="font-size: 12px; color: #666;">До двери, 30-60 мин</div>
+                                        <div style="font-weight: 600; color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? '#28a745' : '#dc3545'}; font-size: 16px;">
+                                            ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
                                         </div>
-                                    </div>
-                                    <div style="font-weight: 600; color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? '#28a745' : '#dc3545'}; font-size: 15px;">
-                                        ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
                                     </div>
                                 </div>
 
-                                ${itemsTotal < 1000 && !hasFreeDeliveryPromo && this.deliveryData.type !== 'courier' ? `
-                                    <div style="margin-top: 10px; padding: 8px; background: #fff8e1; border-radius: 6px; font-size: 12px; color: #856404;">
-                                        <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
-                                        Добавьте товаров на ${this.formatPrice(1000 - itemsTotal)} ₽ для бесплатной доставки
+                                <!-- САМОВЫВОЗ -->
+                                <div id="pickupOption"
+                                     style="padding: 12px; border: ${this.deliveryData.type === 'pickup' ? '2px solid #667eea' : '1px solid #e0e0e0'};
+                                            border-radius: 10px; background: white; cursor: pointer;
+                                            ${this.deliveryData.type === 'pickup' ? 'background: #f8f9ff;' : ''}">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'pickup' ? '#667eea' : '#6c757d'};
+                                                 border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                                <i class="fas fa-store" style="color: white; font-size: 18px;"></i>
+                                            </div>
+                                            <div>
+                                                <div style="font-weight: 600; color: #333; font-size: 16px;">Самовывоз</div>
+                                                <div style="font-size: 13px; color: #666; margin-top: 2px;">Из точки, 15-30 мин</div>
+                                            </div>
+                                        </div>
+                                        <div style="font-weight: 600; color: #28a745; font-size: 16px;">
+                                            Бесплатно
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- СУММА -->
+                            <div style="background: white; border-radius: 12px; padding: 16px; border: 1px solid #e0e0e0; margin-bottom: 16px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="color: #666; font-size: 14px;">Товары:</span>
+                                    <span style="font-weight: 500; font-size: 14px;">${this.formatPrice(itemsTotal)} ₽</span>
+                                </div>
+
+                                ${promoDiscount > 0 ? `
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="color: #28a745; font-size: 14px;">Скидка:</span>
+                                        <span style="color: #28a745; font-weight: 500; font-size: 14px;">-${this.formatPrice(promoDiscount)} ₽</span>
                                     </div>
                                 ` : ''}
-                            </div>
 
-                            <!-- САМОВЫВОЗ -->
-                            <div id="pickupOption"
-                                 class="delivery-card ${this.deliveryData.type === 'pickup' ? 'selected' : ''}"
-                                 style="padding: 12px; border: ${this.deliveryData.type === 'pickup' ? '2px solid #667eea' : '1px solid #e0e0e0'}; border-radius: 10px; background: ${this.deliveryData.type === 'pickup' ? '#f8f9ff' : 'white'}; cursor: pointer; transition: all 0.2s;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="width: 36px; height: 36px; background: ${this.deliveryData.type === 'pickup' ? '#667eea' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="fas fa-store" style="color: white; font-size: 16px;"></i>
-                                        </div>
-                                        <div>
-                                            <div style="font-weight: 600; color: #333; font-size: 15px;">Самовывоз</div>
-                                            <div style="font-size: 12px; color: #666;">Из точки, 15-30 мин</div>
-                                        </div>
-                                    </div>
-                                    <div style="font-weight: 600; color: #28a745; font-size: 15px;">
-                                        Бесплатно
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                                    <span style="color: #666; font-size: 14px;">Доставка:</span>
+                                    <span style="color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? '#28a745' : '#dc3545'};
+                                          font-weight: 500; font-size: 14px;">
+                                        ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? 'Бесплатно' : '100 ₽'}
+                                    </span>
+                                </div>
+
+                                <div style="border-top: 1px solid #eee; padding-top: 12px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="font-weight: 600; font-size: 16px;">Итого:</span>
+                                        <span style="font-weight: 700; font-size: 18px; color: #2c3e50;">${this.formatPrice(finalTotal)} ₽</span>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- СУММА -->
-                        <div style="background: white; border-radius: 12px; border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 15px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px;">
-                                <span style="color: #666;">Товары:</span>
-                                <span>${this.formatPrice(itemsTotal)} ₽</span>
-                            </div>
-
-                            ${promoDiscount > 0 ? `
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #28a745;">
-                                    <span>Скидка:</span>
-                                    <span>-${this.formatPrice(promoDiscount)} ₽</span>
-                                </div>
-                            ` : ''}
-
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px;">
-                                <span style="color: #666;">Доставка:</span>
-                                <span style="color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? '#28a745' : '#dc3545'}">
-                                    ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? 'Бесплатно' : '100 ₽'}
-                                </span>
-                            </div>
-
-                            <div style="border-top: 1px solid #eee; padding-top: 12px;">
-                                <div style="display: flex; justify-content: space-between; font-weight: bold;">
-                                    <span style="font-size: 16px;">Итого:</span>
-                                    <span style="font-size: 18px; color: #2c3e50;">${this.formatPrice(finalTotal)} ₽</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- КНОПКА НАЗАД -->
-                        <div style="padding: 15px 0; border-top: 1px solid #eee;">
+                            <!-- КНОПКА НАЗАД -->
                             <button onclick="shop.returnToCartFromDelivery()"
-                                    style="width: 100%; padding: 14px; background: #f8f9fa; color: #333; border: 1px solid #dee2e6; border-radius: 10px; cursor: pointer; font-weight: 500; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <i class="fas fa-arrow-left"></i>
+                                    style="width: 100%; padding: 14px; background: white; color: #333; border: 1px solid #ddd;
+                                           border-radius: 10px; cursor: pointer; font-weight: 500; font-size: 15px;
+                                           display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <i class="fas fa-arrow-left" style="font-size: 16px;"></i>
                                 <span>Назад в корзину</span>
                             </button>
                         </div>
@@ -2305,18 +2294,24 @@ class TelegramShop {
         `;
         setTimeout(() => {
             // Курьер
-            const courierOption = document.getElementById('courierOption');
-            if (courierOption) {
-                courierOption.addEventListener('click', () => {
+            const courierBtn = document.getElementById('courierOption');
+            const pickupBtn = document.getElementById('pickupOption');
+
+            if (courierBtn) {
+                courierBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🚚 Курьер выбран');
                     this.deliveryData.type = 'courier';
                     this.showDeliverySelection();
                 });
             }
 
-            // Самовывоз
-            const pickupOption = document.getElementById('pickupOption');
-            if (pickupOption) {
-                pickupOption.addEventListener('click', () => {
+            if (pickupBtn) {
+                pickupBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🏪 Самовывоз выбран');
                     this.deliveryData.type = 'pickup';
                     this.showDeliverySelection();
                 });
@@ -2354,7 +2349,9 @@ class TelegramShop {
             if (closeBtn) {
                 closeBtn.addEventListener('click', () => this.closeCart());
             }
-        }, 50);
+
+            console.log('✅ Обработчики назначены');
+        }, 100);
 
 
         // Назначаем обработчики
