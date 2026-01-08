@@ -2118,6 +2118,8 @@ class TelegramShop {
     }
 
     async showDeliverySelection() {
+        console.log('🔄 showDeliverySelection() called');
+        console.log('📊 deliveryData.type в начале метода:', this.deliveryData.type); // <-- ДОБАВЬТЕ
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
@@ -2300,7 +2302,18 @@ class TelegramShop {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('🚚 Курьер выбран');
+
+                    // Визуальная обратная связь
+                    courierBtn.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        courierBtn.style.transform = '';
+                    }, 100);
+
+                    // Сохраняем выбор
                     this.deliveryData.type = 'courier';
+                    console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
+
+                    // Перезагружаем отображение
                     this.showDeliverySelection();
                 });
             }
@@ -2310,7 +2323,18 @@ class TelegramShop {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('🏪 Самовывоз выбран');
+
+                    // Визуальная обратная связь
+                    pickupBtn.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        pickupBtn.style.transform = '';
+                    }, 100);
+
+                    // Сохраняем выбор
                     this.deliveryData.type = 'pickup';
+                    console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
+
+                    // Перезагружаем отображение
                     this.showDeliverySelection();
                 });
             }
