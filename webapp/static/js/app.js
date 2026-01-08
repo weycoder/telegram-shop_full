@@ -2290,6 +2290,8 @@ class TelegramShop {
                                 <span>Назад в корзину</span>
                             </button>
                         </div>
+                    </div>
+                </div>
             </div>
         `;
         setTimeout(() => {
