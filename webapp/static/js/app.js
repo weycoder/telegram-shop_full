@@ -1986,7 +1986,7 @@ class TelegramShop {
                         <div class="form-group">
                             <label for="cashAmount">
                                 <i class="fas fa-money-bill"></i>
-                                Вы даёте нам (₽):
+                                Сколько дал клиент (₽):
                             </label>
                             <div class="cash-input-group">
                                 <button class="cash-btn minus" onclick="shop.adjustCashAmount(-100)">
@@ -2017,7 +2017,7 @@ class TelegramShop {
                             </div>
                         </div>
 
-                        <div class="change-result" id="changeResult">
+                        <div class="change-result" id="changeResult" style="display: none;">
                             <div class="change-header">
                                 <i class="fas fa-calculator"></i>
                                 <h4>Сдача:</h4>
@@ -2086,7 +2086,11 @@ class TelegramShop {
         const changeBreakdown = document.getElementById('changeBreakdown');
         const confirmBtn = document.getElementById('confirmCashPayment');
 
-        if (!totalElement || !cashInput || !changeResult) return;
+        // Проверяем наличие элементов
+        if (!totalElement || !cashInput || !changeResult || !changeAmount || !confirmBtn) {
+            console.error('Не найдены необходимые элементы DOM');
+            return;
+        }
 
         // Получаем сумму заказа
         const totalAmountText = totalElement.textContent.replace(/\s/g, '').replace('₽', '');
@@ -2105,11 +2109,13 @@ class TelegramShop {
             if (change > 0) {
                 // Рассчитываем купюры для сдачи
                 const breakdown = this.calculateCashBreakdown(change);
-                changeBreakdown.innerHTML = breakdown;
-                changeNotes.style.display = 'flex';
+                if (changeBreakdown) {
+                    changeBreakdown.innerHTML = breakdown;
+                }
             } else {
-                changeBreakdown.innerHTML = '<div class="no-change">Сдачи не требуется</div>';
-                changeNotes.style.display = 'none';
+                if (changeBreakdown) {
+                    changeBreakdown.innerHTML = '<div class="no-change">Сдачи не требуется</div>';
+                }
             }
 
             // Активируем кнопку подтверждения
