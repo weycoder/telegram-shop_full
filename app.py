@@ -1518,9 +1518,9 @@ def get_available_orders():
                                              o.recipient_name,
                                              o.phone_number,
                                              o.created_at,
-                                             o.payment_method,   # ← ДОБАВИТЬ
-                                             o.cash_received,    # ← ДОБАВИТЬ
-                                             o.cash_change,      # ← ДОБАВИТЬ
+                                             o.payment_method,   
+                                             o.cash_received,    
+                                             o.cash_change,    
                                              (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
                                       FROM orders o
                                                LEFT JOIN order_assignments a ON o.id = a.order_id
@@ -1664,12 +1664,12 @@ def get_courier_orders():
                                           o.username,
                                           o.items,
                                           o.total_price,
-                                          o.delivery_cost,  # ← ДОБАВИТЬ
+                                          o.delivery_cost,  
                                           o.status as order_status,
                                           o.delivery_type,
                                           o.delivery_address,
                                           o.pickup_point,
-                                          o.payment_method,  # ← ДОБАВИТЬ
+                                          o.payment_method, 
                                           o.recipient_name,
                                           o.phone_number,
                                           o.created_at,
@@ -1679,9 +1679,9 @@ def get_courier_orders():
                                           a.delivered_at,
                                           a.photo_proof,
                                           a.delivery_notes,
-                                          o.cash_received,  # ← ДОБАВИТЬ
-                                          o.cash_change,    # ← ДОБАВИТЬ
-                                          o.cash_details    # ← ДОБАВИТЬ
+                                          o.cash_received, 
+                                          o.cash_change,   
+                                          o.cash_details   
                                    FROM orders o
                                             JOIN order_assignments a ON o.id = a.order_id
                                    WHERE a.courier_id = ?
@@ -1697,12 +1697,12 @@ def get_courier_orders():
                                              o.username,
                                              o.items,
                                              o.total_price,
-                                             o.delivery_cost,  # ← ДОБАВИТЬ
+                                             o.delivery_cost,  
                                              o.status as order_status,
                                              o.delivery_type,
                                              o.delivery_address,
                                              o.pickup_point,
-                                             o.payment_method,  # ← ДОБАВИТЬ
+                                             o.payment_method,  
                                              o.recipient_name,
                                              o.phone_number,
                                              o.created_at,
@@ -1711,9 +1711,9 @@ def get_courier_orders():
                                              a.delivered_at,
                                              a.photo_proof,
                                              a.delivery_notes,
-                                             o.cash_received,  # ← ДОБАВИТЬ
-                                             o.cash_change,    # ← ДОБАВИТЬ
-                                             o.cash_details    # ← ДОБАВИТЬ
+                                             o.cash_received, 
+                                             o.cash_change,   
+                                             o.cash_details 
                                       FROM orders o
                                                JOIN order_assignments a ON o.id = a.order_id
                                       WHERE a.courier_id = ?
@@ -1728,19 +1728,19 @@ def get_courier_orders():
                                          o.username,
                                          o.items,
                                          o.total_price,
-                                         o.delivery_cost,  # ← ДОБАВИТЬ
+                                         o.delivery_cost,  
                                          o.status as order_status,
                                          o.delivery_type,
                                          o.delivery_address,
                                          o.pickup_point,
-                                         o.payment_method,  # ← ДОБАВИТЬ
+                                         o.payment_method, 
                                          o.recipient_name,
                                          o.phone_number,
                                          o.created_at,
                                          a.status as assignment_status,
-                                         o.cash_received,  # ← ДОБАВИТЬ
-                                         o.cash_change,    # ← ДОБАВИТЬ
-                                         o.cash_details    # ← ДОБАВИТЬ
+                                         o.cash_received,  
+                                         o.cash_change,   
+                                         o.cash_details   
                                   FROM orders o
                                            JOIN order_assignments a ON o.id = a.order_id
                                   WHERE a.courier_id = ?
