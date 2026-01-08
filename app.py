@@ -8,6 +8,7 @@ import telegram
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 import base64
+import math
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -1335,7 +1336,8 @@ def api_create_order():
     print(f"📦 items: {len(data.get('items', []))} товаров")
     print(f"💰 total: {data.get('total', 0)} руб. (тип: {type(data.get('total'))})")
     print(f"🚚 delivery_type: {data.get('delivery_type')}")
-    print(f"💵 cash_payment: {data.get('cash_payment')}")
+    print(f"💵 cash_payment: {data.get('cash_payment', {})}")
+    print(f"💳 payment_method: {data.get('payment_method', 'cash')}")
     print("=" * 50)
 
     db = get_db()
@@ -1344,14 +1346,21 @@ def api_create_order():
         payment_method = data.get('payment_method', 'cash')
         delivery_address = data.get('delivery_address', '{}')
 
-        # Получаем данные о наличной оплате
-        cash_payment = data.get('cash_payment', {})
-        cash_received = cash_payment.get('received')
-        cash_change = cash_payment.get('change')
-        cash_details = json.dumps(cash_payment) if cash_payment else None
+        # Получаем данные о наличной оплате - ИСПРАВЛЕНО
+        cash_payment = data.get('cash_payment', {}) or {}
+        cash_received = cash_payment.get('received', 0)
+        cash_change = cash_payment.get('change', 0)
+        cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
+
+        # Преобразуем данные о наличных в числа
+        try:
+            cash_received = float(cash_received) if cash_received not in [None, '', 0] else 0.0
+            cash_change = float(cash_change) if cash_change not in [None, '', 0] else 0.0
+        except (ValueError, TypeError):
+            cash_received = 0.0
+            cash_change = 0.0
 
         # ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
-        # ОБЯЗАТЕЛЬНО преобразуем в float
         try:
             order_total = float(data.get('total', 0))
         except (ValueError, TypeError):
@@ -1363,18 +1372,26 @@ def api_create_order():
         if delivery_type == 'courier':
             print(f"💰 Проверяем доставку: заказ {order_total} руб, тип {type(order_total)}")
 
-            if order_total < 1000.0:  # Явно указываем float
+            if order_total < 1000.0:
                 delivery_cost = 100.0
                 print(f"💰 Доставка платная: +{delivery_cost} руб (сумма заказа: {order_total} руб)")
             else:
                 print(f"✅ Доставка бесплатная (сумма заказа: {order_total} руб)")
 
-        # Общая сумма заказа с учетом доставки
         total_with_delivery = order_total + delivery_cost
-        print(f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} "
-              f"руб + доставка: {delivery_cost} руб)")
+        print(
+            f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
 
-        # ИСПРАВЛЕННАЯ ОБРАБОТКА АДРЕСА
+        # Если оплата наличными и нет данных о полученной сумме, рассчитываем ее
+        if payment_method == 'cash' and cash_received == 0:
+            # Округляем до ближайших 500 рублей
+            cash_received = math.ceil(total_with_delivery / 500) * 500
+            cash_change = cash_received - total_with_delivery
+            print(f"💵 Авторасчет наличных: получено={cash_received}, сдача={cash_change}")
+
+        print(f"💵 Наличные: получено={cash_received} руб, сдача={cash_change} руб")
+
+        # ОБРАБОТКА АДРЕСА
         address_obj = {}
         if isinstance(delivery_address, str):
             try:
@@ -1454,7 +1471,7 @@ def api_create_order():
                                 delivery_type,
                                 json.dumps(address_obj if address_obj else {}, ensure_ascii=False),
                                 data.get('pickup_point'),
-                                'cash',
+                                payment_method,
                                 recipient_name,
                                 phone_number,
                                 cash_received,
@@ -1485,6 +1502,8 @@ def api_create_order():
         db.close()
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
+        print(f"💰 Сумма: {total_with_delivery} руб")
+        print(f"💵 Наличные: получено {cash_received} руб, сдача {cash_change} руб")
         print("=" * 50)
         return jsonify({
             'success': True,
