@@ -1989,7 +1989,10 @@ def get_order_details(order_id):
                                   a.photo_proof,
                                   a.delivery_notes,
                                   c.full_name as courier_name,
-                                  c.phone     as courier_phone
+                                  c.phone     as courier_phone,
+                                  o.cash_received,
+                                  o.cash_change,      
+                                  o.cash_details     
                            FROM orders o
                                     LEFT JOIN order_assignments a ON o.id = a.order_id
                                     LEFT JOIN couriers c ON a.courier_id = c.id

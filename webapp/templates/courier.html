@@ -1130,6 +1130,14 @@
                     const order = data.order;
                     const items = order.items_list || [];
 
+                    // Информация о наличной оплате
+                    const total = parseFloat(order.total_price) || 0;
+                    const deliveryCost = parseFloat(order.delivery_cost) || 0;
+                    const totalWithDelivery = total + deliveryCost;
+                    const cashReceived = parseFloat(order.cash_received) || 0;
+                    const cashChange = parseFloat(order.cash_change) || 0;
+                    const cashToPay = totalWithDelivery;
+
                     // Извлекаем информацию о доставке
                     const deliveryInfo = extractDeliveryInfo(order);
 
@@ -1139,15 +1147,76 @@
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                 <p><strong>Номер заказа:</strong> #${order.id}</p>
                                 <p><strong>Статус заказа:</strong> ${getStatusText(order.status || order.assignment_status)}</p>
-                                <p><strong>Сумма товаров:</strong> ${order.total_price || 0} ₽</p>
-                                <p><strong>Стоимость доставки:</strong> ${order.delivery_cost ? order.delivery_cost + ' ₽' : 'Бесплатно'}</p>
-                                <p><strong>Итого:</strong> ${(parseFloat(order.total_price || 0) + parseFloat(order.delivery_cost || 0))} ₽</p>
+                                <p><strong>Сумма товаров:</strong> ${formatPrice(total)} ₽</p>
+                                <p><strong>Стоимость доставки:</strong> ${deliveryCost > 0 ? deliveryCost + ' ₽' : 'Бесплатно'}</p>
+                                <p><strong>Итого к оплате:</strong> <strong style="font-size: 16px;">${formatPrice(totalWithDelivery)} ₽</strong></p>
                                 <p><strong>Тип доставки:</strong> ${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</p>
-                                <p><strong>Способ оплата:</strong> ${order.payment_method === 'cash' ? 'Наличные' : 'Перевод'}</p>
+                                <p><strong>Способ оплата:</strong> ${order.payment_method === 'cash' ? 'Наличные' :
+                                                                      order.payment_method === 'transfer' ? 'Перевод курьеру' :
+                                                                      order.payment_method === 'terminal' ? 'Терминал' : order.payment_method}</p>
                                 <p><strong>Дата создания:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
                             </div>
                         </div>
                     `;
+
+                    // Информация о наличной оплате (если есть)
+                    if (order.payment_method === 'cash') {
+                        if (cashReceived > 0 || cashChange > 0 || order.cash_details) {
+                            let cashDetailsHtml = `
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin-bottom: 15px;">💵 Наличная оплата</h3>
+                                    <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold;">
+                                            <span>Сумма к оплате:</span>
+                                            <span>${formatPrice(cashToPay)} ₽</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                            <span>Получено от клиента:</span>
+                                            <span style="color: #27ae60; font-weight: bold;">${formatPrice(cashReceived)} ₽</span>
+                                        </div>
+                            `;
+
+                            if (cashChange > 0) {
+                                cashDetailsHtml += `
+                                    <div style="display: flex; justify-content: space-between; background: #dc3545; color: white; padding: 10px; border-radius: 6px; margin-top: 10px; font-weight: bold;">
+                                        <span>⚠️ Сдача клиенту:</span>
+                                        <span>${formatPrice(cashChange)} ₽</span>
+                                    </div>
+                                    <div style="font-size: 12px; color: #856404; margin-top: 8px; text-align: center;">
+                                        <i class="fas fa-exclamation-triangle"></i> <strong>ВНИМАНИЕ: Подготовьте сдачу заранее!</strong>
+                                    </div>
+                                `;
+                            } else if (cashChange === 0 && cashReceived >= cashToPay) {
+                                cashDetailsHtml += `
+                                    <div style="display: flex; justify-content: space-between; background: #28a745; color: white; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                                        <span>✅ Без сдачи:</span>
+                                        <span>Сдачи не требуется</span>
+                                    </div>
+                                `;
+                            } else if (cashReceived === 0) {
+                                cashDetailsHtml += `
+                                    <div style="display: flex; justify-content: space-between; background: #6c757d; color: white; padding: 10px; border-radius: 6px; margin-top: 10px;">
+                                        <span>⚠️ Сумма не указана:</span>
+                                        <span>Уточните сумму у клиента</span>
+                                    </div>
+                                `;
+                            }
+
+                            cashDetailsHtml += `</div></div>`;
+                            html += cashDetailsHtml;
+                        } else {
+                            html += `
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin-bottom: 15px;">💵 Наличная оплата</h3>
+                                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                        <div style="text-align: center; color: #6c757d;">
+                                            <i class="fas fa-info-circle"></i> Информация о наличной оплате будет уточнена при доставке
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
 
                     // Информация о клиенте
                     html += `
@@ -1173,26 +1242,35 @@
                         `;
                     }
 
+                    // Состав заказа
                     if (items.length > 0) {
+                        let itemsTotal = 0;
                         html += `
                             <div style="margin-bottom: 20px;">
                                 <h3 style="margin-bottom: 15px;">🛍️ Состав заказа</h3>
                                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                                    ${items.map(item => `
-                                        <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6;">
-                                            <div style="display: flex; justify-content: space-between;">
-                                                <div>
-                                                    <strong>${item.name}</strong><br>
-                                                    <small>${item.quantity} × ${item.price} ₽</small>
+                                    ${items.map(item => {
+                                        const itemPrice = parseFloat(item.price) || 0;
+                                        const itemQuantity = parseInt(item.quantity) || 1;
+                                        const itemTotal = itemPrice * itemQuantity;
+                                        itemsTotal += itemTotal;
+
+                                        return `
+                                            <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6;">
+                                                <div style="display: flex; justify-content: space-between;">
+                                                    <div>
+                                                        <strong>${item.name || 'Товар'}</strong><br>
+                                                        <small>${itemQuantity} × ${formatPrice(itemPrice)} ₽</small>
+                                                    </div>
+                                                    <div style="font-weight: bold;">${formatPrice(itemTotal)} ₽</div>
                                                 </div>
-                                                <div style="font-weight: bold;">${item.quantity * item.price} ₽</div>
                                             </div>
-                                        </div>
-                                    `).join('')}
+                                        `;
+                                    }).join('')}
                                     <div style="margin-top: 10px; padding-top: 10px; border-top: 2px solid #ddd;">
                                         <div style="display: flex; justify-content: space-between; font-weight: bold;">
                                             <div>Итого:</div>
-                                            <div>${order.total_price || 0} ₽</div>
+                                            <div>${formatPrice(itemsTotal)} ₽</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1200,6 +1278,7 @@
                         `;
                     }
 
+                    // Примечания курьера
                     if (order.delivery_notes) {
                         html += `
                             <div style="margin-bottom: 20px;">
@@ -1211,6 +1290,7 @@
                         `;
                     }
 
+                    // Фото подтверждения
                     if (order.photo_proof) {
                         html += `
                             <div style="margin-bottom: 20px;">
@@ -1222,14 +1302,36 @@
                         `;
                     }
 
+                    // Дополнительная информация о курьере (если есть)
+                    if (order.courier_name || order.courier_phone) {
+                        html += `
+                            <div style="margin-bottom: 20px;">
+                                <h3 style="margin-bottom: 15px;">🚚 Информация о курьере</h3>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    ${order.courier_name ? `<p><strong>Курьер:</strong> ${order.courier_name}</p>` : ''}
+                                    ${order.courier_phone ? `<p><strong>Телефон курьера:</strong> ${order.courier_phone}</p>` : ''}
+                                    ${order.assigned_at ? `<p><strong>Назначен:</strong> ${new Date(order.assigned_at).toLocaleString('ru-RU')}</p>` : ''}
+                                    ${order.delivered_at ? `<p><strong>Доставлен:</strong> ${new Date(order.delivered_at).toLocaleString('ru-RU')}</p>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+
                     document.getElementById('modal-order-id').textContent = orderId;
                     document.getElementById('modal-content').innerHTML = html;
                     document.getElementById('order-modal').style.display = 'flex';
+                } else {
+                    alert('Ошибка загрузки деталей заказа: ' + (data.error || 'Неизвестная ошибка'));
                 }
             } catch (error) {
                 console.error('Error loading order details:', error);
-                alert('Ошибка загрузки деталей заказа');
+                alert('Не удалось загрузить детали заказа');
             }
+        }
+
+                // Функция для форматирования цены
+        function formatPrice(price) {
+            return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
         }
 
         // Обновить статус заказа
