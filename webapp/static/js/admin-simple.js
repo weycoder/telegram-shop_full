@@ -1607,13 +1607,27 @@ class AdminPanel {
     async loadPromoCodes() {
         console.log('🎟️ Загрузка промокодов...');
         try {
-            const response = await fetch('/api/admin/promo-codes');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const response = await fetch('/api/promo-codes');  // Используйте правильный эндпоинт
 
-            this.promo_codes = await response.json();
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // Проверяем структуру ответа
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            this.promo_codes = Array.isArray(data) ? data : [];
+            console.log(`✅ Загружено ${this.promo_codes.length} промокодов`);
+
             this.renderPromoCodes();
+
         } catch (error) {
             console.error('❌ Ошибка загрузки промокодов:', error);
+            this.showAlert('❌ Ошибка загрузки промокодов: ' + error.message, 'error');
             this.promo_codes = [];
             this.renderPromoCodes();
         }
@@ -2601,36 +2615,42 @@ class AdminPanel {
     async handlePromoCodeSubmit(e) {
         e.preventDefault();
 
-        const formData = {
-            code: document.getElementById('promoCode').value.toUpperCase(),
-            discount_type: document.getElementById('promoType').value,
-            value: parseFloat(document.getElementById('promoValue').value) || 0,
-            usage_limit: parseInt(document.getElementById('usageLimit').value) || null,
-            min_order_amount: parseFloat(document.getElementById('minOrderAmountPromo').value) || 0,
-            start_date: document.getElementById('promoStartDate').value || null,
-            end_date: document.getElementById('promoEndDate').value || null,
-            is_active: document.getElementById('isActivePromo').value === '1',
-            one_per_customer: document.getElementById('onePerCustomer').value === '1',
-            exclude_sale_items: document.getElementById('excludeSaleItems').value === '1'
-        };
-
-        // Валидация
-        if (!formData.code) {
-            this.showAlert('❌ Введите код промокода', 'error');
-            return;
-        }
-
-        if (!formData.discount_type) {
-            this.showAlert('❌ Выберите тип промокода', 'error');
-            return;
-        }
-
-        if ((formData.discount_type === 'percentage' || formData.discount_type === 'fixed') && !formData.value) {
-            this.showAlert('❌ Укажите размер скидки', 'error');
-            return;
-        }
+        console.log('📝 Отправка формы промокода...');
 
         try {
+            // Собираем данные формы
+            const formData = {
+                code: document.getElementById('promoCode').value.trim().toUpperCase(),
+                discount_type: document.getElementById('promoType').value,
+                value: document.getElementById('promoValue') ? parseFloat(document.getElementById('promoValue').value) || 0 : 0,
+                usage_limit: document.getElementById('usageLimit') ? parseInt(document.getElementById('usageLimit').value) || null : null,
+                min_order_amount: document.getElementById('minOrderAmountPromo') ? parseFloat(document.getElementById('minOrderAmountPromo').value) || 0 : 0,
+                start_date: document.getElementById('promoStartDate').value || null,
+                end_date: document.getElementById('promoEndDate').value || null,
+                is_active: document.getElementById('isActivePromo') ? document.getElementById('isActivePromo').value === '1' : true,
+                one_per_customer: document.getElementById('onePerCustomer') ? document.getElementById('onePerCustomer').value === '1' : false,
+                exclude_sale_items: document.getElementById('excludeSaleItems') ? document.getElementById('excludeSaleItems').value === '1' : false
+            };
+
+            console.log('📤 Данные промокода:', formData);
+
+            // Валидация
+            if (!formData.code) {
+                this.showAlert('❌ Введите код промокода', 'error');
+                return;
+            }
+
+            if (!formData.discount_type) {
+                this.showAlert('❌ Выберите тип промокода', 'error');
+                return;
+            }
+
+            if ((formData.discount_type === 'percentage' || formData.discount_type === 'fixed') && formData.value <= 0) {
+                this.showAlert('❌ Укажите размер скидки', 'error');
+                return;
+            }
+
+            // Отправка запроса
             const response = await fetch('/api/admin/promo-codes', {
                 method: 'POST',
                 headers: {
@@ -2641,15 +2661,21 @@ class AdminPanel {
 
             const result = await response.json();
 
+            console.log('📥 Ответ сервера:', result);
+
             if (result.success) {
                 this.showAlert('✅ Промокод успешно создан', 'success');
-                await this.loadPromoCodes();
+                // Возвращаемся к списку
+                setTimeout(() => {
+                    this.loadPromoCodes();
+                }, 1000);
             } else {
-                this.showAlert('❌ Ошибка: ' + (result.error || ''), 'error');
+                this.showAlert('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
             }
+
         } catch (error) {
             console.error('❌ Ошибка создания промокода:', error);
-            this.showAlert('❌ Ошибка соединения с сервером', 'error');
+            this.showAlert('❌ Ошибка соединения с сервером: ' + error.message, 'error');
         }
     }
 

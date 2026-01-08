@@ -2131,12 +2131,12 @@ class TelegramShop {
         if (!cartOverlay) return;
 
         // Рассчитываем стоимость
-        const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        let deliveryCost = 0;
+        const itemsTotal = this.cart.reduce((sum, item) => {
+            const priceToShow = item.discounted_price || item.price;
+            return sum + (priceToShow * item.quantity);
+        }, 0);
 
-        if (itemsTotal < 1000) {
-            deliveryCost = 100;
-        }
+        let deliveryCost = 0;
 
         cartOverlay.innerHTML = `
             <div class="cart-modal" style="padding: 0;">
@@ -2148,6 +2148,50 @@ class TelegramShop {
                 </div>
 
                 <div class="delivery-content" style="padding: 20px; max-height: calc(100vh - 180px); overflow-y: auto;">
+
+                    <!-- БЛОК ПРОМОКОДА ДЛЯ ПОЛЬЗОВАТЕЛЯ -->
+                    <div class="user-promo-section" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 1px solid #dee2e6;">
+                        <h3 style="margin-bottom: 10px; color: #333; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-ticket-alt" style="color: #667eea;"></i>
+                            У вас есть промокод?
+                        </h3>
+
+                        <div style="margin-bottom: 10px;">
+                            <div class="promo-input-group" style="display: flex; gap: 10px;">
+                                <input type="text"
+                                       id="userPromoCodeInput"
+                                       placeholder="Введите промокод"
+                                       style="flex: 1; padding: 12px 15px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px;">
+                                <button id="applyUserPromoBtn"
+                                        style="padding: 12px 20px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap;">
+                                    <i class="fas fa-check"></i> Применить
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="userPromoMessage" style="font-size: 14px; min-height: 24px;"></div>
+
+                        ${this.appliedPromoCode ? `
+                            <div class="promo-applied-info" style="margin-top: 10px; padding: 10px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4CAF50;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <strong style="color: #2e7d32;">
+                                            <i class="fas fa-check-circle"></i> Промокод "${this.appliedPromoCode.code}" применен
+                                        </strong>
+                                        <div style="font-size: 13px; margin-top: 5px; color: #388E3C;">
+                                            ${this.getPromoMessage(this.appliedPromoCode, this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode))}
+                                        </div>
+                                    </div>
+                                    <button id="removeUserPromoBtn"
+                                            style="background: none; border: none; color: #666; cursor: pointer; font-size: 14px; padding: 5px;">
+                                        <i class="fas fa-times"></i> Удалить
+                                    </button>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <!-- КОНЕЦ БЛОКА ПРОМОКОДА -->
+
                     <!-- Способ 1: Курьер -->
                     <div class="delivery-method active" id="courierOption">
                         <div class="method-check">
@@ -2186,7 +2230,7 @@ class TelegramShop {
                         <i class="fas fa-chevron-right method-arrow"></i>
                     </div>
 
-                    <!-- Информация о заказе (компактная) -->
+                    <!-- Информация о заказе -->
                     <div class="order-summary-card">
                         <div class="summary-header">
                             <i class="fas fa-receipt"></i>
@@ -2197,6 +2241,16 @@ class TelegramShop {
                                 <span>Товары:</span>
                                 <span class="item-value">${this.formatPrice(itemsTotal)} ₽</span>
                             </div>
+
+                            ${this.appliedPromoCode ? `
+                                <div class="summary-item" style="color: #28a745;">
+                                    <span>Скидка по промокоду:</span>
+                                    <span class="item-value" style="color: #28a745;">
+                                        -${this.formatPrice(this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode))} ₽
+                                    </span>
+                                </div>
+                            ` : ''}
+
                             <div class="summary-item">
                                 <span>Доставка:</span>
                                 <span class="item-value ${itemsTotal >= 1000 ? 'value-free' : ''}">
@@ -2206,20 +2260,10 @@ class TelegramShop {
                         </div>
                         <div class="summary-total">
                             <span>Итого:</span>
-                            <span class="total-value">${this.formatPrice(itemsTotal + deliveryCost)} ₽</span>
+                            <span class="total-value">
+                                ${this.formatPrice(itemsTotal + deliveryCost - (this.appliedPromoCode ? this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0))} ₽
+                            </span>
                         </div>
-
-                        ${itemsTotal < 1000 ? `
-                            <div class="free-shipping-hint">
-                                <i class="fas fa-info-circle"></i>
-                                Добавьте товаров на ${this.formatPrice(1000 - itemsTotal)} ₽ для бесплатной доставки
-                            </div>
-                        ` : `
-                            <div class="free-shipping-badge">
-                                <i class="fas fa-check-circle"></i>
-                                Ура! Доставка бесплатная
-                            </div>
-                        `}
                     </div>
                 </div>
 
@@ -2231,27 +2275,183 @@ class TelegramShop {
             </div>
         `;
 
-                // Назначаем обработчики событий
+        // Назначаем обработчики для промокода
+        document.getElementById('applyUserPromoBtn').addEventListener('click', () => {
+            this.applyUserPromoCode();
+        });
+
+        document.getElementById('userPromoCodeInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.applyUserPromoCode();
+            }
+        });
+
+        if (this.appliedPromoCode) {
+            document.getElementById('removeUserPromoBtn').addEventListener('click', () => {
+                this.removeUserPromoCode();
+            });
+        }
+
+        // Остальные обработчики доставки...
         document.getElementById('courierOption').addEventListener('click', () => {
-            // Добавляем класс active
             document.querySelectorAll('.delivery-method').forEach(m => m.classList.remove('active'));
             document.getElementById('courierOption').classList.add('active');
-
-            // Вызываем метод выбора доставки через 100мс
             setTimeout(() => this.selectDeliveryType('courier'), 100);
         });
 
         document.getElementById('pickupOption').addEventListener('click', () => {
-            // Добавляем класс active
             document.querySelectorAll('.delivery-method').forEach(m => m.classList.remove('active'));
             document.getElementById('pickupOption').classList.add('active');
-
-            // Вызываем метод выбора доставки через 100мс
             setTimeout(() => this.selectDeliveryType('pickup'), 100);
         });
 
         document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
+    }
 
+
+    removeUserPromoCode() {
+        this.appliedPromoCode = null;
+        console.log('🗑️ Пользователь удалил промокод');
+
+        // Обновляем отображение
+        this.showUserPromoMessage('🗑️ Промокод удален', 'info');
+
+        setTimeout(() => {
+            this.showDeliverySelection();
+        }, 500);
+    }
+
+    showUserPromoMessage(message, type = 'info') {
+        const messageDiv = document.getElementById('userPromoMessage');
+        if (!messageDiv) return;
+
+        messageDiv.innerHTML = message;
+        messageDiv.className = 'promo-message';
+
+        // Добавляем классы для стилизации
+        if (type === 'error') {
+            messageDiv.style.color = '#dc3545';
+            messageDiv.style.backgroundColor = '#f8d7da';
+            messageDiv.style.border = '1px solid #f5c6cb';
+        } else if (type === 'success') {
+            messageDiv.style.color = '#155724';
+            messageDiv.style.backgroundColor = '#d4edda';
+            messageDiv.style.border = '1px solid #c3e6cb';
+        } else if (type === 'loading') {
+            messageDiv.style.color = '#0c5460';
+            messageDiv.style.backgroundColor = '#d1ecf1';
+            messageDiv.style.border = '1px solid #bee5eb';
+        } else if (type === 'info') {
+            messageDiv.style.color = '#0c5460';
+            messageDiv.style.backgroundColor = '#d1ecf1';
+            messageDiv.style.border = '1px solid #bee5eb';
+        }
+
+        // Добавляем паддинг
+        messageDiv.style.padding = '10px 15px';
+        messageDiv.style.borderRadius = '6px';
+        messageDiv.style.marginTop = '10px';
+        messageDiv.style.fontSize = '14px';
+    }
+
+    async applyUserPromoCode() {
+        const input = document.getElementById('userPromoCodeInput');
+        const messageDiv = document.getElementById('userPromoMessage');
+        const code = input?.value.trim().toUpperCase();
+
+        if (!code) {
+            this.showUserPromoMessage('❌ Введите промокод', 'error');
+            return;
+        }
+
+        try {
+            console.log(`🎟️ Пользователь проверяет промокод: ${code}`);
+
+            // Показываем загрузку
+            this.showUserPromoMessage('<i class="fas fa-spinner fa-spin"></i> Проверка промокода...', 'loading');
+
+            const response = await fetch('/api/check-promo-code', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ code: code })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Проверяем минимальную сумму заказа
+                const itemsTotal = this.cart.reduce((sum, item) => {
+                    const priceToShow = item.discounted_price || item.price;
+                    return sum + (priceToShow * item.quantity);
+                }, 0);
+
+                const promo = result.promo_code;
+
+                // Проверка минимальной суммы
+                if (promo.min_order_amount > 0 && itemsTotal < promo.min_order_amount) {
+                    this.showUserPromoMessage(
+                        `❌ Минимальная сумма заказа для этого промокода: ${this.formatPrice(promo.min_order_amount)} ₽`,
+                        'error'
+                    );
+                    return;
+                }
+
+                // Проверка срока действия
+                if (promo.end_date) {
+                    const endDate = new Date(promo.end_date);
+                    const now = new Date();
+                    if (endDate < now) {
+                        this.showUserPromoMessage('❌ Срок действия промокода истек', 'error');
+                        return;
+                    }
+                }
+
+                // Проверка лимита использований
+                if (promo.usage_limit && promo.used_count >= promo.usage_limit) {
+                    this.showUserPromoMessage('❌ Промокод уже использован максимальное количество раз', 'error');
+                    return;
+                }
+
+                // Проверка "один на пользователя"
+                if (promo.one_per_customer) {
+                    // TODO: Проверка, использовал ли пользователь уже этот промокод
+                    console.log('⚠️ Проверка one_per_customer не реализована');
+                }
+
+                // Сохраняем промокод
+                this.appliedPromoCode = {
+                    ...promo,
+                    code: code
+                };
+
+                // Рассчитываем скидку
+                const discount = this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode);
+                const discountMessage = this.getPromoMessage(this.appliedPromoCode, discount);
+
+                // Показываем успех
+                this.showUserPromoMessage(
+                    `✅ Промокод "${code}" успешно применен! ${discountMessage}`,
+                    'success'
+                );
+
+                // Обновляем отображение
+                setTimeout(() => {
+                    this.showDeliverySelection();
+                }, 1000);
+
+                console.log('✅ Промокод применен пользователем:', this.appliedPromoCode);
+
+            } else {
+                this.showUserPromoMessage(`❌ ${result.error}`, 'error');
+                console.log('❌ Ошибка промокода:', result.error);
+            }
+
+        } catch (error) {
+            console.error('❌ Ошибка проверки промокода:', error);
+            this.showUserPromoMessage('❌ Ошибка соединения с сервером', 'error');
+        }
     }
 
     async selectDeliveryType(type) {

@@ -4416,3 +4416,32 @@ html {
         justify-content: center;
     }
 }
+
+/* В style.css добавьте: */
+.user-promo-section {
+    animation: fadeIn 0.5s ease;
+}
+
+.promo-input-group {
+    transition: all 0.3s ease;
+}
+
+.promo-applied-info {
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
