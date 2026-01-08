@@ -107,6 +107,12 @@ class TelegramShop {
         console.log('✅ Магазин инициализирован');
     }
 
+
+    appliedPromoCode = null;
+
+    async applyPromoCode() {
+        const codeInput = document.getElementById('promoCodeInput')
+
     // ДОБАВЬ ЭТИ МЕТОДЫ В КЛАСС:
     saveUserToLocalStorage() {
         if (this.userId && this.userId !== 0) {
@@ -238,6 +244,27 @@ class TelegramShop {
         }
 
         return null;
+    }
+
+    getPromoMessage(promo, discount) {
+        if (!promo) return '';
+
+        switch (promo.discount_type) {
+            case 'percentage':
+                return `Скидка ${promo.value}% (экономия ${this.formatPrice(discount)} ₽)`;
+
+            case 'fixed':
+                return `Скидка ${this.formatPrice(promo.value)} ₽`;
+
+            case 'free_delivery':
+                return 'Бесплатная доставка!';
+
+            case 'bogo':
+                return 'Купи 1 получи 2!';
+
+            default:
+                return 'Промокод применен';
+        }
     }
 
 
@@ -457,6 +484,7 @@ class TelegramShop {
 
         const cartItems = document.getElementById('cartItems');
         const cartTotal = document.getElementById('cartTotal');
+        const cartFooter = document.querySelector('.cart-footer');
 
         if (!cartItems || !cartTotal) {
             console.error('❌ Элементы корзины не найдены!');
@@ -467,7 +495,9 @@ class TelegramShop {
         if (this.cart.length === 0) {
             console.log('🛒 Корзина пуста - показываем сообщение');
 
-            // Просто показываем сообщение прямо в cartItems
+            // Скрываем промокод если был применен
+            this.appliedPromoCode = null;
+
             cartItems.innerHTML = `
                 <div class="empty-cart">
                     <i class="fas fa-shopping-cart"></i>
@@ -476,11 +506,8 @@ class TelegramShop {
                 </div>
             `;
 
-            // Обнуляем сумму
             cartTotal.textContent = '0 ₽';
 
-            // Скрываем footer корзины если есть
-            const cartFooter = document.querySelector('.cart-footer');
             if (cartFooter) {
                 cartFooter.style.display = 'none';
             }
@@ -491,10 +518,26 @@ class TelegramShop {
         // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
         console.log(`📦 В корзине ${this.cart.length} товаров`);
 
+        // Рассчитываем сумму корзины
+        const itemsSubtotal = this.cart.reduce((sum, item) => {
+            const priceToShow = item.discounted_price || item.price;
+            return sum + (priceToShow * item.quantity);
+        }, 0);
+
+        // Применяем промокод если есть
+        let promoDiscount = 0;
+        let promoMessage = '';
+        let finalTotal = itemsSubtotal;
+
+        if (this.appliedPromoCode) {
+            promoDiscount = this.calculatePromoDiscount(itemsSubtotal, this.appliedPromoCode);
+            finalTotal = Math.max(itemsSubtotal - promoDiscount, 0);
+            promoMessage = this.getPromoMessage(this.appliedPromoCode, promoDiscount);
+        }
+
         // Генерируем HTML для товаров
         let itemsHTML = '';
 
-        // ИСПРАВЛЕНИЕ: используем this.cart вместо this.cartItems
         this.cart.forEach(item => {
             const priceToShow = item.discounted_price || item.price;
             const totalPrice = priceToShow * item.quantity;
@@ -546,21 +589,158 @@ class TelegramShop {
             `;
         });
 
-        // Вставляем HTML
+        // Добавляем блок с промокодом
+        itemsHTML += `
+            <div class="cart-promo-section">
+                <div class="promo-code-input-container">
+                    <input type="text"
+                           id="cartPromoCodeInput"
+                           placeholder="Введите промокод"
+                           value="${this.appliedPromoCode?.code || ''}"
+                           ${this.appliedPromoCode ? 'readonly' : ''}
+                           class="promo-code-input">
+                    ${!this.appliedPromoCode ? `
+                        <button id="applyCartPromoBtn" class="btn-apply-promo">
+                            <i class="fas fa-check"></i> Применить
+                        </button>
+                    ` : `
+                        <button id="removeCartPromoBtn" class="btn-remove-promo">
+                            <i class="fas fa-times"></i> Удалить
+                        </button>
+                    `}
+                </div>
+                ${promoMessage ? `
+                    <div class="promo-applied-message success">
+                        <i class="fas fa-check-circle"></i> ${promoMessage}
+                    </div>
+                ` : ''}
+                <div id="promoErrorMessage" class="promo-error-message"></div>
+            </div>
+        `;
+
         cartItems.innerHTML = itemsHTML;
 
-        // Обновляем сумму
-        const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        cartTotal.textContent = `${this.formatPrice(total)} ₽`;
+        // Обновляем итоговую сумму с учетом промокода
+        cartTotal.textContent = `${this.formatPrice(finalTotal)} ₽`;
 
-        // Показываем footer корзины
-        const cartFooter = document.querySelector('.cart-footer');
+        // Показываем блок с детализацией сумм
+        const summaryHTML = `
+            <div class="cart-summary">
+                <div class="summary-details">
+                    <div class="summary-row">
+                        <span>Сумма товаров:</span>
+                        <span>${this.formatPrice(itemsSubtotal)} ₽</span>
+                    </div>
+
+                    ${this.appliedPromoCode ? `
+                        <div class="summary-row promo-discount-row">
+                            <span>Скидка по промокоду:</span>
+                            <span class="discount-amount">-${this.formatPrice(promoDiscount)} ₽</span>
+                        </div>
+                    ` : ''}
+
+                    <div class="summary-row total-row">
+                        <span><strong>Итого к оплате:</strong></span>
+                        <span class="total-amount"><strong>${this.formatPrice(finalTotal)} ₽</strong></span>
+                    </div>
+                </div>
+
+                <div class="cart-actions">
+                    <button class="btn btn-outline" id="clearCart">
+                        <i class="fas fa-trash"></i> Очистить
+                    </button>
+                    <button class="btn btn-primary" id="checkoutBtn">
+                        <i class="fas fa-paper-plane"></i> Перейти к оплате
+                    </button>
+                </div>
+            </div>
+        `;
+
         if (cartFooter) {
+            cartFooter.innerHTML = summaryHTML;
             cartFooter.style.display = 'block';
+
+            // Назначаем обработчики для кнопок промокода
+            if (!this.appliedPromoCode) {
+                document.getElementById('applyCartPromoBtn').addEventListener('click', () => {
+                    this.applyPromoCodeInCart();
+                });
+
+                document.getElementById('cartPromoCodeInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.applyPromoCodeInCart();
+                    }
+                });
+            } else {
+                document.getElementById('removeCartPromoBtn').addEventListener('click', () => {
+                    this.removePromoCodeFromCart();
+                });
+            }
+
+            // Назначаем обработчики для других кнопок
+            this.bindEvent('clearCart', 'click', () => this.clearCart());
+            this.bindEvent('checkoutBtn', 'click', () => this.checkout());
         }
 
-        console.log('✅ Корзина обновлена');
+        console.log('✅ Корзина обновлена с промокодом:', this.appliedPromoCode?.code || 'нет');
     }
+
+
+    calculatePromoDiscount(subtotal, promo) {
+        if (!promo) return 0;
+
+        switch (promo.discount_type) {
+            case 'percentage':
+                return subtotal * (promo.value / 100);
+
+            case 'fixed':
+                return Math.min(promo.value, subtotal); // Не больше суммы заказа
+
+            case 'free_delivery':
+                // Для бесплатной доставки - возвращаем 0, но сохраняем флаг
+                return 0;
+
+            case 'bogo':
+                // Для "Купи 1 получи 2" нужна логика расчета
+                // Здесь упрощенная версия - скидка 50% на самый дорогой товар
+                if (this.cart.length > 0) {
+                    const mostExpensive = Math.max(...this.cart.map(item =>
+                        (item.discounted_price || item.price) * item.quantity));
+                    return mostExpensive * 0.5;
+                }
+                return 0;
+
+            default:
+                return 0;
+        }
+    }
+
+
+    removePromoCodeFromCart() {
+        this.appliedPromoCode = null;
+        console.log('🗑️ Промокод удален');
+
+        // Показываем сообщение об удалении
+        const notification = document.createElement('div');
+        notification.className = 'promo-applied-message info';
+        notification.innerHTML = `
+            <i class="fas fa-info-circle"></i>
+            Промокод удален
+        `;
+
+        const promoSection = document.querySelector('.cart-promo-section');
+        if (promoSection) {
+            const oldMessage = promoSection.querySelector('.promo-applied-message');
+            if (oldMessage) oldMessage.remove();
+            promoSection.appendChild(notification);
+        }
+
+        // Обновляем отображение
+        setTimeout(() => {
+            this.updateCartDisplay();
+        }, 500);
+    }
+
 
 
     updateBackButton() {
@@ -576,6 +756,126 @@ class TelegramShop {
             }
         }
     }
+
+
+    async applyPromoCodeInCart() {
+        const input = document.getElementById('cartPromoCodeInput');
+        const code = input?.value.trim().toUpperCase();
+        const errorMessage = document.getElementById('promoErrorMessage');
+
+        if (!code) {
+            if (errorMessage) {
+                errorMessage.textContent = '❌ Введите промокод';
+                errorMessage.style.display = 'block';
+            }
+            return;
+        }
+
+        try {
+            console.log(`🎟️ Проверка промокода: ${code}`);
+
+            const response = await fetch('/api/check-promo-code', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ code: code })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Проверяем минимальную сумму заказа
+                const itemsSubtotal = this.cart.reduce((sum, item) => {
+                    const priceToShow = item.discounted_price || item.price;
+                    return sum + (priceToShow * item.quantity);
+                }, 0);
+
+                if (result.promo_code.min_order_amount > 0 &&
+                    itemsSubtotal < result.promo_code.min_order_amount) {
+                    const minAmount = this.formatPrice(result.promo_code.min_order_amount);
+                    const currentAmount = this.formatPrice(itemsSubtotal);
+                    if (errorMessage) {
+                        errorMessage.innerHTML = `
+                            ❌ Промокод требует минимальную сумму заказа ${minAmount} ₽<br>
+                            <small>Ваша текущая сумма: ${currentAmount} ₽</small>
+                        `;
+                        errorMessage.style.display = 'block';
+                    }
+                    return;
+                }
+
+                // Проверяем лимит использований
+                if (result.promo_code.usage_limit &&
+                    result.promo_code.used_count >= result.promo_code.usage_limit) {
+                    if (errorMessage) {
+                        errorMessage.textContent = '❌ Промокод уже использован максимальное количество раз';
+                        errorMessage.style.display = 'block';
+                    }
+                    return;
+                }
+
+                // Проверяем срок действия
+                if (result.promo_code.end_date) {
+                    const endDate = new Date(result.promo_code.end_date);
+                    const now = new Date();
+                    if (endDate < now) {
+                        if (errorMessage) {
+                            errorMessage.textContent = '❌ Срок действия промокода истек';
+                            errorMessage.style.display = 'block';
+                        }
+                        return;
+                    }
+                }
+
+                // Сохраняем промокод
+                this.appliedPromoCode = {
+                    ...result.promo_code,
+                    code: code
+                };
+
+                // Показываем успешное сообщение
+                const promoMessage = document.querySelector('.promo-applied-message') ||
+                                    document.createElement('div');
+                promoMessage.className = 'promo-applied-message success';
+                promoMessage.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    Промокод "${code}" успешно применен!
+                `;
+
+                const promoSection = document.querySelector('.cart-promo-section');
+                if (promoSection) {
+                    promoSection.insertBefore(promoMessage, errorMessage);
+                }
+
+                if (errorMessage) {
+                    errorMessage.style.display = 'none';
+                }
+
+                console.log('✅ Промокод применен:', this.appliedPromoCode);
+
+                // Обновляем отображение корзины
+                setTimeout(() => {
+                    this.updateCartDisplay();
+                }, 500);
+
+            } else {
+                if (errorMessage) {
+                    errorMessage.textContent = `❌ ${result.error}`;
+                    errorMessage.style.display = 'block';
+                }
+                console.log('❌ Ошибка промокода:', result.error);
+            }
+
+        } catch (error) {
+            console.error('❌ Ошибка проверки промокода:', error);
+            if (errorMessage) {
+                errorMessage.textContent = '❌ Ошибка соединения с сервером';
+                errorMessage.style.display = 'block';
+            }
+        }
+    }
+
 
     isCartOpen() {
         const cart = document.getElementById('cartOverlay');
@@ -2871,14 +3171,17 @@ class TelegramShop {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
-                total: numericItemsTotal,  // Используем числовое значение
+                total: numericItemsTotal,
                 delivery_type: this.deliveryData.type,
                 delivery_address: JSON.stringify(deliveryDetails),
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
                 recipient_name: recipient_name,
                 phone_number: phone_number,
-                cash_payment: cashPayment
+                cash_payment: cashPayment,
+                promo_code: this.appliedPromoCode?.code || null,
+                promo_code_id: this.appliedPromoCode?.id || null,
+                discount_amount: promoDiscount || 0
             };
 
             if (this.deliveryData.cash_payment) {

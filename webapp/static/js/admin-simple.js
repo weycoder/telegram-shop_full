@@ -172,6 +172,22 @@ class AdminPanel {
         container.innerHTML = html;
     }
 
+
+    async initializePromoCodesPage() {
+        console.log('🎟️ Инициализация страницы промокодов...');
+
+        // Загружаем данные для страницы
+        await Promise.all([
+            this.loadPromoCodes(),
+            this.loadDiscounts()  // Для выбора скидок
+        ]);
+
+        // Если это страница промокодов, рендерим их
+        if (this.currentPage === 'promo-codes') {
+            this.renderPromoCodes();
+        }
+    }
+
     // Методы рендеринга заказов
     renderOrders() {
         const container = document.getElementById('ordersContainer');
@@ -1603,6 +1619,595 @@ class AdminPanel {
         }
     }
 
+
+    filterPromoCodes(searchTerm = null) {
+        if (!searchTerm) {
+            searchTerm = document.getElementById('searchPromoCode')?.value || '';
+        }
+
+        const filterStatus = document.getElementById('filterStatus')?.value || '';
+        const filterType = document.getElementById('filterType')?.value || '';
+
+        const now = new Date();
+
+        const filtered = this.promo_codes.filter(promo => {
+            // Поиск по коду и имени
+            if (searchTerm) {
+                const searchLower = searchTerm.toLowerCase();
+                const codeMatch = promo.code.toLowerCase().includes(searchLower);
+                const discountMatch = promo.discount_name && promo.discount_name.toLowerCase().includes(searchLower);
+                if (!codeMatch && !discountMatch) return false;
+            }
+
+            // Фильтр по статусу
+            if (filterStatus) {
+                if (filterStatus === 'active') {
+                    if (!promo.is_active) return false;
+                    if (promo.end_date && new Date(promo.end_date) < now) return false;
+                } else if (filterStatus === 'inactive') {
+                    if (promo.is_active) return false;
+                } else if (filterStatus === 'expired') {
+                    if (!promo.end_date || new Date(promo.end_date) >= now) return false;
+                }
+            }
+
+            // Фильтр по типу
+            if (filterType && promo.discount_type !== filterType) {
+                return false;
+            }
+
+            return true;
+        });
+
+        this.renderPromoCodesTableRows(filtered);
+
+        // Обновляем счетчик
+        const shownCount = document.getElementById('shownCount');
+        if (shownCount) {
+            shownCount.textContent = filtered.length;
+        }
+    }
+
+    copyPromoCode(code) {
+        navigator.clipboard.writeText(code).then(() => {
+            this.showAlert(`✅ Промокод "${code}" скопирован в буфер`, 'success');
+        }).catch(err => {
+            console.error('Ошибка копирования:', err);
+        });
+    }
+
+    viewPromoCodeDetails(promoId) {
+        const promo = this.promo_codes.find(p => p.id === promoId);
+        if (!promo) return;
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-ticket-alt"></i> Детали промокода</h3>
+                    <button class="close-modal" onclick="this.parentElement.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="promo-detail-card">
+                        <div class="promo-detail-header">
+                            <span class="promo-code-large">${promo.code}</span>
+                            <span class="status-badge ${promo.is_active ? 'active' : 'inactive'}">
+                                ${promo.is_active ? 'Активен' : 'Неактивен'}
+                            </span>
+                        </div>
+
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label><i class="fas fa-percentage"></i> Тип скидки:</label>
+                                <span>${this.getDiscountTypeText(promo.discount_type)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label><i class="fas fa-ruble-sign"></i> Размер:</label>
+                                <span class="detail-value">${this.getDiscountValueText(promo)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label><i class="fas fa-shopping-cart"></i> Мин. заказ:</label>
+                                <span>${promo.min_order_amount ? this.formatPrice(promo.min_order_amount) + ' ₽' : 'Нет'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label><i class="fas fa-chart-line"></i> Использовано:</label>
+                                <span>${promo.used_count || 0} раз${promo.usage_limit ? ` из ${promo.usage_limit}` : ''}</span>
+                            </div>
+                        </div>
+
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label><i class="fas fa-calendar-start"></i> Начало:</label>
+                                <span>${promo.start_date ? new Date(promo.start_date).toLocaleDateString('ru-RU') : 'Сразу'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label><i class="fas fa-calendar-times"></i> Окончание:</label>
+                                <span>${promo.end_date ? new Date(promo.end_date).toLocaleDateString('ru-RU') : 'Без срока'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label><i class="fas fa-user-check"></i> Одноразовый:</label>
+                                <span>${promo.one_per_customer ? 'Да' : 'Нет'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label><i class="fas fa-tag"></i> Исключает скидки:</label>
+                                <span>${promo.exclude_sale_items ? 'Да' : 'Нет'}</span>
+                            </div>
+                        </div>
+
+                        <div class="detail-created">
+                            <i class="fas fa-clock"></i>
+                            Создан: ${new Date(promo.created_at).toLocaleDateString('ru-RU')}
+                        </div>
+
+                        <div class="promo-usage-history">
+                            <h4><i class="fas fa-history"></i> История использований</h4>
+                            ${promo.used_count > 0 ?
+                                `<p>Был использован ${promo.used_count} раз(а)</p>`
+                                : `<p class="no-history">Промокод еще не использовался</p>`}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="this.parentElement.parentElement.parentElement.remove()">
+                        Закрыть
+                    </button>
+                    <button class="btn btn-primary" onclick="admin.showEditPromoCodeForm(${promo.id}); this.parentElement.parentElement.parentElement.remove()">
+                        <i class="fas fa-edit"></i> Редактировать
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    }
+
+    getDiscountTypeText(type) {
+        const types = {
+            'percentage': 'Процентная скидка',
+            'fixed': 'Фиксированная сумма',
+            'free_delivery': 'Бесплатная доставка',
+            'bogo': 'Купи 1 получи 2'
+        };
+        return types[type] || type;
+    }
+
+    getDiscountValueText(promo) {
+        switch(promo.discount_type) {
+            case 'percentage':
+                return `${promo.value}%`;
+            case 'fixed':
+                return `${this.formatPrice(promo.value)} ₽`;
+            case 'free_delivery':
+                return 'Бесплатная доставка';
+            case 'bogo':
+                return '2 по цене 1';
+            default:
+                return promo.value;
+        }
+    }
+
+    showAddPromoCodeForm() {
+        const container = document.getElementById('promoCodesContainer');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="promo-code-form-container">
+                <div class="form-header">
+                    <h2><i class="fas fa-ticket-alt"></i> Создание нового промокода</h2>
+                    <button class="btn btn-outline" onclick="admin.loadPromoCodes()">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </button>
+                </div>
+
+                <div class="form-tabs">
+                    <button class="tab-btn active" onclick="admin.switchPromoTab('basic')">
+                        <i class="fas fa-info-circle"></i> Основное
+                    </button>
+                    <button class="tab-btn" onclick="admin.switchPromoTab('limits')">
+                        <i class="fas fa-sliders-h"></i> Ограничения
+                    </button>
+                    <button class="tab-btn" onclick="admin.switchPromoTab('advanced')">
+                        <i class="fas fa-cog"></i> Дополнительно
+                    </button>
+                </div>
+
+                <form id="promoCodeForm" onsubmit="return admin.handlePromoCodeSubmit(event)">
+                    <div id="basicTab" class="form-tab active">
+                        <div class="form-section">
+                            <h3>Основная информация</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="promoCode">
+                                        <i class="fas fa-key"></i> Код промокода *
+                                        <span class="required-star">*</span>
+                                    </label>
+                                    <div class="input-with-button">
+                                        <input type="text" id="promoCode" required
+                                               placeholder="SUMMER2024"
+                                               style="font-family: monospace; font-size: 16px;"
+                                               oninput="this.value = this.value.toUpperCase()">
+                                        <button type="button" class="btn-small btn-primary"
+                                                onclick="admin.generatePromoCode()">
+                                            <i class="fas fa-dice"></i> Сгенерировать
+                                        </button>
+                                    </div>
+                                    <small class="form-hint">
+                                        Используйте буквы и цифры, рекомендуется 6-12 символов
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="promoName">
+                                        <i class="fas fa-heading"></i> Название (необязательно)
+                                    </label>
+                                    <input type="text" id="promoName"
+                                           placeholder="Летняя распродажа, Черная пятница">
+                                    <small class="form-hint">
+                                        Внутреннее название для администрирования
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="promoType">
+                                        <i class="fas fa-percentage"></i> Тип скидки *
+                                        <span class="required-star">*</span>
+                                    </label>
+                                    <select id="promoType" required onchange="admin.onPromoTypeChange()">
+                                        <option value="">Выберите тип</option>
+                                        <option value="percentage">Процентная скидка</option>
+                                        <option value="fixed">Фиксированная сумма</option>
+                                        <option value="free_delivery">Бесплатная доставка</option>
+                                        <option value="bogo">Купи 1 получи 2</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group" id="promoValueGroup">
+                                    <label for="promoValue">
+                                        <i class="fas fa-ruble-sign"></i> Размер скидки *
+                                        <span class="required-star">*</span>
+                                    </label>
+                                    <div class="input-with-unit">
+                                        <input type="number" id="promoValue" step="0.01"
+                                               placeholder="10" required
+                                               onchange="admin.validatePromoValue()">
+                                        <span id="promoUnit">%</span>
+                                    </div>
+                                    <small class="form-hint" id="valueHint">
+                                        Укажите размер скидки
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="limitsTab" class="form-tab">
+                        <div class="form-section">
+                            <h3>Ограничения и условия</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="usageLimit">
+                                        <i class="fas fa-chart-line"></i> Лимит использований
+                                    </label>
+                                    <input type="number" id="usageLimit" min="1"
+                                           placeholder="100 (0 или пусто = без лимита)">
+                                    <small class="form-hint">
+                                        Сколько раз можно использовать промокод
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="minOrderAmountPromo">
+                                        <i class="fas fa-shopping-cart"></i> Мин. сумма заказа
+                                    </label>
+                                    <input type="number" id="minOrderAmountPromo" step="0.01"
+                                           placeholder="0 (без ограничений)">
+                                    <small class="form-hint">
+                                        Минимальная сумма заказа для применения промокода
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="promoStartDate">
+                                        <i class="fas fa-calendar-start"></i> Дата начала
+                                    </label>
+                                    <input type="datetime-local" id="promoStartDate">
+                                    <small class="form-hint">
+                                        Когда промокод станет активен (оставьте пустым для немедленной активации)
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="promoEndDate">
+                                        <i class="fas fa-calendar-times"></i> Дата окончания
+                                    </label>
+                                    <input type="datetime-local" id="promoEndDate">
+                                    <small class="form-hint">
+                                        Когда промокод перестанет работать
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="advancedTab" class="form-tab">
+                        <div class="form-section">
+                            <h3>Дополнительные настройки</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="isActivePromo">
+                                        <i class="fas fa-power-off"></i> Статус
+                                    </label>
+                                    <select id="isActivePromo">
+                                        <option value="1">Активен</option>
+                                        <option value="0">Не активен</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="onePerCustomer">
+                                        <i class="fas fa-user-check"></i> Одноразовый для пользователя
+                                    </label>
+                                    <select id="onePerCustomer">
+                                        <option value="0">Нет (можно использовать многократно)</option>
+                                        <option value="1">Да (один раз на пользователя)</option>
+                                    </select>
+                                    <small class="form-hint">
+                                        Ограничивает использование промокода одним разом для каждого пользователя
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="excludeSaleItems">
+                                        <i class="fas fa-tag"></i> Исключать товары со скидкой
+                                    </label>
+                                    <select id="excludeSaleItems">
+                                        <option value="0">Нет (применять ко всем товарам)</option>
+                                        <option value="1">Да (не применять к товарам со скидкой)</option>
+                                    </select>
+                                    <small class="form-hint">
+                                        Промокод не будет применяться к товарам, на которые уже действует скидка
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="customerGroups">
+                                        <i class="fas fa-users"></i> Группы клиентов (в разработке)
+                                    </label>
+                                    <input type="text" id="customerGroups" disabled
+                                           placeholder="Функция в разработке">
+                                    <small class="form-hint">
+                                        В будущем: применять промокод только к определенным группам клиентов
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-preview">
+                        <h3><i class="fas fa-eye"></i> Предварительный просмотр</h3>
+                        <div class="preview-card">
+                            <div class="preview-header">
+                                <span id="previewCode" class="preview-code">SUMMER2024</span>
+                                <span class="preview-badge" id="previewBadge">Процентная</span>
+                            </div>
+                            <div class="preview-details">
+                                <div class="preview-row">
+                                    <span>Тип:</span>
+                                    <span id="previewType">Процентная скидка</span>
+                                </div>
+                                <div class="preview-row">
+                                    <span>Размер:</span>
+                                    <span id="previewValue" class="preview-value">10%</span>
+                                </div>
+                                <div class="preview-row">
+                                    <span>Мин. заказ:</span>
+                                    <span id="previewMinOrder">Нет</span>
+                                </div>
+                                <div class="preview-row">
+                                    <span>Действует:</span>
+                                    <span id="previewDates">Сразу и всегда</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="admin.loadPromoCodes()">
+                            <i class="fas fa-times"></i> Отмена
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить промокод
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="admin.resetPromoForm()">
+                            <i class="fas fa-redo"></i> Сбросить форму
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        // Генерируем код по умолчанию
+        this.generatePromoCode();
+
+        // Инициализируем предварительный просмотр
+        this.updatePromoPreview();
+
+        // Добавляем обработчики событий для обновления предпросмотра
+        ['promoCode', 'promoType', 'promoValue', 'minOrderAmountPromo', 'promoStartDate', 'promoEndDate'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('input', () => this.updatePromoPreview());
+                element.addEventListener('change', () => this.updatePromoPreview());
+            }
+        });
+    }
+
+
+    exportPromoCodes() {
+        const data = JSON.stringify(this.promo_codes, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `promo-codes-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.showAlert('✅ Промокоды экспортированы в файл', 'success');
+    }
+
+
+    validatePromoValue() {
+        const type = document.getElementById('promoType')?.value;
+        const value = parseFloat(document.getElementById('promoValue')?.value) || 0;
+        const hint = document.getElementById('valueHint');
+
+        if (!hint) return;
+
+        switch(type) {
+            case 'percentage':
+                if (value < 1 || value > 100) {
+                    hint.innerHTML = '<span style="color: #dc3545;">Процент должен быть от 1 до 100</span>';
+                } else {
+                    hint.textContent = `Скидка ${value}% от суммы заказа`;
+                }
+                break;
+            case 'fixed':
+                if (value < 1) {
+                    hint.innerHTML = '<span style="color: #dc3545;">Сумма должна быть положительной</span>';
+                } else {
+                    hint.textContent = `Фиксированная скидка ${this.formatPrice(value)} ₽`;
+                }
+                break;
+            default:
+                hint.textContent = 'Укажите размер скидки';
+        }
+    }
+
+    // Обновленный метод onPromoTypeChange
+    onPromoTypeChange() {
+        const type = document.getElementById('promoType').value;
+        const valueGroup = document.getElementById('promoValueGroup');
+        const unit = document.getElementById('promoUnit');
+        const valueInput = document.getElementById('promoValue');
+        const minOrderGroup = document.getElementById('minOrderAmountGroup');
+
+        if (type === 'free_delivery' || type === 'bogo') {
+            valueGroup.style.display = 'none';
+            if (valueInput) {
+                valueInput.removeAttribute('required');
+                valueInput.value = '0';
+            }
+        } else {
+            valueGroup.style.display = 'block';
+            if (valueInput) {
+                valueInput.setAttribute('required', 'required');
+            }
+
+            if (type === 'percentage') {
+                if (unit) unit.textContent = '%';
+                if (valueInput) valueInput.placeholder = '10';
+            } else if (type === 'fixed') {
+                if (unit) unit.textContent = '₽';
+                if (valueInput) valueInput.placeholder = '1000';
+            }
+        }
+
+        // Обновляем предпросмотр
+        this.updatePromoPreview();
+        this.validatePromoValue();
+    }
+
+
+    resetPromoForm() {
+        if (confirm('Сбросить форму? Все введенные данные будут потеряны.')) {
+            this.showAddPromoCodeForm();
+        }
+    }
+
+    updatePromoPreview() {
+        const code = document.getElementById('promoCode')?.value || 'PROMOCODE';
+        const type = document.getElementById('promoType')?.value || 'percentage';
+        const value = parseFloat(document.getElementById('promoValue')?.value) || 0;
+        const minOrder = parseFloat(document.getElementById('minOrderAmountPromo')?.value) || 0;
+        const startDate = document.getElementById('promoStartDate')?.value;
+        const endDate = document.getElementById('promoEndDate')?.value;
+
+        // Обновляем код
+        document.getElementById('previewCode').textContent = code.toUpperCase();
+
+        // Обновляем бейдж
+        const badgeText = {
+            'percentage': 'Процентная',
+            'fixed': 'Фиксированная',
+            'free_delivery': 'Доставка',
+            'bogo': '2+1'
+        }[type] || 'Скидка';
+        document.getElementById('previewBadge').textContent = badgeText;
+
+        // Обновляем тип
+        const typeText = {
+            'percentage': 'Процентная скидка',
+            'fixed': 'Фиксированная сумма',
+            'free_delivery': 'Бесплатная доставка',
+            'bogo': 'Купи 1 получи 2'
+        }[type] || 'Скидка';
+        document.getElementById('previewType').textContent = typeText;
+
+        // Обновляем значение
+        let valueText = '';
+        switch(type) {
+            case 'percentage':
+                valueText = `${value}%`;
+                break;
+            case 'fixed':
+                valueText = `${this.formatPrice(value)} ₽`;
+                break;
+            case 'free_delivery':
+                valueText = 'Бесплатная доставка';
+                break;
+            case 'bogo':
+                valueText = '2 по цене 1';
+                break;
+            default:
+                valueText = value;
+        }
+        document.getElementById('previewValue').textContent = valueText;
+
+        // Обновляем минимальный заказ
+        document.getElementById('previewMinOrder').textContent =
+            minOrder > 0 ? `${this.formatPrice(minOrder)} ₽` : 'Нет';
+
+        // Обновляем даты
+        let datesText = 'Сразу и всегда';
+        if (startDate || endDate) {
+            const start = startDate ? new Date(startDate).toLocaleDateString('ru-RU') : 'Сразу';
+            const end = endDate ? new Date(endDate).toLocaleDateString('ru-RU') : 'Без срока';
+            datesText = `${start} - ${end}`;
+        }
+        document.getElementById('previewDates').textContent = datesText;
+    }
+
+    switchPromoTab(tabName) {
+        // Убираем активный класс со всех вкладок
+        document.querySelectorAll('.form-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        // Активируем выбранную вкладку
+        document.getElementById(`${tabName}Tab`)?.classList.add('active');
+        document.querySelector(`.tab-btn[onclick*="${tabName}"]`)?.classList.add('active');
+    }
+
+
     renderPromoCodes() {
         const container = document.getElementById('promoCodesContainer');
         if (!container) return;
@@ -1612,7 +2217,7 @@ class AdminPanel {
                 <div class="no-data">
                     <i class="fas fa-ticket-alt" style="font-size: 48px; color: #ddd;"></i>
                     <h3>Промокоды не найдены</h3>
-                    <p>Создайте первый промокод</p>
+                    <p>Создайте первый промокод для привлечения клиентов</p>
                     <button class="btn btn-primary" onclick="admin.showAddPromoCodeForm()">
                         <i class="fas fa-plus"></i> Добавить промокод
                     </button>
@@ -1621,36 +2226,128 @@ class AdminPanel {
             return;
         }
 
+        // Подсчитываем статистику
+        const activeCount = this.promo_codes.filter(p => p.is_active).length;
+        const expiredCount = this.promo_codes.filter(p => {
+            if (!p.end_date) return false;
+            return new Date(p.end_date) < new Date();
+        }).length;
+        const usedCount = this.promo_codes.reduce((sum, p) => sum + (p.used_count || 0), 0);
+
         let html = `
             <div class="promo-codes-header">
-                <h2>Управление промокодами</h2>
-                <button class="btn btn-primary" onclick="admin.showAddPromoCodeForm()">
-                    <i class="fas fa-plus"></i> Новый промокод
-                </button>
+                <div>
+                    <h2>Управление промокодами</h2>
+                    <div class="promo-stats">
+                        <span class="stat-badge active"><i class="fas fa-check-circle"></i> Активных: ${activeCount}</span>
+                        <span class="stat-badge warning"><i class="fas fa-clock"></i> Истекших: ${expiredCount}</span>
+                        <span class="stat-badge info"><i class="fas fa-chart-line"></i> Использований: ${usedCount}</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="admin.exportPromoCodes()">
+                        <i class="fas fa-file-export"></i> Экспорт
+                    </button>
+                    <button class="btn btn-primary" onclick="admin.showAddPromoCodeForm()">
+                        <i class="fas fa-plus"></i> Новый промокод
+                    </button>
+                </div>
             </div>
+
+            <div class="promo-codes-filters">
+                <input type="text" id="searchPromoCode" placeholder="Поиск по коду или названию..."
+                       onkeyup="admin.filterPromoCodes(this.value)">
+                <select id="filterStatus" onchange="admin.filterPromoCodes()">
+                    <option value="">Все статусы</option>
+                    <option value="active">Активные</option>
+                    <option value="inactive">Неактивные</option>
+                    <option value="expired">Истекшие</option>
+                </select>
+                <select id="filterType" onchange="admin.filterPromoCodes()">
+                    <option value="">Все типы</option>
+                    <option value="percentage">Процентные</option>
+                    <option value="fixed">Фиксированные</option>
+                    <option value="free_delivery">Бесплатная доставка</option>
+                    <option value="bogo">2 по цене 1</option>
+                </select>
+            </div>
+
             <div class="promo-codes-table-container">
                 <table class="promo-codes-table">
                     <thead>
                         <tr>
                             <th>Код</th>
                             <th>Тип</th>
-                            <th>Значение</th>
-                            <th>Лимит</th>
+                            <th>Скидка</th>
                             <th>Использовано</th>
                             <th>Статус</th>
                             <th>Срок действия</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="promoCodesTableBody">
+                        <!-- Содержимое заполняется динамически -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-footer">
+                <div class="pagination-info">
+                    Показано <span id="shownCount">${this.promo_codes.length}</span> из ${this.promo_codes.length} промокодов
+                </div>
+                <div class="pagination">
+                    <button class="btn-small" onclick="admin.prevPage()" id="prevPageBtn" disabled>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span id="currentPage">1</span>
+                    <button class="btn-small" onclick="admin.nextPage()" id="nextPageBtn" disabled>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
         `;
 
-        this.promo_codes.forEach(promo => {
+        container.innerHTML = html;
+
+        // Теперь рендерим строки таблицы
+        this.renderPromoCodesTableRows(this.promo_codes);
+    }
+
+    renderPromoCodesTableRows(promo_codes) {
+        const container = document.getElementById('promoCodesTableBody');
+        if (!container) return;
+
+        if (promo_codes.length === 0) {
+            container.innerHTML = `
+                <tr>
+                    <td colspan="7" class="no-data-row">
+                        <i class="fas fa-search"></i>
+                        <div>Промокоды не найдены</div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+
+        promo_codes.forEach(promo => {
+            const isExpired = promo.end_date && new Date(promo.end_date) < new Date();
+            const statusClass = isExpired ? 'expired' : (promo.is_active ? 'active' : 'inactive');
+            const statusText = isExpired ? 'Истек' : (promo.is_active ? 'Активен' : 'Неактивен');
+
+            const typeBadge = {
+                'percentage': 'badge-percentage',
+                'fixed': 'badge-fixed',
+                'free_delivery': 'badge-delivery',
+                'bogo': 'badge-bogo'
+            }[promo.discount_type] || '';
+
             const typeText = {
-                'percentage': 'Процент',
-                'fixed': 'Сумма',
+                'percentage': '%',
+                'fixed': '₽',
                 'free_delivery': 'Доставка',
-                'bogo': '2 по цене 1'
+                'bogo': '2+1'
             }[promo.discount_type] || promo.discount_type;
 
             const valueText = promo.discount_type === 'percentage'
@@ -1659,48 +2356,90 @@ class AdminPanel {
                     ? `${this.formatPrice(promo.value)} ₽`
                     : promo.discount_type === 'free_delivery'
                         ? 'Бесплатно'
-                        : '2 по цене 1';
+                        : 'Купи 1 получи 2';
 
-            const usageText = promo.usage_limit
-                ? `${promo.used_count || 0}/${promo.usage_limit}`
-                : `${promo.used_count || 0}/∞`;
-
-            const statusClass = promo.is_active ? 'active' : 'inactive';
-            const statusText = promo.is_active ? 'Активен' : 'Не активен';
+            const usageLimit = promo.usage_limit ? `${promo.used_count || 0}/${promo.usage_limit}` : 'Без лимита';
+            const usagePercentage = promo.usage_limit ? Math.round(((promo.used_count || 0) / promo.usage_limit) * 100) : 0;
 
             let expiresText = '';
             if (promo.end_date) {
                 const endDate = new Date(promo.end_date);
                 const now = new Date();
-                if (endDate < now) {
-                    expiresText = `<span style="color: #dc3545;">Истек: ${endDate.toLocaleDateString('ru-RU')}</span>`;
+                const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+
+                if (daysLeft > 0) {
+                    expiresText = `<span style="color: #28a745;">Осталось: ${daysLeft} дн.</span>`;
                 } else {
-                    expiresText = `До: ${endDate.toLocaleDateString('ru-RU')}`;
+                    expiresText = `<span style="color: #dc3545;">Истек: ${endDate.toLocaleDateString('ru-RU')}</span>`;
                 }
             } else {
-                expiresText = 'Без срока';
+                expiresText = '<span style="color: #6c757d;">Без срока</span>';
             }
 
             html += `
-                <tr>
-                    <td><strong style="font-family: monospace; font-size: 16px;">${promo.code}</strong></td>
-                    <td>${typeText}</td>
-                    <td>${valueText}</td>
-                    <td>${promo.usage_limit || '∞'}</td>
-                    <td>${usageText}</td>
-                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                    <td>${expiresText}</td>
+                <tr data-promo-id="${promo.id}" data-status="${statusClass}" data-type="${promo.discount_type}">
                     <td>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button class="btn-small btn-edit" onclick="admin.showEditPromoCodeForm(${promo.id})">
+                        <div class="promo-code-cell">
+                            <span class="promo-code-display" onclick="admin.copyPromoCode('${promo.code}')">
+                                <strong style="font-family: 'Courier New', monospace; font-size: 16px;">${promo.code}</strong>
+                                <i class="fas fa-copy copy-icon" title="Копировать"></i>
+                            </span>
+                            ${promo.min_order_amount > 0 ?
+                                `<small class="min-order">Мин. заказ: ${this.formatPrice(promo.min_order_amount)} ₽</small>`
+                                : ''}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="promo-type-badge ${typeBadge}">${typeText}</span>
+                    </td>
+                    <td>
+                        <div class="promo-value-cell">
+                            <strong>${valueText}</strong>
+                            ${promo.discount_type === 'percentage' && promo.min_order_amount > 0 ?
+                                `<br><small>До ${this.formatPrice(promo.min_order_amount * (promo.value/100))} ₽</small>`
+                                : ''}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="usage-cell">
+                            <div class="usage-bar">
+                                <div class="usage-progress" style="width: ${usagePercentage}%;"></div>
+                            </div>
+                            <span class="usage-text">${usageLimit}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            <i class="fas fa-circle"></i> ${statusText}
+                        </span>
+                        ${isExpired ? '<br><small style="color: #dc3545;">Просрочен</small>' : ''}
+                    </td>
+                    <td>
+                        <div class="expiry-cell">
+                            ${promo.start_date ?
+                                `<small>С: ${new Date(promo.start_date).toLocaleDateString('ru-RU')}</small><br>`
+                                : ''}
+                            ${expiresText}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-small btn-info" onclick="admin.viewPromoCodeDetails(${promo.id})"
+                                    title="Просмотр деталей">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn-small btn-edit" onclick="admin.showEditPromoCodeForm(${promo.id})"
+                                    title="Редактировать">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn-small btn-delete" onclick="admin.deletePromoCode(${promo.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                            <button class="btn-small ${promo.is_active ? 'btn-secondary' : 'btn-success'}"
-                                    onclick="admin.togglePromoCodeStatus(${promo.id}, ${!promo.is_active})">
+                            <button class="btn-small ${promo.is_active && !isExpired ? 'btn-warning' : 'btn-success'}"
+                                    onclick="admin.togglePromoCodeStatus(${promo.id}, ${!promo.is_active})"
+                                    title="${promo.is_active ? 'Деактивировать' : 'Активировать'}">
                                 <i class="fas fa-power-off"></i>
+                            </button>
+                            <button class="btn-small btn-delete" onclick="admin.deletePromoCode(${promo.id})"
+                                    title="Удалить">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </div>
                     </td>
@@ -1708,13 +2447,10 @@ class AdminPanel {
             `;
         });
 
-        html += `
-                    </tbody>
-                </table>
-            </div>
-        `;
         container.innerHTML = html;
     }
+
+
 
     showAddPromoCodeForm() {
         const container = document.getElementById('promoCodesContainer');
@@ -2468,6 +3204,11 @@ class AdminPanel {
                 setTimeout(() => {
                     targetPage.classList.add('active');
                 }, 10);
+            }
+            if (pageId === 'promo-codes') {
+                setTimeout(() => {
+                    this.initializePromoCodesPage();
+                }, 50);
             }
 
             document.querySelectorAll('.nav-item').forEach(item => {
