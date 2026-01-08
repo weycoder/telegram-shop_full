@@ -4513,3 +4513,84 @@ html {
         width: 100% !important;
     }
 }
+
+/* В style.css добавьте: */
+
+/* Адаптивные стили для мобильных */
+@media (max-width: 480px) {
+    .cart-modal {
+        max-height: 90vh !important;
+    }
+
+    .delivery-content {
+        padding: 10px !important;
+    }
+
+    input, button {
+        font-size: 14px !important;
+    }
+
+    .compact-promo-input {
+        flex-direction: row !important;
+    }
+
+    .compact-promo-input button {
+        min-width: 50px !important;
+    }
+}
+
+/* Улучшение для промокода */
+.compact-promo-section {
+    transition: all 0.3s ease;
+}
+
+.promo-applied-compact {
+    animation: slideIn 0.3s ease;
+}
+
+/* Анимации */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Стили для выбора доставки */
+.delivery-option {
+    transition: all 0.2s ease;
+}
+
+.delivery-option:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.delivery-option.selected {
+    border-color: #667eea !important;
+    background: #f8f9ff !important;
+}
+
+/* Компактный дизайн сумм */
+.compact-summary {
+    font-size: 13px;
+}
+
+.compact-summary .total {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Модальное окно */
+.modal-overlay {
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

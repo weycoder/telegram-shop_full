@@ -260,7 +260,7 @@ class TelegramShop {
             case 'bogo':
                 return '2 по цене 1';
             default:
-                return 'Скидка применена';
+                return 'Скидка';
         }
     }
 
@@ -693,12 +693,12 @@ class TelegramShop {
                 return Math.min(promo.value, subtotal); // Не больше суммы заказа
 
             case 'free_delivery':
-                // Для бесплатной доставки - возвращаем 0, но сохраняем флаг
-                return 0;
+                // Для бесплатной доставки возвращаем стоимость доставки как скидку
+                const deliveryCost = (subtotal < 1000) ? 100 : 0;
+                return deliveryCost;
 
             case 'bogo':
-                // Для "Купи 1 получи 2" нужна логика расчета
-                // Здесь упрощенная версия - скидка 50% на самый дорогой товар
+                // Для "Купи 1 получи 2" - скидка 50% на самый дорогой товар
                 if (this.cart.length > 0) {
                     const mostExpensive = Math.max(...this.cart.map(item =>
                         (item.discounted_price || item.price) * item.quantity));
@@ -2131,9 +2131,16 @@ class TelegramShop {
             return sum + (priceToShow * item.quantity);
         }, 0);
 
+        // Рассчитываем стоимость доставки
         let deliveryCost = 0;
-        if (itemsTotal < 1000) {
+        let deliveryMessage = 'Бесплатно';
+
+        // Если промокод на бесплатную доставку
+        const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
+
+        if (!hasFreeDeliveryPromo && itemsTotal < 1000) {
             deliveryCost = 100;
+            deliveryMessage = '100 ₽';
         }
 
         // Рассчитываем скидку от промокода если есть
@@ -2143,49 +2150,51 @@ class TelegramShop {
 
         cartOverlay.innerHTML = `
             <div class="cart-modal" style="padding: 0;">
-                <div class="cart-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C); color: white; border: none; padding: 15px 20px;">
-                    <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-truck"></i> Способ доставки
+                <div class="cart-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C); color: white; border: none; padding: 12px 15px;">
+                    <h2 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-truck"></i> Доставка
                     </h2>
-                    <button class="close-cart" id="closeDeliverySelection" style="color: white; background: rgba(255,255,255,0.2); width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;">
-                        <i class="fas fa-times"></i>
+                    <button class="close-cart" id="closeDeliverySelection"
+                            style="color: white; background: rgba(255,255,255,0.2); width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-times" style="font-size: 14px;"></i>
                     </button>
                 </div>
 
-                <div class="delivery-content" style="padding: 15px; max-height: calc(100vh - 150px); overflow-y: auto;">
+                <div class="delivery-content" style="padding: 12px; max-height: calc(100vh - 140px); overflow-y: auto;">
 
                     <!-- КОМПАКТНЫЙ БЛОК ПРОМОКОДА -->
-                    <div class="compact-promo-section" style="margin-bottom: 15px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                            <h4 style="margin: 0; color: #333; font-size: 16px;">
-                                <i class="fas fa-ticket-alt" style="color: #667eea; margin-right: 8px;"></i>
+                    <div class="compact-promo-section" style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-weight: 600; color: #333; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-ticket-alt" style="color: #667eea;"></i>
                                 Промокод
-                            </h4>
+                            </span>
                             ${this.appliedPromoCode ? `
                                 <button id="removePromoBtnCompact"
-                                        style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 13px; padding: 4px 8px;">
-                                    <i class="fas fa-times"></i> Удалить
+                                        style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 12px; padding: 2px 6px;">
+                                    <i class="fas fa-times"></i>
                                 </button>
                             ` : ''}
                         </div>
 
                         ${!this.appliedPromoCode ? `
-                            <div class="compact-promo-input" style="display: flex; gap: 8px; align-items: center;">
+                            <div class="compact-promo-input" style="display: flex; gap: 6px; align-items: stretch;">
                                 <input type="text"
                                        id="compactPromoCodeInput"
                                        placeholder="Введите код"
-                                       style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; height: 40px;">
+                                       style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
                                 <button id="applyPromoBtnCompact"
-                                        style="padding: 0 15px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; white-space: nowrap;">
-                                    Применить
+                                        style="padding: 0 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; min-width: 70px;">
+                                    OK
                                 </button>
                             </div>
                         ` : `
-                            <div class="promo-applied-compact" style="padding: 10px; background: #e8f5e9; border-radius: 6px; border-left: 3px solid #4CAF50;">
+                            <div class="promo-applied-compact" style="padding: 8px 10px; background: #e8f5e9; border-radius: 6px; border-left: 3px solid #4CAF50;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div>
-                                        <div style="font-weight: 600; color: #2e7d32; font-size: 14px;">
-                                            <i class="fas fa-check-circle"></i> ${this.appliedPromoCode.code}
+                                        <div style="font-weight: 600; color: #2e7d32; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fas fa-check-circle"></i>
+                                            <span style="font-family: monospace;">${this.appliedPromoCode.code}</span>
                                         </div>
                                         <div style="font-size: 12px; color: #388E3C; margin-top: 2px;">
                                             ${this.getPromoMessage(this.appliedPromoCode, promoDiscount)}
@@ -2195,94 +2204,112 @@ class TelegramShop {
                             </div>
                         `}
 
-                        <div id="compactPromoMessage" style="font-size: 12px; margin-top: 5px; min-height: 16px;"></div>
+                        <div id="compactPromoMessage" style="font-size: 11px; margin-top: 4px; min-height: 14px; line-height: 1.2;"></div>
                     </div>
 
-                    <!-- Способ 1: Курьер -->
-                    <div class="delivery-method compact" id="courierOption" style="padding: 12px 15px; margin-bottom: 10px; border: 1px solid #e0e0e0; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #4CAF50, #388E3C); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-truck" style="color: white; font-size: 16px;"></i>
+                    <!-- КОМПАКТНЫЙ ВЫБОР СПОСОБА ДОСТАВКИ -->
+                    <div style="margin-bottom: 15px;">
+                        <div class="delivery-option ${this.deliveryData.type === 'courier' ? 'selected' : ''}"
+                             id="courierOption"
+                             style="padding: 10px 12px; margin-bottom: 8px; border: 2px solid ${this.deliveryData.type === 'courier' ? '#667eea' : '#e0e0e0'}; border-radius: 8px; cursor: pointer; background: ${this.deliveryData.type === 'courier' ? '#f8f9ff' : 'white'}; transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="width: 32px; height: 32px; background: ${this.deliveryData.type === 'courier' ? '#667eea' : '#6c757d'}; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-truck" style="color: white; font-size: 14px;"></i>
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 600; color: #333; font-size: 14px;">Курьером</div>
+                                        <div style="font-size: 12px; color: #666;">До двери</div>
+                                    </div>
+                                </div>
+                                <div style="font-weight: 600; color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? '#28a745' : '#dc3545'}; font-size: 14px;">
+                                    ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
+                                </div>
                             </div>
-                            <div style="flex: 1;">
-                                <div style="font-weight: 600; color: #333; font-size: 15px;">Курьером</div>
-                                <div style="font-size: 13px; color: #666; margin-top: 2px;">До двери</div>
+                        </div>
+
+                        <div class="delivery-option ${this.deliveryData.type === 'pickup' ? 'selected' : ''}"
+                             id="pickupOption"
+                             style="padding: 10px 12px; border: 2px solid ${this.deliveryData.type === 'pickup' ? '#667eea' : '#e0e0e0'}; border-radius: 8px; cursor: pointer; background: ${this.deliveryData.type === 'pickup' ? '#f8f9ff' : 'white'}; transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="width: 32px; height: 32px; background: ${this.deliveryData.type === 'pickup' ? '#667eea' : '#6c757d'}; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-store" style="color: white; font-size: 14px;"></i>
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 600; color: #333; font-size: 14px;">Самовывоз</div>
+                                        <div style="font-size: 12px; color: #666;">Из точки</div>
+                                    </div>
+                                </div>
+                                <div style="font-weight: 600; color: #28a745; font-size: 14px;">
+                                    Бесплатно
+                                </div>
                             </div>
-                            <div style="font-weight: 600; color: ${itemsTotal >= 1000 ? '#4CAF50' : '#333'}; font-size: 15px;">
-                                ${itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
-                            </div>
-                            <i class="fas fa-chevron-right" style="color: #999; font-size: 14px;"></i>
                         </div>
                     </div>
 
-                    <!-- Способ 2: Самовывоз -->
-                    <div class="delivery-method compact" id="pickupOption" style="padding: 12px 15px; margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #FF9800, #F57C00); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-store" style="color: white; font-size: 16px;"></i>
-                            </div>
-                            <div style="flex: 1;">
-                                <div style="font-weight: 600; color: #333; font-size: 15px;">Самовывоз</div>
-                                <div style="font-size: 13px; color: #666; margin-top: 2px;">Из точки выдачи</div>
-                            </div>
-                            <div style="font-weight: 600; color: #4CAF50; font-size: 15px;">
-                                Бесплатно
-                            </div>
-                            <i class="fas fa-chevron-right" style="color: #999; font-size: 14px;"></i>
-                        </div>
-                    </div>
-
-                    <!-- КОМПАКТНАЯ СУММА ЗАКАЗА -->
-                    <div class="compact-order-summary" style="background: #f8f9fa; border-radius: 8px; padding: 15px; margin-top: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 14px; color: #666;">Товары:</span>
-                            <span style="font-weight: 500;">${this.formatPrice(itemsTotal)} ₽</span>
+                    <!-- КОМПАКТНАЯ СУММА -->
+                    <div style="background: #f8f9fa; border-radius: 8px; padding: 12px; font-size: 13px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                            <span style="color: #666;">Товары:</span>
+                            <span>${this.formatPrice(itemsTotal)} ₽</span>
                         </div>
 
                         ${promoDiscount > 0 ? `
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: #28a745;">
-                                <span style="font-size: 14px;">Скидка:</span>
-                                <span style="font-weight: 500;">-${this.formatPrice(promoDiscount)} ₽</span>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; color: #28a745;">
+                                <span>Скидка:</span>
+                                <span>-${this.formatPrice(promoDiscount)} ₽</span>
                             </div>
                         ` : ''}
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 14px; color: #666;">Доставка:</span>
-                            <span style="font-weight: 500; color: ${deliveryCost === 0 ? '#28a745' : '#333'}">
-                                ${deliveryCost === 0 ? 'Бесплатно' : deliveryCost + ' ₽'}
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="color: #666;">Доставка:</span>
+                            <span style="color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? '#28a745' : '#dc3545'};">
+                                ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? 'Бесплатно' : '100 ₽'}
                             </span>
                         </div>
 
-                        <div style="border-top: 1px solid #dee2e6; padding-top: 10px; margin-top: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-weight: 600; font-size: 16px;">Итого:</span>
-                                <span style="font-weight: 700; font-size: 18px; color: #2c3e50;">
-                                    ${this.formatPrice(finalTotal)} ₽
-                                </span>
-                            </div>
-                        </div>
-
-                        ${itemsTotal < 1000 ? `
-                            <div style="margin-top: 8px; padding: 6px 10px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
-                                <div style="font-size: 12px; color: #856404; display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-info-circle"></i>
-                                    Добавьте товаров на ${this.formatPrice(1000 - itemsTotal)} ₽ для бесплатной доставки
+                        ${!hasFreeDeliveryPromo && itemsTotal < 1000 && this.deliveryData.type === 'courier' ? `
+                            <div style="padding: 6px 8px; background: #fff3cd; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #ffc107;">
+                                <div style="font-size: 11px; color: #856404; display: flex; align-items: center; gap: 4px;">
+                                    <i class="fas fa-info-circle" style="font-size: 10px;"></i>
+                                    Добавьте на ${this.formatPrice(1000 - itemsTotal)} ₽ для бесплатной доставки
                                 </div>
                             </div>
                         ` : ''}
+
+                        <div style="border-top: 1px solid #dee2e6; padding-top: 8px;">
+                            <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                                <span>Итого:</span>
+                                <span style="font-size: 16px; color: #2c3e50;">${this.formatPrice(finalTotal)} ₽</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="delivery-footer" style="padding: 15px; border-top: 1px solid #eee; display: flex; gap: 10px;">
-                    <button class="btn-back" onclick="shop.returnToCartFromDelivery()"
-                            style="flex: 1; padding: 12px; background: #f8f9fa; color: #333; border: 1px solid #dee2e6; border-radius: 8px; cursor: pointer; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <i class="fas fa-arrow-left"></i> Назад
+                <div style="padding: 12px; border-top: 1px solid #eee;">
+                    <button onclick="shop.returnToCartFromDelivery()"
+                            style="width: 100%; padding: 10px; background: #f8f9fa; color: #333; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <i class="fas fa-arrow-left"></i> Назад в корзину
                     </button>
                 </div>
             </div>
         `;
 
-        // Назначаем обработчики для компактного промокода
+        // Назначаем обработчики
+        const courierOption = document.getElementById('courierOption');
+        const pickupOption = document.getElementById('pickupOption');
+
+        courierOption.addEventListener('click', () => {
+            this.deliveryData.type = 'courier';
+            this.showDeliverySelection(); // Обновляем отображение
+        });
+
+        pickupOption.addEventListener('click', () => {
+            this.deliveryData.type = 'pickup';
+            this.showDeliverySelection(); // Обновляем отображение
+        });
+
         if (!this.appliedPromoCode) {
             document.getElementById('applyPromoBtnCompact').addEventListener('click', () => {
                 this.applyCompactPromoCode();
@@ -2298,29 +2325,9 @@ class TelegramShop {
                 this.removeCompactPromoCode();
             });
         }
-                // Наводимые эффекты для методов доставки
-        const deliveryMethods = document.querySelectorAll('.delivery-method.compact');
-        deliveryMethods.forEach(method => {
-            method.addEventListener('mouseenter', function() {
-                this.style.borderColor = '#667eea';
-                this.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.1)';
-                this.style.transform = 'translateY(-2px)';
-            });
-
-            method.addEventListener('mouseleave', function() {
-                this.style.borderColor = '#e0e0e0';
-                this.style.boxShadow = 'none';
-                this.style.transform = 'translateY(0)';
-            });
-
-            method.addEventListener('click', () => {
-                const type = method.id === 'courierOption' ? 'courier' : 'pickup';
-                this.selectDeliveryType(type);
-            });
-        });
 
         document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
-    }
+        }
 
     async applyCompactPromoCode() {
         const input = document.getElementById('compactPromoCodeInput');
@@ -2328,13 +2335,13 @@ class TelegramShop {
         const code = input?.value.trim().toUpperCase();
 
         if (!code) {
-            this.showCompactPromoMessage('❌ Введите промокод', 'error');
+            this.showCompactPromoMessage('Введите промокод', 'error');
             return;
         }
 
         try {
-            console.log(`🎟️ Применение компактного промокода: ${code}`);
-            this.showCompactPromoMessage('<i class="fas fa-spinner fa-spin"></i> Проверка...', 'loading');
+            console.log(`🎟️ Проверка промокода: ${code}`);
+            this.showCompactPromoMessage('Проверка...', 'loading');
 
             const response = await fetch('/api/check-promo-code', {
                 method: 'POST',
@@ -2357,7 +2364,7 @@ class TelegramShop {
 
                 if (promo.min_order_amount > 0 && itemsTotal < promo.min_order_amount) {
                     this.showCompactPromoMessage(
-                        `❌ Мин. сумма: ${this.formatPrice(promo.min_order_amount)} ₽`,
+                        `Мин. сумма: ${this.formatPrice(promo.min_order_amount)} ₽`,
                         'error'
                     );
                     return;
@@ -2368,15 +2375,9 @@ class TelegramShop {
                     const endDate = new Date(promo.end_date);
                     const now = new Date();
                     if (endDate < now) {
-                        this.showCompactPromoMessage('❌ Промокод истек', 'error');
+                        this.showCompactPromoMessage('Промокод истек', 'error');
                         return;
                     }
-                }
-
-                // Проверка лимита
-                if (promo.usage_limit && promo.used_count >= promo.usage_limit) {
-                    this.showCompactPromoMessage('❌ Промокод закончился', 'error');
-                    return;
                 }
 
                 // Сохраняем промокод
@@ -2385,16 +2386,12 @@ class TelegramShop {
                     code: code
                 };
 
-                // Показываем успех
-                this.showCompactPromoMessage(
-                    `✅ Промокод применен!`,
-                    'success'
-                );
+                this.showCompactPromoMessage('✅ Применен!', 'success');
 
-                // Обновляем отображение через 500мс
+                // Обновляем отображение
                 setTimeout(() => {
                     this.showDeliverySelection();
-                }, 500);
+                }, 800);
 
             } else {
                 this.showCompactPromoMessage(`❌ ${result.error}`, 'error');
@@ -2402,7 +2399,7 @@ class TelegramShop {
 
         } catch (error) {
             console.error('❌ Ошибка промокода:', error);
-            this.showCompactPromoMessage('❌ Ошибка сервера', 'error');
+            this.showCompactPromoMessage('❌ Ошибка', 'error');
         }
     }
 
@@ -2554,77 +2551,92 @@ class TelegramShop {
 
         // TelegramShop class - добавьте этот метод
     showCashPaymentModal(totalAmount) {
-        // Создаем модальное окно для оплаты наличными
+        // Создаем модальное окно
         const modal = document.createElement('div');
-        modal.className = 'modal-overlay cash-payment-modal';
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 10px;
+        `;
+
         modal.innerHTML = `
-            <div class="modal-content cash-payment-content">
-                <div class="modal-header">
-                    <h3><i class="fas fa-money-bill-wave"></i> Оплата наличными</h3>
-                    <button class="close-modal" onclick="this.parentElement.parentElement.remove()">
-                        <i class="fas fa-times"></i>
-                    </button>
+            <div style="background: white; border-radius: 10px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
+                <div style="padding: 15px; border-bottom: 1px solid #eee;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; font-size: 16px; color: #333;">
+                            <i class="fas fa-money-bill-wave"></i> Наличные
+                        </h3>
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()"
+                                style="background: none; border: none; color: #666; cursor: pointer; font-size: 16px; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="cash-payment-info">
-                        <div class="total-amount-display">
-                            <div class="total-label">Сумма к оплате:</div>
-                            <div class="total-value">${this.formatPrice(totalAmount)} ₽</div>
+
+                <div style="padding: 15px;">
+                    <!-- Сумма к оплате -->
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <div style="font-size: 13px; color: #666; margin-bottom: 4px;">К оплате:</div>
+                        <div style="font-size: 24px; font-weight: bold; color: #2c3e50;">${this.formatPrice(totalAmount)} ₽</div>
+                    </div>
+
+                    <!-- Ввод суммы -->
+                    <div style="margin-bottom: 15px;">
+                        <div style="font-size: 13px; color: #666; margin-bottom: 6px;">Сумма от клиента:</div>
+                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                            <input type="number"
+                                   id="cashAmountCompact"
+                                   value="${Math.ceil(totalAmount / 100) * 100}"
+                                   style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; text-align: center;">
                         </div>
 
-                        <div class="form-group">
-                            <label for="cashAmount">
-                                <i class="fas fa-money-bill"></i>
-                                Сколько дал клиент (₽):
-                            </label>
-                            <div class="cash-input-group">
-                                <button class="cash-btn minus" onclick="shop.adjustCashAmount(-100)">
-                                    <i class="fas fa-minus"></i> 100
-                                </button>
-                                <input
-                                    type="number"
-                                    id="cashAmount"
-                                    min="${totalAmount}"
-                                    step="1"
-                                    value="${Math.ceil(totalAmount / 100) * 100}"
-                                    oninput="shop.calculateChange()"
-                                    placeholder="Введите сумму">
-                                <button class="cash-btn plus" onclick="shop.adjustCashAmount(100)">
-                                    <i class="fas fa-plus"></i> 100
-                                </button>
-                            </div>
-                            <div class="cash-quick-buttons">
-                                <button class="quick-cash-btn" onclick="shop.setExactCashAmount(${Math.ceil(totalAmount / 100) * 100})">
-                                    ${Math.ceil(totalAmount / 100) * 100} ₽
-                                </button>
-                                <button class="quick-cash-btn" onclick="shop.setExactCashAmount(${Math.ceil(totalAmount / 500) * 500})">
-                                    ${Math.ceil(totalAmount / 500) * 500} ₽
-                                </button>
-                                <button class="quick-cash-btn" onclick="shop.setExactCashAmount(${Math.ceil(totalAmount / 1000) * 1000})">
-                                    ${Math.ceil(totalAmount / 1000) * 1000} ₽
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="change-result" id="changeResult" style="display: none;">
-                            <div class="change-header">
-                                <i class="fas fa-calculator"></i>
-                                <h4>Сдача:</h4>
-                            </div>
-                            <div class="change-display">
-                                <div id="changeAmount" class="change-amount">0 ₽</div>
-                                <div class="change-breakdown" id="changeBreakdown"></div>
-                            </div>
+                        <!-- Быстрые кнопки -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px;">
+                            <button onclick="shop.adjustCashAmountCompact(100)"
+                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                +100 ₽
+                            </button>
+                            <button onclick="shop.adjustCashAmountCompact(500)"
+                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                +500 ₽
+                            </button>
+                            <button onclick="shop.adjustCashAmountCompact(1000)"
+                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                +1000 ₽
+                            </button>
                         </div>
                     </div>
 
-                    <div class="modal-actions">
-                        <button class="btn btn-secondary" onclick="this.parentElement.parentElement.parentElement.remove()">
-                            <i class="fas fa-times"></i> Отмена
+                    <!-- Сдача -->
+                    <div id="changeResultCompact" style="display: none; margin-bottom: 15px;">
+                        <div style="background: #f8f9fa; border-radius: 6px; padding: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="font-size: 13px; color: #666;">Сдача:</div>
+                                <div id="changeAmountCompact" style="font-size: 18px; font-weight: bold; color: #28a745;">0 ₽</div>
+                            </div>
+                            <div id="changeBreakdownCompact" style="font-size: 11px; color: #666;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Кнопки действий -->
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()"
+                                style="flex: 1; padding: 12px; background: #f8f9fa; color: #333; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            Отмена
                         </button>
-                        <button class="btn btn-primary" id="confirmCashPayment" disabled
-                                onclick="shop.confirmCashPayment(${totalAmount})">
-                            <i class="fas fa-check-circle"></i> Подтвердить оплату
+                        <button id="confirmCashCompact"
+                                onclick="shop.confirmCashPaymentCompact(${totalAmount})"
+                                style="flex: 1; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            Готово
                         </button>
                     </div>
                 </div>
@@ -2633,27 +2645,52 @@ class TelegramShop {
 
         document.body.appendChild(modal);
 
-        // Сразу рассчитываем сдачу
-        setTimeout(() => this.calculateChange(), 100);
+        // Инициализация
+        const cashInput = document.getElementById('cashAmountCompact');
+        cashInput.addEventListener('input', () => this.calculateChangeCompact(totalAmount));
+
+        // Рассчитываем сдачу сразу
+        setTimeout(() => this.calculateChangeCompact(totalAmount), 100);
     }
 
-        // Метод для корректировки суммы
-    adjustCashAmount(delta) {
-        const cashInput = document.getElementById('cashAmount');
+    confirmCashPaymentCompact(totalAmount) {
+        const cashInput = document.getElementById('cashAmountCompact');
+        const changeElement = document.getElementById('changeAmountCompact');
+
+        if (!cashInput || !changeElement) return;
+
+        const cashAmount = parseFloat(cashInput.value);
+        const change = parseFloat(changeElement.textContent.replace(' ₽', '').replace(/\s/g, '')) || 0;
+
+        // Сохраняем информацию
+        this.cashPaymentInfo = {
+            total: totalAmount,
+            received: cashAmount,
+            change: change,
+            payment_method: 'cash',
+            timestamp: new Date().toISOString()
+        };
+
+        // Закрываем модальное окно
+        const modal = document.querySelector('.modal-overlay');
+        if (modal) {
+            modal.remove();
+        }
+
+        // Продолжаем оформление
+        this.confirmOrderWithCash();
+    }
+
+    adjustCashAmountCompact(amount) {
+        const cashInput = document.getElementById('cashAmountCompact');
         if (!cashInput) return;
 
         let currentValue = parseInt(cashInput.value) || 0;
-        const totalAmount = parseFloat(document.querySelector('.total-value').textContent.replace(/\s/g, '').replace('₽', '')) || 0;
+        cashInput.value = currentValue + amount;
 
-        let newValue = currentValue + delta;
-
-        // Не позволяем ввести сумму меньше суммы заказа
-        if (newValue < totalAmount) {
-            newValue = Math.ceil(totalAmount / delta) * delta;
-        }
-
-        cashInput.value = newValue;
-        this.calculateChange();
+        // Рассчитываем сдачу
+        const totalAmount = parseFloat(cashInput.dataset.totalAmount) || 0;
+        this.calculateChangeCompact(totalAmount);
     }
 
         // Метод для установки точной суммы
@@ -2667,54 +2704,36 @@ class TelegramShop {
 
 
         // Метод расчета сдачи
-    calculateChange() {
-        const totalElement = document.querySelector('.cash-payment-info .total-value');
-        const cashInput = document.getElementById('cashAmount');
-        const changeResult = document.getElementById('changeResult');
-        const changeAmount = document.getElementById('changeAmount');
-        const changeBreakdown = document.getElementById('changeBreakdown');
-        const confirmBtn = document.getElementById('confirmCashPayment');
+    calculateChangeCompact(totalAmount) {
+        const cashInput = document.getElementById('cashAmountCompact');
+        const changeResult = document.getElementById('changeResultCompact');
+        const changeAmount = document.getElementById('changeAmountCompact');
+        const changeBreakdown = document.getElementById('changeBreakdownCompact');
+        const confirmBtn = document.getElementById('confirmCashCompact');
 
-        // Проверяем наличие элементов
-        if (!totalElement || !cashInput || !changeResult || !changeAmount || !confirmBtn) {
-            console.error('Не найдены необходимые элементы DOM');
-            return;
-        }
+        if (!cashInput || !changeResult) return;
 
-        // Получаем сумму заказа
-        const totalAmountText = totalElement.textContent.replace(/\s/g, '').replace('₽', '');
-        const totalAmount = parseFloat(totalAmountText) || 0;
-
-        // Получаем введенную сумму
         const cashAmount = parseFloat(cashInput.value) || 0;
 
         if (cashAmount >= totalAmount) {
             const change = cashAmount - totalAmount;
 
-            // Показываем блок с сдачей
             changeResult.style.display = 'block';
             changeAmount.textContent = `${this.formatPrice(change)} ₽`;
 
             if (change > 0) {
-                // Рассчитываем купюры для сдачи
                 const breakdown = this.calculateCashBreakdown(change);
-                if (changeBreakdown) {
-                    changeBreakdown.innerHTML = breakdown;
-                }
+                changeBreakdown.innerHTML = breakdown;
             } else {
-                if (changeBreakdown) {
-                    changeBreakdown.innerHTML = '<div class="no-change">Сдачи не требуется</div>';
-                }
+                changeBreakdown.innerHTML = '<div style="text-align: center; color: #28a745;">Без сдачи</div>';
             }
 
-            // Активируем кнопку подтверждения
             confirmBtn.disabled = false;
-            confirmBtn.innerHTML = `<i class="fas fa-check-circle"></i> Подтвердить (сдача: ${this.formatPrice(change)} ₽)`;
+            confirmBtn.innerHTML = `Готово`;
         } else {
-            // Скрываем блок с сдачей
             changeResult.style.display = 'none';
             confirmBtn.disabled = true;
-            confirmBtn.innerHTML = `<i class="fas fa-check-circle"></i> Подтвердить оплату`;
+            confirmBtn.innerHTML = `Готово`;
         }
     }
 
@@ -3384,94 +3403,54 @@ class TelegramShop {
             console.log('🚚 Данные доставки:', this.deliveryData);
             console.log('🛒 Товары в корзине:', this.cart.length);
 
-            // Подготавливаем данные о доставке и оплате
-            let deliveryDetails = {};
-            let recipient_name = "";
-            let phone_number = "";
-            let deliveryCost = 0;
-
-            if (this.deliveryData.type === 'courier' && this.deliveryData.address_id) {
-                if (this.deliveryData.address_id.toString().startsWith('guest_')) {
-                    const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-                    const addressIndex = parseInt(this.deliveryData.address_id.split('_')[1]);
-                    deliveryDetails = guestAddresses[addressIndex] || {};
-                    recipient_name = deliveryDetails.recipient_name || '';
-                    phone_number = deliveryDetails.phone || '';
-                    console.log('🏠 Адрес гостя:', deliveryDetails);
-                } else {
-                    deliveryDetails = this.deliveryData.address_details || {};
-                    recipient_name = deliveryDetails.recipient_name || '';
-                    phone_number = deliveryDetails.phone || deliveryDetails.phone_number || '';
-                    console.log('👤 Адрес пользователя:', deliveryDetails);
-                }
-
-                if (!recipient_name || recipient_name.trim() === '') {
-                    this.showNotification('❌ Укажите имя получателя', 'error');
-                    this.showAddressSelection();
-                    return;
-                }
-
-                if (!phone_number || phone_number.trim() === '') {
-                    this.showNotification('❌ Укажите телефон для связи', 'error');
-                    this.showAddressSelection();
-                    return;
-                }
-            } else if (this.deliveryData.type === 'pickup' && this.deliveryData.pickup_point) {
-                deliveryDetails = { pickup_point_id: this.deliveryData.pickup_point };
-                recipient_name = this.username || 'Гость';
-                phone_number = 'Будет указан при получении';
-            }
-
-            // Формируем items для заказа
-            const orderItems = this.cart.map(item => ({
-                id: item.id,
-                name: item.name,
-                price: parseFloat(item.price) || 0,
-                quantity: parseInt(item.quantity) || 1
-            }));
-
-            // Рассчитываем стоимость - ВАЖНО: преобразуем все к числам
+            // Рассчитываем сумму товаров
             const itemsTotal = this.cart.reduce((sum, item) => {
-                const price = parseFloat(item.price) || 0;
-                const quantity = parseInt(item.quantity) || 1;
-                return sum + (price * quantity);
+                const priceToShow = item.discounted_price || item.price;
+                return sum + (priceToShow * item.quantity);
             }, 0);
 
-            console.log(`💰 Сумма товаров: ${itemsTotal} (тип: ${typeof itemsTotal})`);
-
-            // ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
-            // ЯВНО преобразуем itemsTotal к числу и сравниваем с числом
-            const numericItemsTotal = Number(itemsTotal) || 0;
-
-            if (this.deliveryData.type === 'courier') {
-                if (numericItemsTotal < 1000) {  // Теперь оба значения - числа
-                    deliveryCost = 100;
-                    console.log(`💰 Доставка платная: +${deliveryCost} руб (сумма заказа: ${numericItemsTotal} руб)`);
-                } else {
-                    console.log(`✅ Доставка бесплатная (сумма заказа: ${numericItemsTotal} руб)`);
-                }
-            } else {
-                deliveryCost = 0;
+            // РАССЧИТЫВАЕМ СКИДКУ ОТ ПРОМОКОДА
+            let promoDiscount = 0;
+            if (this.appliedPromoCode) {
+                promoDiscount = this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode);
+                console.log(`🎟️ Скидка от промокода "${this.appliedPromoCode.code}": ${promoDiscount} руб`);
             }
 
-            const totalWithDelivery = numericItemsTotal + deliveryCost;
+            // Рассчитываем стоимость доставки
+            let deliveryCost = 0;
+
+            // ЕСЛИ ПРОМОКОД НА БЕСПЛАТНУЮ ДОСТАВКУ
+            if (this.appliedPromoCode?.discount_type === 'free_delivery') {
+                deliveryCost = 0;
+                console.log('🚚 Доставка бесплатная по промокоду');
+            } else if (this.deliveryData.type === 'courier' && itemsTotal < 1000) {
+                deliveryCost = 100;
+                console.log(`💰 Доставка платная: +${deliveryCost} руб (сумма заказа: ${itemsTotal} руб)`);
+            } else {
+                console.log(`✅ Доставка бесплатная (сумма заказа: ${itemsTotal} руб)`);
+            }
+
+            const totalWithDelivery = itemsTotal + deliveryCost - promoDiscount;
             const cashPayment = this.deliveryData.cash_payment || {};
             const orderData = {
-                user_id: parseInt(this.userId) || 0,
-                username: this.username || 'Гость',
-                items: orderItems,
-                total: numericItemsTotal,
-                delivery_type: this.deliveryData.type,
-                delivery_address: JSON.stringify(deliveryDetails),
-                pickup_point: this.deliveryData.pickup_point,
-                payment_method: this.deliveryData.payment_method || 'cash',
-                recipient_name: recipient_name,
-                phone_number: phone_number,
-                cash_payment: cashPayment,
-                promo_code: this.appliedPromoCode?.code || null,
-                promo_code_id: this.appliedPromoCode?.id || null,
-                discount_amount: promoDiscount || 0
-            };
+                        user_id: parseInt(this.userId) || 0,
+                        username: this.username || 'Гость',
+                        items: orderItems,
+                        total: itemsTotal,  // Сумма без скидок и доставки
+                        delivery_type: this.deliveryData.type,
+                        delivery_address: JSON.stringify(deliveryDetails),
+                        pickup_point: this.deliveryData.pickup_point,
+                        payment_method: this.deliveryData.payment_method || 'cash',
+                        recipient_name: recipient_name,
+                        phone_number: phone_number,
+                        cash_payment: cashPayment,
+                        // Добавляем информацию о промокоде
+                        promo_code: this.appliedPromoCode?.code || null,
+                        promo_code_id: this.appliedPromoCode?.id || null,
+                        discount_amount: promoDiscount || 0,
+                        delivery_cost: deliveryCost,
+                        total_with_delivery: totalWithDelivery
+                    };
 
             if (this.deliveryData.cash_payment) {
                 orderData.cash_details = this.deliveryData.cash_payment;
