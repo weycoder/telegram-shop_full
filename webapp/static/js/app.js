@@ -1174,10 +1174,6 @@ class TelegramShop {
 
         this.closeProductModal();
     }
-
-
-
-
         // Методы для работы с весом
     adjustWeight(delta) {
         const input = document.getElementById('exactWeight');
@@ -2352,7 +2348,8 @@ class TelegramShop {
                 closeBtn.addEventListener('click', () => this.closeCart());
             }
 
-            console.log('✅ Обработчики назначены');}, 100);
+            console.log('✅ Обработчики назначены');
+        }, 100);
     }
 
     async applyCompactPromoCode() {
