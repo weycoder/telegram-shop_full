@@ -200,12 +200,14 @@ class CourierApp {
         let recipient = "Не указан";
         let phone = "Телефон не указан";
         let paymentInfo = "Не указан";
+
+        // Определяем способ оплаты с иконками
         if (order.payment_method === 'cash') {
-            paymentInfo = "Наличные";
+            paymentInfo = "💵 Наличные";
         } else if (order.payment_method === 'transfer') {
-            paymentInfo = "Перевод курьеру";
+            paymentInfo = "📱 Перевод курьеру";
         } else if (order.payment_method === 'terminal') {
-            paymentInfo = "Терминал";
+            paymentInfo = "💳 Терминал";
         }
 
         if (order.recipient_name && order.recipient_name !== 'Гость' && order.recipient_name !== 'Не указан') {
@@ -263,13 +265,18 @@ class CourierApp {
         const deliveryCost = order.delivery_cost || 0;
         const totalWithDelivery = order.total_with_delivery || (total + deliveryCost);
 
+        // Данные о наличной оплате
+        const cashReceived = order.cash_received || 0;
+        const cashChange = order.cash_change || 0;
+        const cashToPay = totalWithDelivery;
+
         // Информация о стоимости доставки
         let deliveryInfo = '';
         if (deliveryCost > 0) {
             deliveryInfo = `
                 <div class="info-item">
                     <span class="info-label">Доставка:</span>
-                    <span class="info-value">${deliveryCost} ₽</span>
+                    <span class="info-value">${this.formatPrice(deliveryCost)} ₽</span>
                 </div>
             `;
         } else {
@@ -281,20 +288,69 @@ class CourierApp {
             `;
         }
 
+        // Блок информации о наличной оплате
+        let cashPaymentInfo = '';
+        if (order.payment_method === 'cash') {
+            if (cashReceived > 0 || cashChange > 0) {
+                // Если есть данные о наличных
+                cashPaymentInfo = `
+                    <div class="cash-payment-details" style="margin-top: 10px; padding: 12px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: bold;">
+                            <span>💵 НАЛИЧНАЯ ОПЛАТА:</span>
+                            <span>${this.formatPrice(cashToPay)} ₽</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                            <span>Получено от клиента:</span>
+                            <span style="color: #27ae60; font-weight: bold;">${this.formatPrice(cashReceived)} ₽</span>
+                        </div>
+                `;
+
+                if (cashChange > 0) {
+                    cashPaymentInfo += `
+                        <div style="display: flex; justify-content: space-between; background: #dc3545; color: white; padding: 8px; border-radius: 6px; margin-top: 8px; font-weight: bold;">
+                            <span>⚠️ СДАЧА КЛИЕНТУ:</span>
+                            <span>${this.formatPrice(cashChange)} ₽</span>
+                        </div>
+                        <div style="font-size: 11px; color: #856404; margin-top: 6px; text-align: center;">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>ВНИМАНИЕ: Подготовьте сдачу заранее!</strong>
+                        </div>
+                    `;
+                } else if (cashChange === 0 && cashReceived >= cashToPay) {
+                    cashPaymentInfo += `
+                        <div style="display: flex; justify-content: space-between; background: #28a745; color: white; padding: 8px; border-radius: 6px; margin-top: 8px;">
+                            <span>✅ Без сдачи:</span>
+                            <span>Сдачи не требуется</span>
+                        </div>
+                    `;
+                }
+
+                cashPaymentInfo += `</div>`;
+            } else {
+                // Если нет данных о наличных, но оплата наличными
+                cashPaymentInfo = `
+                    <div class="cash-payment-details" style="margin-top: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px dashed #6c757d;">
+                        <div style="text-align: center; color: #6c757d;">
+                            <i class="fas fa-info-circle"></i> Информация о наличной оплате будет уточнена
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
         return `
             <div class="order-card available" data-order-id="${order.id}">
                 <div class="order-header">
                     <div class="order-id">Заказ #${order.id}</div>
                     <div class="order-reward">
                         <i class="fas fa-money-bill-wave"></i>
-                        ${totalWithDelivery} ₽
+                        ${this.formatPrice(totalWithDelivery)} ₽
                     </div>
                 </div>
 
                 <div class="order-info">
                     <div class="info-item">
                         <span class="info-label">Товары:</span>
-                        <span class="info-value">${total} ₽</span>
+                        <span class="info-value">${this.formatPrice(total)} ₽</span>
                     </div>
                     ${deliveryInfo}
                     <div class="info-item">
@@ -314,21 +370,15 @@ class CourierApp {
                         <span class="info-value">${new Date(order.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">Товары:</span>
-                        <span class="info-value">${total} ₽</span>
-                    </div>
-                    ${deliveryInfo}
-                    <div class="info-item">
                         <span class="info-label">Оплата:</span>
-                        <span class="info-value">${paymentInfo}</span>
+                        <span class="info-value" style="${order.payment_method === 'cash' && cashChange > 0 ? 'color: #dc3545; font-weight: bold;' : ''}">
+                            ${paymentInfo}
+                        </span>
                     </div>
-                    ${order.payment_method === 'cash' && order.cash_change > 0 ? `
-                        <div class="info-item" style="color: #e74c3c; font-weight: bold;">
-                            <span class="info-label">⚠️ Сдача:</span>
-                            <span class="info-value">${order.cash_change} ₽</span>
-                        </div>
-                    ` : ''}
+
+                    ${cashPaymentInfo}
                 </div>
+
                 <div class="order-actions">
                     <button class="btn-action btn-take-order" onclick="takeOrder(${order.id})">
                         <i class="fas fa-hand-paper"></i> Взять заказ
@@ -556,18 +606,81 @@ class CourierApp {
         container.innerHTML = html;
     }
 
+        // Метод форматирования цены (если еще нет)
+    formatPrice(price) {
+        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+    }
+
 
     createOrderCard(order, isCompleted = false) {
-        // ========== ИСПРАВЛЕННОЕ ИЗВЛЕЧЕНИЕ АДРЕСА И ДАННЫХ ==========
+        // ========== ИСПРАВЛЕННОЕ ИЗВЛЕЧЕНИЕ ДАННЫХ ==========
         let address = "Адрес не указан";
         let recipient = "Не указан";
         let phone = "Телефон не указан";
 
-        // Новые поля для наличной оплаты
-        let paymentInfo = "";
+        // ИНФОРМАЦИЯ О НАЛИЧНОЙ ОПЛАТЕ
         let cashInfo = "";
+        let paymentInfo = "Не указан";
 
-        // 1. Проверяем прямые поля заказа
+        // 1. Определяем способ оплаты
+        if (order.payment_method === 'cash') {
+            paymentInfo = "💵 Наличные";
+
+            // Используем данные из базы
+            const total = order.total_price || 0;
+            const deliveryCost = order.delivery_cost || 0;
+            const totalWithDelivery = total + deliveryCost;
+            const cashReceived = order.cash_received || 0;
+            const cashChange = order.cash_change || 0;
+
+            // Всегда показываем информацию о наличной оплате для наличных заказов
+            cashInfo = `
+                <div class="cash-payment-info" style="margin-top: 8px; padding: 10px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107; font-size: 13px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span><strong>К оплате:</strong></span>
+                        <span><strong>${this.formatPrice(totalWithDelivery)} ₽</strong></span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Получено:</span>
+                        <span style="color: #27ae60;">${this.formatPrice(cashReceived)} ₽</span>
+                    </div>
+            `;
+
+            if (cashChange > 0) {
+                cashInfo += `
+                    <div style="display: flex; justify-content: space-between; background: #dc3545; color: white; padding: 6px; border-radius: 5px; margin-top: 5px;">
+                        <span><strong>Нужно выдать сдачу:</strong></span>
+                        <span><strong>${this.formatPrice(cashChange)} ₽</strong></span>
+                    </div>
+                    <div style="font-size: 11px; color: #856404; margin-top: 5px; text-align: center;">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>ВНИМАНИЕ: Подготовьте сдачу клиенту!</strong>
+                    </div>
+                `;
+            } else if (cashChange === 0 && cashReceived > 0) {
+                cashInfo += `
+                    <div style="display: flex; justify-content: space-between; background: #28a745; color: white; padding: 6px; border-radius: 5px; margin-top: 5px;">
+                        <span><strong>Без сдачи</strong></span>
+                        <span><strong>✅</strong></span>
+                    </div>
+                `;
+            } else {
+                cashInfo += `
+                    <div style="display: flex; justify-content: space-between; background: #6c757d; color: white; padding: 6px; border-radius: 5px; margin-top: 5px;">
+                        <span><strong>Сумма оплаты не указана</strong></span>
+                        <span><strong>⚠️</strong></span>
+                    </div>
+                `;
+            }
+
+            cashInfo += `</div>`;
+        } else if (order.payment_method === 'transfer') {
+            paymentInfo = "📱 Перевод";
+        } else if (order.payment_method === 'terminal') {
+            paymentInfo = "💳 Терминал";
+        }
+
+
+        // 2. Получаем данные получателя и адреса
         if (order.recipient_name && order.recipient_name !== 'Гость' && order.recipient_name !== 'Не указан') {
             recipient = order.recipient_name;
         }
@@ -576,47 +689,7 @@ class CourierApp {
             phone = order.phone_number;
         }
 
-        // 2. Проверяем данные о наличной оплате
-        if (order.payment_method === 'cash') {
-            paymentInfo = "Наличные";
-
-            // Если есть информация о полученных деньгах и сдаче
-            if (order.cash_received || order.cash_change) {
-                const total = order.total_price || 0;
-                const received = order.cash_received || total;
-                const change = order.cash_change || 0;
-
-                cashInfo = `
-                    <div class="cash-payment-info" style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 6px; border: 1px solid #ffeaa7;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                            <span style="font-weight: bold; color: #d35400;">💰 НАЛИЧНЫЕ:</span>
-                            <span style="font-weight: bold;">${total} ₽</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
-                            <span>Получено:</span>
-                            <span style="color: #27ae60;">${received} ₽</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
-                            <span>Сдача:</span>
-                            <span style="color: #e74c3c; font-weight: bold;">${change} ₽</span>
-                        </div>
-                        ${change > 0 ? `
-                            <div style="margin-top: 4px; padding: 4px; background: #ffeaa7; border-radius: 4px; font-size: 12px; text-align: center;">
-                                <i class="fas fa-exclamation-triangle"></i> <strong>Нужно выдать сдачу!</strong>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            }
-        } else if (order.payment_method === 'transfer') {
-            paymentInfo = "Перевод курьеру";
-        } else if (order.payment_method === 'terminal') {
-            paymentInfo = "Терминал";
-        } else {
-            paymentInfo = "Не указан";
-        }
-
-        // 3. Проверяем delivery_address
+        // 3. Обработка адреса
         let addressData = null;
         if (order.delivery_address) {
             try {
@@ -652,34 +725,19 @@ class CourierApp {
                     }
                 }
             } catch (e) {
-                console.error('❌ Ошибка обработки адреса заказа #' + order.id, e);
+                console.error('❌ Ошибка обработки адреса:', e);
                 if (typeof order.delivery_address === 'string') {
                     address = order.delivery_address;
                 }
             }
         }
 
-        // 4. Если все еще нет данных, пробуем username
+        // 4. Если все еще нет данных
         if (recipient === "Не указан" && order.username && order.username !== 'Гость') {
             recipient = order.username;
         }
 
-        // 5. Запасной вариант для адреса
-        if (address === "Адрес не указан" && order.delivery_address_obj) {
-            try {
-                const addr = order.delivery_address_obj;
-                const parts = [];
-                if (addr.city) parts.push(addr.city);
-                if (addr.street) parts.push(`ул. ${addr.street}`);
-                if (addr.house) parts.push(`д. ${addr.house}`);
-                if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
-                if (parts.length > 0) address = parts.join(', ');
-            } catch (e) {
-                // Игнорируем ошибку
-            }
-        }
-
-        // Сумма с учетом доставки
+        // Сумма с доставкой
         const total = order.total_price || 0;
         const deliveryCost = order.delivery_cost || 0;
         const totalWithDelivery = total + deliveryCost;
@@ -743,11 +801,13 @@ class CourierApp {
                     </div>
                     <div class="info-item">
                         <span class="info-label">Оплата:</span>
-                        <span class="info-value" style="${order.payment_method === 'cash' && order.cash_change > 0 ? 'color: #e74c3c; font-weight: bold;' : ''}">
+                        <span class="info-value" style="${order.payment_method === 'cash' && order.cash_change > 0 ? 'color: #dc3545; font-weight: bold;' : ''}">
                             ${paymentInfo}
                         </span>
                     </div>
+
                     ${cashInfo}
+
                     <div class="info-item">
                         <span class="info-label">Получатель:</span>
                         <span class="info-value" style="${recipient === 'Не указан' ? 'color: #e74c3c; font-weight: bold;' : ''}">

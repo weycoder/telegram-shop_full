@@ -1518,6 +1518,9 @@ def get_available_orders():
                                              o.recipient_name,
                                              o.phone_number,
                                              o.created_at,
+                                             o.payment_method,   # ← ДОБАВИТЬ
+                                             o.cash_received,    # ← ДОБАВИТЬ
+                                             o.cash_change,      # ← ДОБАВИТЬ
                                              (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
                                       FROM orders o
                                                LEFT JOIN order_assignments a ON o.id = a.order_id
@@ -1546,6 +1549,13 @@ def get_available_orders():
                     order_dict['delivery_address_obj'] = {}
             else:
                 order_dict['delivery_address_obj'] = {}
+
+            # Парсим cash_details если есть
+            if order_dict.get('cash_details'):
+                try:
+                    order_dict['cash_details_obj'] = json.loads(order_dict['cash_details'])
+                except:
+                    order_dict['cash_details_obj'] = {}
 
             processed_orders.append(order_dict)
 
@@ -1654,11 +1664,12 @@ def get_courier_orders():
                                           o.username,
                                           o.items,
                                           o.total_price,
+                                          o.delivery_cost,  # ← ДОБАВИТЬ
                                           o.status as order_status,
                                           o.delivery_type,
                                           o.delivery_address,
                                           o.pickup_point,
-                                          o.payment_method,
+                                          o.payment_method,  # ← ДОБАВИТЬ
                                           o.recipient_name,
                                           o.phone_number,
                                           o.created_at,
@@ -1667,7 +1678,10 @@ def get_courier_orders():
                                           a.delivery_started,
                                           a.delivered_at,
                                           a.photo_proof,
-                                          a.delivery_notes
+                                          a.delivery_notes,
+                                          o.cash_received,  # ← ДОБАВИТЬ
+                                          o.cash_change,    # ← ДОБАВИТЬ
+                                          o.cash_details    # ← ДОБАВИТЬ
                                    FROM orders o
                                             JOIN order_assignments a ON o.id = a.order_id
                                    WHERE a.courier_id = ?
@@ -1683,11 +1697,12 @@ def get_courier_orders():
                                              o.username,
                                              o.items,
                                              o.total_price,
+                                             o.delivery_cost,  # ← ДОБАВИТЬ
                                              o.status as order_status,
                                              o.delivery_type,
                                              o.delivery_address,
                                              o.pickup_point,
-                                             o.payment_method,
+                                             o.payment_method,  # ← ДОБАВИТЬ
                                              o.recipient_name,
                                              o.phone_number,
                                              o.created_at,
@@ -1695,7 +1710,10 @@ def get_courier_orders():
                                              a.assigned_at,
                                              a.delivered_at,
                                              a.photo_proof,
-                                             a.delivery_notes
+                                             a.delivery_notes,
+                                             o.cash_received,  # ← ДОБАВИТЬ
+                                             o.cash_change,    # ← ДОБАВИТЬ
+                                             o.cash_details    # ← ДОБАВИТЬ
                                       FROM orders o
                                                JOIN order_assignments a ON o.id = a.order_id
                                       WHERE a.courier_id = ?
@@ -1710,15 +1728,19 @@ def get_courier_orders():
                                          o.username,
                                          o.items,
                                          o.total_price,
+                                         o.delivery_cost,  # ← ДОБАВИТЬ
                                          o.status as order_status,
                                          o.delivery_type,
                                          o.delivery_address,
                                          o.pickup_point,
-                                         o.payment_method,
+                                         o.payment_method,  # ← ДОБАВИТЬ
                                          o.recipient_name,
                                          o.phone_number,
                                          o.created_at,
-                                         a.status as assignment_status
+                                         a.status as assignment_status,
+                                         o.cash_received,  # ← ДОБАВИТЬ
+                                         o.cash_change,    # ← ДОБАВИТЬ
+                                         o.cash_details    # ← ДОБАВИТЬ
                                   FROM orders o
                                            JOIN order_assignments a ON o.id = a.order_id
                                   WHERE a.courier_id = ?
@@ -1748,6 +1770,13 @@ def get_courier_orders():
                 else:
                     order_dict['delivery_address_obj'] = {}
 
+                # Парсим cash_details если есть
+                if order_dict.get('cash_details'):
+                    try:
+                        order_dict['cash_details_obj'] = json.loads(order_dict['cash_details'])
+                    except:
+                        order_dict['cash_details_obj'] = {}
+
                 processed.append(order_dict)
             return processed
 
@@ -1763,7 +1792,6 @@ def get_courier_orders():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @app.route('/api/courier/update-status', methods=['POST'])
 def update_delivery_status():
