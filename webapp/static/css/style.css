@@ -4693,3 +4693,110 @@ html {
 .delivery-option.selected {
     box-shadow: 0 0 0 2px #667eea, 0 4px 12px rgba(102, 126, 234, 0.1);
 }
+
+/* МОБИЛЬНАЯ АДАПТАЦИЯ */
+@media (max-width: 480px) {
+    /* Промокод */
+    .delivery-card {
+        padding: 10px !important;
+    }
+
+    .delivery-card > div:first-child > div:first-child {
+        gap: 10px !important;
+    }
+
+    .delivery-card > div:first-child > div:first-child > div:first-child {
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+    }
+
+    .delivery-card i.fa-truck,
+    .delivery-card i.fa-store {
+        font-size: 14px !important;
+    }
+
+    .delivery-card > div:first-child > div:last-child {
+        font-size: 14px !important;
+    }
+
+    /* Поля ввода */
+    input#compactPromoCodeInput {
+        font-size: 16px !important;
+        padding: 12px 10px !important;
+        height: 44px !important;
+    }
+
+    button#applyPromoBtnCompact {
+        padding: 12px 14px !important;
+        height: 44px !important;
+        font-size: 14px !important;
+    }
+
+    /* Сумма */
+    .delivery-card > div:first-child > div:last-child {
+        font-size: 14px !important;
+    }
+
+    .delivery-card > div:first-child > div:first-child > div:last-child > div:first-child {
+        font-size: 14px !important;
+    }
+
+    .delivery-card > div:first-child > div:first-child > div:last-child > div:last-child {
+        font-size: 12px !important;
+    }
+}
+
+/* Для очень маленьких экранов (iPhone SE и подобные) */
+@media (max-width: 375px) {
+    .delivery-card {
+        padding: 8px !important;
+    }
+
+    .delivery-card > div:first-child > div:first-child {
+        gap: 8px !important;
+    }
+
+    .delivery-card > div:first-child > div:first-child > div:first-child {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+    }
+
+    input#compactPromoCodeInput {
+        font-size: 15px !important;
+        padding: 10px 8px !important;
+        height: 42px !important;
+    }
+
+    button#applyPromoBtnCompact {
+        padding: 10px 12px !important;
+        height: 42px !important;
+        min-width: 60px !important;
+    }
+}
+
+/* Анимации */
+.delivery-card {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.delivery-card:active {
+    transform: scale(0.98);
+}
+
+.delivery-card.selected {
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+/* iOS специфичные стили */
+@supports (-webkit-touch-callout: none) {
+    input#compactPromoCodeInput {
+        font-size: 16px !important;
+    }
+
+    button {
+        cursor: pointer;
+    }
+}
