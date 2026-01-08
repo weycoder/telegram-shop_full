@@ -3424,62 +3424,85 @@ class TelegramShop {
             console.log('🚚 Данные доставки:', this.deliveryData);
             console.log('🛒 Товары в корзине:', this.cart.length);
 
+            // Проверка корзины
+            if (this.cart.length === 0) {
+                this.showNotification('❌ Корзина пуста', 'error');
+                return;
+            }
+
             // Рассчитываем сумму товаров
             const itemsTotal = this.cart.reduce((sum, item) => {
                 const priceToShow = item.discounted_price || item.price;
                 return sum + (priceToShow * item.quantity);
             }, 0);
 
-            // РАССЧИТЫВАЕМ СКИДКУ ОТ ПРОМОКОДА
+            // Скидка от промокода
             let promoDiscount = 0;
             if (this.appliedPromoCode) {
                 promoDiscount = this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode);
                 console.log(`🎟️ Скидка от промокода "${this.appliedPromoCode.code}": ${promoDiscount} руб`);
             }
 
-            // Рассчитываем стоимость доставки
+            // Стоимость доставки
             let deliveryCost = 0;
+            const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
-            // ЕСЛИ ПРОМОКОД НА БЕСПЛАТНУЮ ДОСТАВКУ
-            if (this.appliedPromoCode?.discount_type === 'free_delivery') {
-                deliveryCost = 0;
-                console.log('🚚 Доставка бесплатная по промокоду');
-            } else if (this.deliveryData.type === 'courier' && itemsTotal < 1000) {
+            if (!hasFreeDeliveryPromo && this.deliveryData.type === 'courier' && itemsTotal < 1000) {
                 deliveryCost = 100;
-                console.log(`💰 Доставка платная: +${deliveryCost} руб (сумма заказа: ${itemsTotal} руб)`);
+                console.log(`💰 Доставка платная: +${deliveryCost} руб`);
             } else {
-                console.log(`✅ Доставка бесплатная (сумма заказа: ${itemsTotal} руб)`);
+                console.log('✅ Доставка бесплатная');
             }
 
             const totalWithDelivery = itemsTotal + deliveryCost - promoDiscount;
-            const cashPayment = this.deliveryData.cash_payment || {};
-            const orderData = {
-                        user_id: parseInt(this.userId) || 0,
-                        username: this.username || 'Гость',
-                        items: orderItems,
-                        total: itemsTotal,  // Сумма без скидок и доставки
-                        delivery_type: this.deliveryData.type,
-                        delivery_address: JSON.stringify(deliveryDetails),
-                        pickup_point: this.deliveryData.pickup_point,
-                        payment_method: this.deliveryData.payment_method || 'cash',
-                        recipient_name: recipient_name,
-                        phone_number: phone_number,
-                        cash_payment: cashPayment,
-                        // Добавляем информацию о промокоде
-                        promo_code: this.appliedPromoCode?.code || null,
-                        promo_code_id: this.appliedPromoCode?.id || null,
-                        discount_amount: promoDiscount || 0,
-                        delivery_cost: deliveryCost,
-                        total_with_delivery: totalWithDelivery
-                    };
 
-            if (this.deliveryData.cash_payment) {
-                orderData.cash_details = this.deliveryData.cash_payment;
-                console.log('💰 Добавлены данные о наличных в заказ:', this.deliveryData.cash_payment);
+            // Формируем данные заказа
+            const orderItems = this.cart.map(item => ({
+                id: item.original_product_id || item.id,
+                name: item.name,
+                price: item.discounted_price || item.price,
+                quantity: item.quantity,
+                weight: item.weight || null,
+                is_weight: item.is_weight || false
+            }));
+
+            // Данные доставки
+            let deliveryDetails = {};
+            if (this.deliveryData.type === 'courier' && this.deliveryData.address_details) {
+                deliveryDetails = {
+                    address: `${this.deliveryData.address_details.city}, ${this.deliveryData.address_details.street}, ${this.deliveryData.address_details.house}`,
+                    apartment: this.deliveryData.address_details.apartment,
+                    floor: this.deliveryData.address_details.floor,
+                    doorcode: this.deliveryData.address_details.doorcode,
+                    recipient_name: this.deliveryData.address_details.recipient_name,
+                    phone_number: this.deliveryData.address_details.phone
+                };
             }
 
+            const recipient_name = this.deliveryData.address_details?.recipient_name || this.username || 'Получатель';
+            const phone_number = this.deliveryData.address_details?.phone || '';
+
+            const orderData = {
+                user_id: parseInt(this.userId) || 0,
+                username: this.username || 'Гость',
+                items: orderItems,
+                total: itemsTotal,
+                delivery_type: this.deliveryData.type,
+                delivery_address: JSON.stringify(deliveryDetails),
+                pickup_point: this.deliveryData.pickup_point,
+                payment_method: this.deliveryData.payment_method || 'cash',
+                recipient_name: recipient_name,
+                phone_number: phone_number,
+                cash_payment: this.deliveryData.cash_payment || null,
+                promo_code: this.appliedPromoCode?.code || null,
+                promo_code_id: this.appliedPromoCode?.id || null,
+                discount_amount: promoDiscount || 0,
+                delivery_cost: deliveryCost,
+                total_with_delivery: totalWithDelivery
+            };
+
             console.log('📤 Отправка заказа на сервер:', orderData);
-            console.log(`💰 Итоговая сумма: ${totalWithDelivery} руб (товары: ${numericItemsTotal} руб + доставка: ${deliveryCost} руб)`);
+            console.log(`💰 Итоговая сумма: ${totalWithDelivery} руб (товары: ${itemsTotal} руб + доставка: ${deliveryCost} руб)`);
 
             // Используем метод createOrder класса
             const result = await this.createOrder(orderData);
@@ -3490,7 +3513,7 @@ class TelegramShop {
                 await this.notifyBotAboutOrder(result.order_id, 'created');
 
                 // Показываем подтверждение заказа
-                this.showOrderConfirmation(result.order_id, numericItemsTotal, deliveryCost, totalWithDelivery);
+                this.showOrderConfirmation(result.order_id, itemsTotal, deliveryCost, totalWithDelivery);
 
                 // Очищаем корзину ПОСЛЕ показа подтверждения
                 this.cart = [];
