@@ -2161,42 +2161,40 @@ class TelegramShop {
                 </div>
 
                 <div class="delivery-content" style="padding: 12px; max-height: calc(100vh - 140px); overflow-y: auto;">
-
-                    <!-- КОМПАКТНЫЙ БЛОК ПРОМОКОДА -->
-                    <div class="compact-promo-section" style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                    <div class="compact-promo-section" style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; max-width: 100%; box-sizing: border-box;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="font-weight: 600; color: #333; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                            <span style="font-weight: 600; color: #333; font-size: 14px; display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                                 <i class="fas fa-ticket-alt" style="color: #667eea;"></i>
-                                Промокод
+                                <span class="promo-label" style="white-space: nowrap;">Промокод</span>
                             </span>
                             ${this.appliedPromoCode ? `
                                 <button id="removePromoBtnCompact"
-                                        style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 12px; padding: 2px 6px;">
+                                        style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 12px; padding: 2px 6px; flex-shrink: 0;">
                                     <i class="fas fa-times"></i>
                                 </button>
                             ` : ''}
                         </div>
 
                         ${!this.appliedPromoCode ? `
-                            <div class="compact-promo-input" style="display: flex; gap: 6px; align-items: stretch;">
+                            <div class="compact-promo-input" style="display: flex; gap: 6px; align-items: stretch; flex-wrap: nowrap; max-width: 100%;">
                                 <input type="text"
                                        id="compactPromoCodeInput"
                                        placeholder="Введите код"
-                                       style="flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                                       style="flex: 1; min-width: 0; /* Важно! */ padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
                                 <button id="applyPromoBtnCompact"
-                                        style="padding: 0 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; min-width: 70px;">
+                                        style="padding: 0 12px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px; min-width: 70px; flex-shrink: 0;">
                                     OK
                                 </button>
                             </div>
                         ` : `
-                            <div class="promo-applied-compact" style="padding: 8px 10px; background: #e8f5e9; border-radius: 6px; border-left: 3px solid #4CAF50;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <div style="font-weight: 600; color: #2e7d32; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-                                            <i class="fas fa-check-circle"></i>
-                                            <span style="font-family: monospace;">${this.appliedPromoCode.code}</span>
+                            <div class="promo-applied-compact" style="padding: 8px 10px; background: #e8f5e9; border-radius: 6px; border-left: 3px solid #4CAF50; max-width: 100%; overflow: hidden;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                                    <div style="max-width: 100%; overflow: hidden;">
+                                        <div style="font-weight: 600; color: #2e7d32; font-size: 13px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <i class="fas fa-check-circle" style="flex-shrink: 0;"></i>
+                                            <span style="font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.appliedPromoCode.code}</span>
                                         </div>
-                                        <div style="font-size: 12px; color: #388E3C; margin-top: 2px;">
+                                        <div style="font-size: 12px; color: #388E3C; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;">
                                             ${this.getPromoMessage(this.appliedPromoCode, promoDiscount)}
                                         </div>
                                     </div>
@@ -2204,7 +2202,7 @@ class TelegramShop {
                             </div>
                         `}
 
-                        <div id="compactPromoMessage" style="font-size: 11px; margin-top: 4px; min-height: 14px; line-height: 1.2;"></div>
+                        <div id="compactPromoMessage" style="font-size: 11px; margin-top: 4px; min-height: 14px; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis;"></div>
                     </div>
 
                     <!-- КОМПАКТНЫЙ ВЫБОР СПОСОБА ДОСТАВКИ -->
