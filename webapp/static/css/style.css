@@ -4647,3 +4647,49 @@ html {
         max-font-size: 16px;
     }
 }
+
+
+/* Адаптация для мобильных */
+@media (max-width: 480px) {
+    .delivery-option {
+        padding: 12px !important;
+    }
+
+    .delivery-option > div > div:first-child {
+        gap: 10px !important;
+    }
+
+    .delivery-option i.fa-truck,
+    .delivery-option i.fa-store {
+        font-size: 16px !important;
+    }
+
+    .delivery-option > div > div:first-child > div:first-child {
+        width: 36px !important;
+        height: 36px !important;
+    }
+
+    input#compactPromoCodeInput {
+        font-size: 16px !important; /* Для iOS */
+        padding: 12px !important;
+    }
+
+    button#applyPromoBtnCompact {
+        padding: 12px 14px !important;
+    }
+}
+
+/* Улучшение для тач-интерфейса */
+.delivery-option {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.delivery-option:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+}
+
+/* Стили для выбранного варианта */
+.delivery-option.selected {
+    box-shadow: 0 0 0 2px #667eea, 0 4px 12px rgba(102, 126, 234, 0.1);
+}
