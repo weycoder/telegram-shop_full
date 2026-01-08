@@ -2350,8 +2350,9 @@ class TelegramShop {
                 closeBtn.addEventListener('click', () => this.closeCart());
             }
 
-            console.log('✅ Обработчики назначены');
-        }, 100);
+            console.log('✅ Обработчики назначены');}, 100);
+    }
+
     async applyCompactPromoCode() {
         const input = document.getElementById('compactPromoCodeInput');
         const messageDiv = document.getElementById('compactPromoMessage');
