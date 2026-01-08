@@ -2119,21 +2119,19 @@ class TelegramShop {
 
     async showDeliverySelection() {
         console.log('🔄 showDeliverySelection() called');
-        console.log('📊 deliveryData.type в начале метода:', this.deliveryData.type); // <-- ДОБАВЬТЕ
+        console.log('📊 deliveryData.type:', this.deliveryData.type);
+
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
-        // Рассчитываем стоимость
+        // Рассчитываем стоимость (оставить как есть)
         const itemsTotal = this.cart.reduce((sum, item) => {
             const priceToShow = item.discounted_price || item.price;
             return sum + (priceToShow * item.quantity);
         }, 0);
 
-        // Рассчитываем стоимость доставки
         let deliveryCost = 0;
         let deliveryMessage = 'Бесплатно';
-
-        // Если промокод на бесплатную доставку
         const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
         if (!hasFreeDeliveryPromo && itemsTotal < 1000) {
@@ -2141,10 +2139,12 @@ class TelegramShop {
             deliveryMessage = '100 ₽';
         }
 
-        // Рассчитываем скидку от промокода если есть
         const promoDiscount = this.appliedPromoCode ?
             this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
         const finalTotal = itemsTotal + deliveryCost - promoDiscount;
+
+        // ВАЖНО: Сохраняем текущий тип доставки перед генерацией HTML
+        const currentDeliveryType = this.deliveryData.type;
 
         cartOverlay.innerHTML = `
             <div class="cart-modal" style="padding: 0;">
@@ -2197,21 +2197,18 @@ class TelegramShop {
 
                                 <div id="compactPromoMessage" style="margin-top: 6px; font-size: 12px; min-height: 16px;"></div>
                             </div>
-
                             <!-- СПОСОБ ДОСТАВКИ -->
                             <div style="margin-bottom: 16px;">
                                 <div style="margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">
                                     Способ получения
                                 </div>
-
                                 <!-- КУРЬЕР -->
                                 <div id="courierOption"
-                                     style="margin-bottom: 8px; padding: 12px; border: ${this.deliveryData.type === 'courier' ? '2px solid #667eea' : '1px solid #e0e0e0'};
-                                            border-radius: 10px; background: white; cursor: pointer;
-                                            ${this.deliveryData.type === 'courier' ? 'background: #f8f9ff;' : ''}">
+                                     style="margin-bottom: 8px; padding: 12px; border: ${currentDeliveryType === 'courier' ? '2px solid #667eea' : '1px solid #e0e0e0'};
+                                            border-radius: 10px; background: ${currentDeliveryType === 'courier' ? '#f8f9ff' : 'white'}; cursor: pointer;">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div style="display: flex; align-items: center; gap: 12px;">
-                                            <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'courier' ? '#667eea' : '#6c757d'};
+                                            <div style="width: 40px; height: 40px; background: ${currentDeliveryType === 'courier' ? '#667eea' : '#6c757d'};
                                                  border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                                 <i class="fas fa-truck" style="color: white; font-size: 18px;"></i>
                                             </div>
@@ -2228,12 +2225,11 @@ class TelegramShop {
 
                                 <!-- САМОВЫВОЗ -->
                                 <div id="pickupOption"
-                                     style="padding: 12px; border: ${this.deliveryData.type === 'pickup' ? '2px solid #667eea' : '1px solid #e0e0e0'};
-                                            border-radius: 10px; background: white; cursor: pointer;
-                                            ${this.deliveryData.type === 'pickup' ? 'background: #f8f9ff;' : ''}">
+                                     style="padding: 12px; border: ${currentDeliveryType === 'pickup' ? '2px solid #667eea' : '1px solid #e0e0e0'};
+                                            border-radius: 10px; background: ${currentDeliveryType === 'pickup' ? '#f8f9ff' : 'white'}; cursor: pointer;">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div style="display: flex; align-items: center; gap: 12px;">
-                                            <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'pickup' ? '#667eea' : '#6c757d'};
+                                            <div style="width: 40px; height: 40px; background: ${currentDeliveryType === 'pickup' ? '#667eea' : '#6c757d'};
                                                  border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                                 <i class="fas fa-store" style="color: white; font-size: 18px;"></i>
                                             </div>
@@ -2248,7 +2244,6 @@ class TelegramShop {
                                     </div>
                                 </div>
                             </div>
-
                             <!-- СУММА -->
                             <div style="background: white; border-radius: 12px; padding: 16px; border: 1px solid #e0e0e0; margin-bottom: 16px;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -2262,7 +2257,6 @@ class TelegramShop {
                                         <span style="color: #28a745; font-weight: 500; font-size: 14px;">-${this.formatPrice(promoDiscount)} ₽</span>
                                     </div>
                                 ` : ''}
-
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
                                     <span style="color: #666; font-size: 14px;">Доставка:</span>
                                     <span style="color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? '#28a745' : '#dc3545'};
@@ -2278,7 +2272,6 @@ class TelegramShop {
                                     </div>
                                 </div>
                             </div>
-
                             <!-- КНОПКА НАЗАД -->
                             <button onclick="shop.returnToCartFromDelivery()"
                                     style="width: 100%; padding: 14px; background: white; color: #333; border: 1px solid #ddd;
@@ -2293,9 +2286,6 @@ class TelegramShop {
             </div>
         `;
         setTimeout(() => {
-            // УДАЛЕНО рекурсивные вызовы showDeliverySelection()
-            // и заменено на обновление только визуального состояния
-
             const courierBtn = document.getElementById('courierOption');
             const pickupBtn = document.getElementById('pickupOption');
 
@@ -2305,18 +2295,12 @@ class TelegramShop {
                     e.stopPropagation();
                     console.log('🚚 Курьер выбран');
 
-                    // Визуальная обратная связь
-                    courierBtn.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        courierBtn.style.transform = '';
-                    }, 100);
-
-                    // Сохраняем выбор
+                    // Обновляем состояние
                     this.deliveryData.type = 'courier';
                     console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
 
-                    // Обновляем только стили без перезагрузки
-                    this.updateDeliverySelectionUI();
+                    // НЕ вызываем showDeliverySelection() - вместо этого переходим к следующему шагу
+                    this.showAddressSelection(); // или showPaymentSelection() если самовывоз
                 });
             }
 
@@ -2326,18 +2310,12 @@ class TelegramShop {
                     e.stopPropagation();
                     console.log('🏪 Самовывоз выбран');
 
-                    // Визуальная обратная связь
-                    pickupBtn.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        pickupBtn.style.transform = '';
-                    }, 100);
-
-                    // Сохраняем выбор
+                    // Обновляем состояние
                     this.deliveryData.type = 'pickup';
                     console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
 
-                    // Обновляем только стили без перезагрузки
-                    this.updateDeliverySelectionUI();
+                    // НЕ вызываем showDeliverySelection() - вместо этого переходим к следующему шагу
+                    this.showPickupPoints();
                 });
             }
 
@@ -2382,16 +2360,11 @@ class TelegramShop {
     updateDeliverySelectionUI() {
         const courierBtn = document.getElementById('courierOption');
         const pickupBtn = document.getElementById('pickupOption');
-
         if (!courierBtn || !pickupBtn) return;
-
-        // Сбрасываем все стили
         courierBtn.style.border = '1px solid #e0e0e0';
         courierBtn.style.background = 'white';
         pickupBtn.style.border = '1px solid #e0e0e0';
         pickupBtn.style.background = 'white';
-
-        // Применяем стили к выбранному варианту
         if (this.deliveryData.type === 'courier') {
             courierBtn.style.border = '2px solid #667eea';
             courierBtn.style.background = '#f8f9ff';
