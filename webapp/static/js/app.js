@@ -1986,7 +1986,7 @@ class TelegramShop {
                         <div class="form-group">
                             <label for="cashAmount">
                                 <i class="fas fa-money-bill"></i>
-                                Сколько дал клиент (₽):
+                                Вы даёте нам (₽):
                             </label>
                             <div class="cash-input-group">
                                 <button class="cash-btn minus" onclick="shop.adjustCashAmount(-100)">
@@ -2025,10 +2025,6 @@ class TelegramShop {
                             <div class="change-display">
                                 <div id="changeAmount" class="change-amount">0 ₽</div>
                                 <div class="change-breakdown" id="changeBreakdown"></div>
-                            </div>
-                            <div class="change-notes" id="changeNotes">
-                                <i class="fas fa-info-circle"></i>
-                                <span>Выдайте клиенту следующее:</span>
                             </div>
                         </div>
                     </div>

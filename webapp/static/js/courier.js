@@ -199,6 +199,14 @@ class CourierApp {
         let address = "Адрес не указан";
         let recipient = "Не указан";
         let phone = "Телефон не указан";
+        let paymentInfo = "Не указан";
+        if (order.payment_method === 'cash') {
+            paymentInfo = "Наличные";
+        } else if (order.payment_method === 'transfer') {
+            paymentInfo = "Перевод курьеру";
+        } else if (order.payment_method === 'terminal') {
+            paymentInfo = "Терминал";
+        }
 
         if (order.recipient_name && order.recipient_name !== 'Гость' && order.recipient_name !== 'Не указан') {
             recipient = order.recipient_name;
@@ -305,8 +313,22 @@ class CourierApp {
                         <span class="info-label">Создан:</span>
                         <span class="info-value">${new Date(order.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
+                    <div class="info-item">
+                        <span class="info-label">Товары:</span>
+                        <span class="info-value">${total} ₽</span>
+                    </div>
+                    ${deliveryInfo}
+                    <div class="info-item">
+                        <span class="info-label">Оплата:</span>
+                        <span class="info-value">${paymentInfo}</span>
+                    </div>
+                    ${order.payment_method === 'cash' && order.cash_change > 0 ? `
+                        <div class="info-item" style="color: #e74c3c; font-weight: bold;">
+                            <span class="info-label">⚠️ Сдача:</span>
+                            <span class="info-value">${order.cash_change} ₽</span>
+                        </div>
+                    ` : ''}
                 </div>
-
                 <div class="order-actions">
                     <button class="btn-action btn-take-order" onclick="takeOrder(${order.id})">
                         <i class="fas fa-hand-paper"></i> Взять заказ
@@ -534,13 +556,18 @@ class CourierApp {
         container.innerHTML = html;
     }
 
+
     createOrderCard(order, isCompleted = false) {
         // ========== ИСПРАВЛЕННОЕ ИЗВЛЕЧЕНИЕ АДРЕСА И ДАННЫХ ==========
         let address = "Адрес не указан";
         let recipient = "Не указан";
         let phone = "Телефон не указан";
 
-        // 1. Проверяем прямые поля заказа (высший приоритет)
+        // Новые поля для наличной оплаты
+        let paymentInfo = "";
+        let cashInfo = "";
+
+        // 1. Проверяем прямые поля заказа
         if (order.recipient_name && order.recipient_name !== 'Гость' && order.recipient_name !== 'Не указан') {
             recipient = order.recipient_name;
         }
@@ -549,27 +576,61 @@ class CourierApp {
             phone = order.phone_number;
         }
 
-        // 2. Проверяем delivery_address (JSON строка или объект)
-        let addressData = null;
+        // 2. Проверяем данные о наличной оплате
+        if (order.payment_method === 'cash') {
+            paymentInfo = "Наличные";
 
+            // Если есть информация о полученных деньгах и сдаче
+            if (order.cash_received || order.cash_change) {
+                const total = order.total_price || 0;
+                const received = order.cash_received || total;
+                const change = order.cash_change || 0;
+
+                cashInfo = `
+                    <div class="cash-payment-info" style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 6px; border: 1px solid #ffeaa7;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span style="font-weight: bold; color: #d35400;">💰 НАЛИЧНЫЕ:</span>
+                            <span style="font-weight: bold;">${total} ₽</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                            <span>Получено:</span>
+                            <span style="color: #27ae60;">${received} ₽</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                            <span>Сдача:</span>
+                            <span style="color: #e74c3c; font-weight: bold;">${change} ₽</span>
+                        </div>
+                        ${change > 0 ? `
+                            <div style="margin-top: 4px; padding: 4px; background: #ffeaa7; border-radius: 4px; font-size: 12px; text-align: center;">
+                                <i class="fas fa-exclamation-triangle"></i> <strong>Нужно выдать сдачу!</strong>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+        } else if (order.payment_method === 'transfer') {
+            paymentInfo = "Перевод курьеру";
+        } else if (order.payment_method === 'terminal') {
+            paymentInfo = "Терминал";
+        } else {
+            paymentInfo = "Не указан";
+        }
+
+        // 3. Проверяем delivery_address
+        let addressData = null;
         if (order.delivery_address) {
             try {
-                // Пытаемся распарсить JSON
                 if (typeof order.delivery_address === 'string') {
                     if (order.delivery_address.startsWith('{') || order.delivery_address.startsWith('[')) {
                         addressData = JSON.parse(order.delivery_address);
                     } else {
-                        // Если это не JSON, используем как строку адреса
                         address = order.delivery_address;
                     }
                 } else {
-                    // Если это уже объект
                     addressData = order.delivery_address;
                 }
 
-                // Если получили объект адреса
                 if (addressData && typeof addressData === 'object') {
-                    // Формируем читаемый адрес
                     const parts = [];
                     if (addressData.city) parts.push(addressData.city);
                     if (addressData.street) parts.push(`ул. ${addressData.street}`);
@@ -579,12 +640,9 @@ class CourierApp {
                     if (parts.length > 0) {
                         address = parts.join(', ');
                     } else if (addressData.address) {
-                        // Если есть поле address
                         address = addressData.address;
                     }
 
-                    // Извлекаем получателя и телефон из объекта адреса
-                    // Только если в заказе нет этих данных
                     if (recipient === "Не указан" && addressData.recipient_name) {
                         recipient = addressData.recipient_name;
                     }
@@ -595,19 +653,18 @@ class CourierApp {
                 }
             } catch (e) {
                 console.error('❌ Ошибка обработки адреса заказа #' + order.id, e);
-                // Если не удалось распарсить, используем как есть
                 if (typeof order.delivery_address === 'string') {
                     address = order.delivery_address;
                 }
             }
         }
 
-        // 3. Если все еще нет данных, пробуем username
+        // 4. Если все еще нет данных, пробуем username
         if (recipient === "Не указан" && order.username && order.username !== 'Гость') {
             recipient = order.username;
         }
 
-        // 4. Запасной вариант для адреса
+        // 5. Запасной вариант для адреса
         if (address === "Адрес не указан" && order.delivery_address_obj) {
             try {
                 const addr = order.delivery_address_obj;
@@ -621,18 +678,11 @@ class CourierApp {
                 // Игнорируем ошибку
             }
         }
-        // ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
 
-        // Сумма
-        const total = order.total_price || order.sum || 0;
-
-        // Дата доставки
-        let deliveryDate = "Дата не указана";
-        if (order.delivery_started) {
-            deliveryDate = new Date(order.delivery_started).toLocaleDateString('ru-RU');
-        } else if (order.assigned_at) {
-            deliveryDate = new Date(order.assigned_at).toLocaleDateString('ru-RU');
-        }
+        // Сумма с учетом доставки
+        const total = order.total_price || 0;
+        const deliveryCost = order.delivery_cost || 0;
+        const totalWithDelivery = total + deliveryCost;
 
         // Кнопки действий
         let actionsHtml = '';
@@ -689,8 +739,15 @@ class CourierApp {
                 <div class="order-info">
                     <div class="info-item">
                         <span class="info-label">Сумма:</span>
-                        <span class="info-value">${total} ₽</span>
+                        <span class="info-value">${totalWithDelivery} ₽</span>
                     </div>
+                    <div class="info-item">
+                        <span class="info-label">Оплата:</span>
+                        <span class="info-value" style="${order.payment_method === 'cash' && order.cash_change > 0 ? 'color: #e74c3c; font-weight: bold;' : ''}">
+                            ${paymentInfo}
+                        </span>
+                    </div>
+                    ${cashInfo}
                     <div class="info-item">
                         <span class="info-label">Получатель:</span>
                         <span class="info-value" style="${recipient === 'Не указан' ? 'color: #e74c3c; font-weight: bold;' : ''}">

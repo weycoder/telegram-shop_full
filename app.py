@@ -1335,6 +1335,7 @@ def api_create_order():
     print(f"📦 items: {len(data.get('items', []))} товаров")
     print(f"💰 total: {data.get('total', 0)} руб. (тип: {type(data.get('total'))})")
     print(f"🚚 delivery_type: {data.get('delivery_type')}")
+    print(f"💵 cash_payment: {data.get('cash_payment')}")
     print("=" * 50)
 
     db = get_db()
@@ -1342,6 +1343,12 @@ def api_create_order():
         delivery_type = data.get('delivery_type')
         payment_method = data.get('payment_method', 'cash')
         delivery_address = data.get('delivery_address', '{}')
+
+        # Получаем данные о наличной оплате
+        cash_payment = data.get('cash_payment', {})
+        cash_received = cash_payment.get('received')
+        cash_change = cash_payment.get('change')
+        cash_details = json.dumps(cash_payment) if cash_payment else None
 
         # ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
         # ОБЯЗАТЕЛЬНО преобразуем в float
@@ -1354,7 +1361,6 @@ def api_create_order():
         delivery_cost = 0.0
 
         if delivery_type == 'courier':
-            # Убедимся, что order_total - это число
             print(f"💰 Проверяем доставку: заказ {order_total} руб, тип {type(order_total)}")
 
             if order_total < 1000.0:  # Явно указываем float
@@ -1429,8 +1435,7 @@ def api_create_order():
 
         print(f"👤 Используемый user_id: {user_id}")
         print(f"👤 Используемый username: {username}")
-
-        cash_payment = data.get('cash_payment', {})
+        print(f"💵 Данные наличной оплаты: received={cash_received}, change={cash_change}")
 
         # Вставляем заказ с дополнительными полями для наличных
         cursor = db.execute('''
@@ -1449,34 +1454,29 @@ def api_create_order():
                                 delivery_type,
                                 json.dumps(address_obj if address_obj else {}, ensure_ascii=False),
                                 data.get('pickup_point'),
-                                'cash',  # Всегда cash для наличных
+                                'cash',
                                 recipient_name,
                                 phone_number,
-                                cash_payment.get('received'),  # Сколько получили
-                                cash_payment.get('change'),  # Сдача
-                                json.dumps(cash_payment) if cash_payment else None  # Детали
+                                cash_received,
+                                cash_change,
+                                cash_details
                             ))
 
         # Обновляем остатки товаров
         for item in data['items']:
-            # Убедимся, что quantity - это число
             try:
                 quantity = int(item.get('quantity', 1))
             except (ValueError, TypeError):
                 quantity = 1
 
-            # Обновляем остатки
             db.execute('UPDATE products SET stock = stock - ? WHERE id = ?', (quantity, item.get('id')))
 
         db.commit()
         order_id = cursor.lastrowid
 
-        # ========== ИЗМЕНЕНИЕ: НЕ НАЗНАЧАЕМ КУРЬЕРА АВТОМАТИЧЕСКИ ==========
+        # Отправляем уведомление о создании заказа
         if delivery_type == 'courier':
-            # Только создаем заказ, но не назначаем курьера
             print(f"📋 Создан заказ #{order_id} для доставки курьером (ожидает назначения)")
-
-            # Отправляем уведомление об успешном создании заказа
             send_order_notification(order_id, 'created')
         else:
             send_order_notification(order_id, 'created')
@@ -1498,7 +1498,7 @@ def api_create_order():
         print(f"❌ Ошибка создания заказа: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 100
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/courier/available-orders', methods=['GET'])
 def get_available_orders():
@@ -1987,6 +1987,13 @@ def get_order_details(order_id):
                 order_dict['delivery_address_obj'] = {}
         else:
             order_dict['delivery_address_obj'] = {}
+
+        # Парсим cash_details если есть
+        if order_dict.get('cash_details'):
+            try:
+                order_dict['cash_details_obj'] = json.loads(order_dict['cash_details'])
+            except:
+                order_dict['cash_details_obj'] = {}
 
         db.close()
         return jsonify({'success': True, 'order': order_dict})
