@@ -2293,7 +2293,9 @@ class TelegramShop {
             </div>
         `;
         setTimeout(() => {
-            // Курьер
+            // УДАЛЕНО рекурсивные вызовы showDeliverySelection()
+            // и заменено на обновление только визуального состояния
+
             const courierBtn = document.getElementById('courierOption');
             const pickupBtn = document.getElementById('pickupOption');
 
@@ -2313,8 +2315,8 @@ class TelegramShop {
                     this.deliveryData.type = 'courier';
                     console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
 
-                    // Перезагружаем отображение
-                    this.showDeliverySelection();
+                    // Обновляем только стили без перезагрузки
+                    this.updateDeliverySelectionUI();
                 });
             }
 
@@ -2334,8 +2336,8 @@ class TelegramShop {
                     this.deliveryData.type = 'pickup';
                     console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
 
-                    // Перезагружаем отображение
-                    this.showDeliverySelection();
+                    // Обновляем только стили без перезагрузки
+                    this.updateDeliverySelectionUI();
                 });
             }
 
@@ -2375,6 +2377,30 @@ class TelegramShop {
             console.log('✅ Обработчики назначены');
         }, 100);
     }
+
+    // Добавляем новый метод для обновления UI
+    updateDeliverySelectionUI() {
+        const courierBtn = document.getElementById('courierOption');
+        const pickupBtn = document.getElementById('pickupOption');
+
+        if (!courierBtn || !pickupBtn) return;
+
+        // Сбрасываем все стили
+        courierBtn.style.border = '1px solid #e0e0e0';
+        courierBtn.style.background = 'white';
+        pickupBtn.style.border = '1px solid #e0e0e0';
+        pickupBtn.style.background = 'white';
+
+        // Применяем стили к выбранному варианту
+        if (this.deliveryData.type === 'courier') {
+            courierBtn.style.border = '2px solid #667eea';
+            courierBtn.style.background = '#f8f9ff';
+        } else if (this.deliveryData.type === 'pickup') {
+            pickupBtn.style.border = '2px solid #667eea';
+            pickupBtn.style.background = '#f8f9ff';
+        }
+    }
+
 
     async applyCompactPromoCode() {
         const input = document.getElementById('compactPromoCodeInput');
