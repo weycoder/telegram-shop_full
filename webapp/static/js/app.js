@@ -2352,41 +2352,6 @@ class TelegramShop {
 
             console.log('✅ Обработчики назначены');
         }, 100);
-
-
-        // Назначаем обработчики
-        const courierOption = document.getElementById('courierOption');
-        const pickupOption = document.getElementById('pickupOption');
-
-        courierOption.addEventListener('click', () => {
-            this.deliveryData.type = 'courier';
-            this.showDeliverySelection(); // Обновляем отображение
-        });
-
-        pickupOption.addEventListener('click', () => {
-            this.deliveryData.type = 'pickup';
-            this.showDeliverySelection(); // Обновляем отображение
-        });
-
-        if (!this.appliedPromoCode) {
-            document.getElementById('applyPromoBtnCompact').addEventListener('click', () => {
-                this.applyCompactPromoCode();
-            });
-
-            document.getElementById('compactPromoCodeInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    this.applyCompactPromoCode();
-                }
-            });
-        } else {
-            document.getElementById('removePromoBtnCompact').addEventListener('click', () => {
-                this.removeCompactPromoCode();
-            });
-        }
-
-        document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
-        }
-
     async applyCompactPromoCode() {
         const input = document.getElementById('compactPromoCodeInput');
         const messageDiv = document.getElementById('compactPromoMessage');
