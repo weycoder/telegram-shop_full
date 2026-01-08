@@ -4445,3 +4445,71 @@ html {
     from { opacity: 0; }
     to { opacity: 1; }
 }
+
+/* В style.css добавьте: */
+
+/* Стили для компактной версии */
+.delivery-method.compact {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.delivery-method.compact:hover {
+    border-color: #667eea !important;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    transform: translateY(-2px);
+}
+
+.delivery-method.compact.active {
+    border-color: #667eea !important;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+}
+
+.compact-promo-input input {
+    transition: border-color 0.3s ease;
+}
+
+.compact-promo-input input:focus {
+    outline: none;
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.compact-order-summary {
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 480px) {
+    .compact-promo-input {
+        flex-direction: column;
+        gap: 8px !important;
+    }
+
+    .compact-promo-input input {
+        width: 100%;
+    }
+
+    .compact-promo-input button {
+        width: 100%;
+    }
+
+    .delivery-footer {
+        flex-direction: column;
+    }
+
+    .btn-back {
+        width: 100% !important;
+    }
+}
