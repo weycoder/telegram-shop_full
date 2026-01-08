@@ -2866,6 +2866,7 @@ class TelegramShop {
             }
 
             const totalWithDelivery = numericItemsTotal + deliveryCost;
+            const cashPayment = this.deliveryData.cash_payment || {};
             const orderData = {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
@@ -2876,7 +2877,8 @@ class TelegramShop {
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
                 recipient_name: recipient_name,
-                phone_number: phone_number
+                phone_number: phone_number,
+                cash_payment: cashPayment
             };
 
             if (this.deliveryData.cash_payment) {
