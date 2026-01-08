@@ -2885,9 +2885,15 @@ def check_discount():
 
 @app.route('/api/check-promo-code', methods=['POST'])
 def check_promo_code():
-    """Проверить промокод для пользователя"""
+    """Проверить промокод"""
+    db = None
     try:
         data = request.json
+        print(f"🎟️ Проверка промокода: {data}")
+
+        if not data:
+            return jsonify({'success': False, 'error': 'Нет данных'}), 400
+
         code = data.get('code', '').strip().upper()
 
         if not code:
@@ -2897,57 +2903,61 @@ def check_promo_code():
 
         # Получаем промокод
         promo = db.execute('''
-                           SELECT pc.*,
-                                  d.discount_type,
-                                  d.value,
-                                  d.max_discount
-                           FROM promo_codes pc
-                                    LEFT JOIN discounts d ON pc.discount_id = d.id
-                           WHERE pc.code = ?
-                             AND pc.is_active = 1
+                           SELECT *
+                           FROM promo_codes
+                           WHERE code = ?
+                             AND is_active = 1
                            ''', (code,)).fetchone()
 
         if not promo:
             return jsonify({'success': False, 'error': 'Промокод не найден'}), 404
 
         promo_dict = dict(promo)
-
-        # Преобразуем значения
-        if promo_dict.get('value'):
-            promo_dict['value'] = float(promo_dict['value'])
-        if promo_dict.get('min_order_amount'):
-            promo_dict['min_order_amount'] = float(promo_dict['min_order_amount'])
-        if promo_dict.get('used_count'):
-            promo_dict['used_count'] = int(promo_dict['used_count'])
-        if promo_dict.get('usage_limit'):
-            promo_dict['usage_limit'] = int(promo_dict['usage_limit'])
+        print(f"✅ Найден промокод: {promo_dict}")
 
         # Проверяем срок действия
         now = datetime.now()
         if promo_dict.get('end_date'):
-            end_date = datetime.strptime(promo_dict['end_date'], '%Y-%m-%d %H:%M:%S')
-            if end_date < now:
-                return jsonify({'success': False, 'error': 'Срок действия промокода истек'}), 400
+            try:
+                end_date = datetime.strptime(promo_dict['end_date'], '%Y-%m-%d %H:%M:%S')
+                if end_date < now:
+                    return jsonify({'success': False, 'error': 'Срок действия промокода истек'}), 400
+            except Exception as e:
+                print(f"⚠️ Ошибка парсинга даты: {e}")
 
         # Проверяем лимит использований
         if promo_dict.get('usage_limit') and promo_dict.get('used_count', 0) >= promo_dict['usage_limit']:
             return jsonify({'success': False, 'error': 'Промокод закончился'}), 400
 
-        db.close()
+        # Проверяем дату начала
+        if promo_dict.get('start_date'):
+            try:
+                start_date = datetime.strptime(promo_dict['start_date'], '%Y-%m-%d %H:%M:%S')
+                if start_date > now:
+                    return jsonify({'success': False, 'error': 'Промокод еще не активен'}), 400
+            except Exception as e:
+                print(f"⚠️ Ошибка парсинга даты начала: {e}")
+
+        # Конвертируем типы данных
+        promo_dict['value'] = float(promo_dict.get('value', 0)) if promo_dict.get('value') else 0
+        promo_dict['min_order_amount'] = float(promo_dict.get('min_order_amount', 0)) if promo_dict.get(
+            'min_order_amount') else 0
+        promo_dict['used_count'] = int(promo_dict.get('used_count', 0))
+        promo_dict['usage_limit'] = int(promo_dict.get('usage_limit', 0)) if promo_dict.get('usage_limit') else None
 
         return jsonify({
             'success': True,
-            'promo_code': promo_dict,
-            'discount_type': promo_dict.get('discount_type'),
-            'value': promo_dict.get('value'),
-            'max_discount': promo_dict.get('max_discount')
+            'promo_code': promo_dict
         })
 
     except Exception as e:
         print(f"❌ Ошибка проверки промокода: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': 'Ошибка проверки промокода'}), 500
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+    finally:
+        if db:
+            db.close()
 
 
 @app.route('/api/promo-codes', methods=['GET'])
