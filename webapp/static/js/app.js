@@ -112,6 +112,7 @@ class TelegramShop {
 
     async applyPromoCode() {
         const codeInput = document.getElementById('promoCodeInput')
+    }
 
     // ДОБАВЬ ЭТИ МЕТОДЫ В КЛАСС:
     saveUserToLocalStorage() {
