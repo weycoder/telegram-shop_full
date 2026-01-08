@@ -2084,7 +2084,6 @@ class TelegramShop {
         const changeResult = document.getElementById('changeResult');
         const changeAmount = document.getElementById('changeAmount');
         const changeBreakdown = document.getElementById('changeBreakdown');
-        const changeNotes = document.getElementById('changeNotes');
         const confirmBtn = document.getElementById('confirmCashPayment');
 
         if (!totalElement || !cashInput || !changeResult) return;
