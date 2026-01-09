@@ -514,10 +514,9 @@ class TelegramShop {
         // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
         console.log(`📦 В корзине ${this.cart.length} товаров`);
 
-        // Рассчитываем сумму корзины
+        // ВАЖНО: Используем discounted_price везде
         const itemsSubtotal = this.cart.reduce((sum, item) => {
-            const priceToShow = item.discounted_price || item.price;
-            return sum + (priceToShow * item.quantity);
+            return sum + ((item.discounted_price || item.price) * item.quantity);
         }, 0);
 
         // Применяем промокод если есть
@@ -535,55 +534,56 @@ class TelegramShop {
         let itemsHTML = '';
 
         this.cart.forEach(item => {
-            const priceToShow = item.discounted_price || item.price;
+            const priceToShow = item.discounted_price || item.price; // ВАЖНО: discounted_price
             const totalPrice = priceToShow * item.quantity;
 
-            itemsHTML += `
-                <div class="cart-item" data-id="${item.id}">
-                    ${item.discount_info ? `
-                        <div class="cart-item-discount">
-                            <span class="discount-tag-cart">-${this.formatDiscountInfo(item.discount_info)}</span>
-                        </div>
-                    ` : ''}
-                    <img src="${item.image || 'https://via.placeholder.com/80'}"
-                         alt="${item.name}"
-                         class="cart-item-image">
-                    <div class="cart-item-info">
-                        <div class="cart-item-header">
-                            <h4 class="cart-item-name">${item.name}</h4>
-                            <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                        <div class="cart-item-pricing">
-                            ${item.discounted_price && item.discounted_price < item.price ? `
-                                <div class="cart-price-discounted">
-                                    <span class="cart-item-original-price">${this.formatPrice(item.price)} ₽</span>
-                                    <span class="cart-item-price">${this.formatPrice(item.discounted_price)} ₽</span>
-                                </div>
-                            ` : `
-                                <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
-                            `}
-                        </div>
-                        <div class="cart-item-controls">
-                            <div class="quantity-selector small">
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
-                                        ${item.quantity <= 1 ? 'disabled' : ''}>
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
-                                    <i class="fas fa-plus"></i>
+         itemsHTML += `
+                    <div class="cart-item" data-id="${item.id}">
+                        ${item.discount_info ? `
+                            <div class="cart-item-discount">
+                                <span class="discount-tag-cart">-${this.formatDiscountInfo(item.discount_info)}</span>
+                            </div>
+                        ` : ''}
+                        <img src="${item.image || 'https://via.placeholder.com/80'}"
+                             alt="${item.name}"
+                             class="cart-item-image">
+                        <div class="cart-item-info">
+                            <div class="cart-item-header">
+                                <h4 class="cart-item-name">${item.name}</h4>
+                                <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
+                                    <i class="fas fa-trash"></i>
                                 </button>
                             </div>
-                            <div class="cart-item-total">
-                                ${this.formatPrice(totalPrice)} ₽
+                            <div class="cart-item-pricing">
+                                ${item.discounted_price && item.discounted_price < item.price ? `
+                                    <div class="cart-price-discounted">
+                                        <span class="cart-item-original-price">${this.formatPrice(item.price)} ₽</span>
+                                        <span class="cart-item-price">${this.formatPrice(item.discounted_price)} ₽</span>
+                                    </div>
+                                ` : `
+                                    <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                                `}
+                            </div>
+                            <div class="cart-item-controls">
+                                <div class="quantity-selector small">
+                                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
+                                            ${item.quantity <= 1 ? 'disabled' : ''}>
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <span class="quantity">${item.quantity} шт.</span>
+                                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <div class="cart-item-total">
+                                    ${this.formatPrice(totalPrice)} ₽
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            `;
-        });
+                `;
+            });
+
 
         // Добавляем блок с промокодом
         itemsHTML += `
@@ -690,15 +690,14 @@ class TelegramShop {
                 return subtotal * (promo.value / 100);
 
             case 'fixed':
-                return Math.min(promo.value, subtotal); // Не больше суммы заказа
+                return Math.min(promo.value, subtotal);
 
             case 'free_delivery':
-                // Для бесплатной доставки возвращаем стоимость доставки как скидку
-                const deliveryCost = (subtotal < 1000) ? 100 : 0;
-                return deliveryCost;
+                // ВАЖНО: Возвращаем 0 для скидки, но отмечаем в логе
+                console.log('🚚 Промокод на бесплатную доставку применен');
+                return 0; // Не влияет на сумму товаров
 
             case 'bogo':
-                // Для "Купи 1 получи 2" - скидка 50% на самый дорогой товар
                 if (this.cart.length > 0) {
                     const mostExpensive = Math.max(...this.cart.map(item =>
                         (item.discounted_price || item.price) * item.quantity));
@@ -2570,9 +2569,7 @@ class TelegramShop {
         }
     }
 
-        // TelegramShop class - добавьте этот метод
     showCashPaymentModal(totalAmount) {
-        // Создаем модальное окно
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.style.cssText = `
@@ -2588,6 +2585,9 @@ class TelegramShop {
             z-index: 1000;
             padding: 10px;
         `;
+
+        // ВАЖНО: Округляем до ближайших 100 рублей вверх
+        const defaultCashAmount = Math.ceil(totalAmount / 100) * 100;
 
         modal.innerHTML = `
             <div style="background: white; border-radius: 10px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
@@ -2616,7 +2616,9 @@ class TelegramShop {
                         <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                             <input type="number"
                                    id="cashAmountCompact"
-                                   value="${Math.ceil(totalAmount / 100) * 100}"
+                                   value="${defaultCashAmount}"
+                                   min="${totalAmount}"  <!-- ВАЖНО: минимальная сумма -->
+                                   step="1"
                                    style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; text-align: center;">
                         </div>
 
@@ -2666,12 +2668,16 @@ class TelegramShop {
 
         document.body.appendChild(modal);
 
-        // Инициализация
         const cashInput = document.getElementById('cashAmountCompact');
-        cashInput.addEventListener('input', () => this.calculateChangeCompact(totalAmount));
 
-        // Рассчитываем сдачу сразу
-        setTimeout(() => this.calculateChangeCompact(totalAmount), 100);
+        // ВАЖНО: Устанавливаем минимальное значение
+        cashInput.min = totalAmount;
+
+        // Сразу проверяем сдачу
+        this.calculateChangeCompact(totalAmount);
+
+        // Обработчик изменения суммы
+        cashInput.addEventListener('input', () => this.calculateChangeCompact(totalAmount));
     }
 
     confirmCashPaymentCompact(totalAmount) {
@@ -2707,12 +2713,18 @@ class TelegramShop {
         if (!cashInput) return;
 
         let currentValue = parseInt(cashInput.value) || 0;
-        cashInput.value = currentValue + amount;
+        let newValue = currentValue + amount;
 
-        // Рассчитываем сдачу
-        const totalAmount = parseFloat(cashInput.dataset.totalAmount) || 0;
-        this.calculateChangeCompact(totalAmount);
+        // ВАЖНО: Не позволяем уменьшить ниже минимальной суммы
+        const minAmount = parseFloat(cashInput.min) || 0;
+        if (newValue < minAmount) {
+            newValue = minAmount;
+        }
+
+        cashInput.value = newValue;
+        this.calculateChangeCompact(minAmount);
     }
+
 
         // Метод для установки точной суммы
     setExactCashAmount(amount) {
@@ -2736,6 +2748,7 @@ class TelegramShop {
 
         const cashAmount = parseFloat(cashInput.value) || 0;
 
+        // ВАЖНО: Проверяем, что сумма не меньше требуемой
         if (cashAmount >= totalAmount) {
             const change = cashAmount - totalAmount;
 
@@ -2754,7 +2767,7 @@ class TelegramShop {
         } else {
             changeResult.style.display = 'none';
             confirmBtn.disabled = true;
-            confirmBtn.innerHTML = `Готово`;
+            confirmBtn.innerHTML = `Минимум ${this.formatPrice(totalAmount)} ₽`;
         }
     }
 
