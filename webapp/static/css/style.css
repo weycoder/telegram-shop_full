@@ -2994,8 +2994,8 @@ html {
 /* Стили для корзины со скидками */
 .cart-item-discount {
     position: absolute;
-    top: 5px;
-    right: 255px;
+    top: 155px;
+    right: 245px;
 }
 
 .discount-tag-cart {

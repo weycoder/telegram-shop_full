@@ -981,7 +981,7 @@ class AdminPanel {
         }
     }
 
-    async loadOrders() {
+    async function loadOrders() {
         try {
             console.log('📥 Загрузка заказов...');
 
@@ -998,13 +998,31 @@ class AdminPanel {
                 return;
             }
 
-            // Очищаем таблицу
-            const tbody = document.querySelector('#ordersTable tbody');
-            if (!tbody) {
-                console.error('❌ Не найдена таблица заказов');
+            // ИЩЕМ ПРАВИЛЬНЫЙ КОНТЕЙНЕР ДЛЯ ТАБЛИЦЫ
+            let container = document.querySelector('#ordersContainer') ||
+                           document.querySelector('#ordersTable') ||
+                           document.querySelector('.orders-table-container');
+
+            if (!container) {
+                console.error('❌ Контейнер заказов не найден');
                 return;
             }
 
+            // Если контейнер - это tbody, используем его напрямую
+            let tbody;
+            if (container.tagName === 'TBODY') {
+                tbody = container;
+            } else {
+                // Ищем tbody внутри контейнера
+                tbody = container.querySelector('tbody');
+            }
+
+            if (!tbody) {
+                console.error('❌ Не найден tbody для таблицы заказов');
+                return;
+            }
+
+            // Очищаем таблицу
             tbody.innerHTML = '';
 
             if (orders.length === 0) {
@@ -1016,6 +1034,35 @@ class AdminPanel {
                     </tr>
                 `;
                 return;
+            }
+
+            // Функции для форматирования
+            function formatPrice(price) {
+                return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+            }
+
+            function getStatusClass(status) {
+                const statusMap = {
+                    'pending': 'status-pending',
+                    'processing': 'status-processing',
+                    'delivering': 'status-delivering',
+                    'delivered': 'status-completed',
+                    'completed': 'status-completed',
+                    'cancelled': 'status-cancelled'
+                };
+                return statusMap[status?.toLowerCase()] || 'status-pending';
+            }
+
+            function getStatusText(status) {
+                const statusText = {
+                    'pending': 'Ожидает',
+                    'processing': 'В обработке',
+                    'delivering': 'Доставляется',
+                    'delivered': 'Выполнен',
+                    'completed': 'Выполнен',
+                    'cancelled': 'Отменен'
+                };
+                return statusText[status?.toLowerCase()] || status;
             }
 
             // Заполняем таблицу
@@ -1033,10 +1080,10 @@ class AdminPanel {
                 });
 
                 // Форматируем сумму
-                const totalAmount = order.total_with_delivery || order.total || 0;
+                const totalAmount = order.total_with_delivery || order.total_price || order.total || 0;
 
                 // Определяем статус
-                const status = order.status || 'ожидает';
+                const status = order.status || 'pending';
                 const statusClass = getStatusClass(status);
 
                 row.innerHTML = `
@@ -1053,10 +1100,10 @@ class AdminPanel {
                     </td>
                     <td>${formattedDate}</td>
                     <td>
-                        <button class="btn-small" onclick="viewOrderDetails(${order.id})">
+                        <button class="btn-small" onclick="admin.viewOrderDetails(${order.id})">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn-small" onclick="editOrder(${order.id})">
+                        <button class="btn-small" onclick="admin.editOrder(${order.id})">
                             <i class="fas fa-edit"></i>
                         </button>
                     </td>
@@ -1065,7 +1112,7 @@ class AdminPanel {
                 tbody.appendChild(row);
             });
 
-            // Обновляем время
+            // Обновляем время последнего обновления
             const updateTime = document.querySelector('#updateTime');
             if (updateTime) {
                 updateTime.textContent = new Date().toLocaleTimeString('ru-RU');
@@ -1074,19 +1121,21 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Ошибка загрузки заказов:', error);
 
-            const tbody = document.querySelector('#ordersTable tbody');
-            if (tbody) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="6" style="text-align: center; color: #dc3545; padding: 20px;">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            Ошибка загрузки: ${error.message}
-                            <br>
-                            <button onclick="loadOrders()" style="margin-top: 10px;">
-                                <i class="fas fa-redo"></i> Повторить
-                            </button>
-                        </td>
-                    </tr>
+            // Показываем сообщение об ошибке в любом доступном контейнере
+            const errorContainer = document.querySelector('#ordersContainer') ||
+                                  document.querySelector('#ordersTable') ||
+                                  document.querySelector('.orders-table-container');
+
+            if (errorContainer) {
+                errorContainer.innerHTML = `
+                    <div style="text-align: center; color: #dc3545; padding: 20px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Ошибка загрузки заказов: ${error.message}
+                        <br>
+                        <button onclick="loadOrders()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            <i class="fas fa-redo"></i> Повторить
+                        </button>
+                    </div>
                 `;
             }
         }
@@ -1133,29 +1182,6 @@ class AdminPanel {
             console.error('❌ Ошибка загрузки статистики:', error);
         }
     }
-
-    getStatusClass(status) {
-        const statusMap = {
-            'ожидает': 'status-pending',
-            'в обработке': 'status-processing',
-            'доставляется': 'status-delivering',
-            'выполнен': 'status-completed',
-            'отменен': 'status-cancelled'
-        };
-        return statusMap[status.toLowerCase()] || 'status-pending';
-    }
-
-    getStatusText(status) {
-        const statusText = {
-            'ожидает': 'Ожидает',
-            'в обработке': 'В обработке',
-            'доставляется': 'Доставляется',
-            'выполнен': 'Выполнен',
-            'отменен': 'Отменен'
-        };
-        return statusText[status.toLowerCase()] || status;
-    }
-
 
     async loadAllProducts() {
         try {
