@@ -981,7 +981,7 @@ class AdminPanel {
         }
     }
 
-    async function loadOrders() {
+    async loadOrders() {
         try {
             console.log('📥 Загрузка заказов...');
 

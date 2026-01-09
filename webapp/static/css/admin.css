@@ -301,7 +301,7 @@ body.admin {
 
 /* ЗАГОЛОВКИ СТРАНИЦ */
 .products-header,
-.ordersContainer,
+.orders-header,
 .add-product-header {
     display: flex;
     justify-content: space-between;
@@ -310,7 +310,7 @@ body.admin {
 }
 
 .products-header h2,
-.ordersContainer h2,
+.orders-header h2,
 .add-product-header h2 {
     color: var(--dark-color);
     font-size: 28px;
@@ -1219,7 +1219,7 @@ body.admin {
     }
 
     .products-header,
-    .ordersContainer,
+    .orders-header,
     .add-product-header {
         flex-direction: column;
         gap: 20px;
