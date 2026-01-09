@@ -153,6 +153,30 @@ class AdminPanel {
         }
     }
 
+    safeHtml(strings, ...values) {
+        let result = '';
+        for (let i = 0; i < strings.length; i++) {
+            result += strings[i];
+            if (i < values.length) {
+                result += String(values[i])
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+        }
+        return result;
+    }
+
+    // Метод для экранирования HTML
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+
 
     // Методы рендеринга товаров - исправленная версия
     renderProducts() {
