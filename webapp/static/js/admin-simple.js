@@ -24,17 +24,6 @@ class AdminPanel {
 
         console.log('✅ Админ панель инициализирована');
         this.init();
-
-        // CSRF токен для всех запросов
-        this.csrfToken = this.getCSRFToken();
-
-        // Конфигурация
-        this.config = {
-            maxCategoryNameLength: 100,
-            minCategoryNameLength: 2,
-            allowedCategoryChars: /^[a-zA-Zа-яА-ЯёЁ0-9\s\-_]+$/,
-            forbiddenWords: ['admin', 'система', 'тест', 'temp', 'root', 'superuser']
-        };
     }
 
     init() {
@@ -67,6 +56,11 @@ class AdminPanel {
                     }, 50);
                 }
             });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadOrders();
+            setInterval(loadOrders, 10000); // Обновление каждые 10 секунд
         });
 
         // Кнопка обновить
@@ -110,74 +104,6 @@ class AdminPanel {
             fileInput.addEventListener('change', (e) => this.handleImageUpload(e));
         }
     }
-
-        // Общий метод для API запросов
-    async apiRequest(url, options = {}) {
-        const defaultOptions = {
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': this.csrfToken
-            },
-            credentials: 'same-origin' // Отправляем куки
-        };
-
-        const mergedOptions = {
-            ...defaultOptions,
-            ...options,
-            headers: {
-                ...defaultOptions.headers,
-                ...options.headers
-            }
-        };
-
-        try {
-            const response = await fetch(url, mergedOptions);
-
-            // Проверка на статус 401/403 (неавторизован)
-            if (response.status === 401 || response.status === 403) {
-                this.showAlert('Сессия истекла. Пожалуйста, войдите снова.', 'error');
-                setTimeout(() => window.location.reload(), 2000);
-                throw new Error('Unauthorized');
-            }
-
-            // Проверка на статус 429 (слишком много запросов)
-            if (response.status === 429) {
-                this.showAlert('Слишком много запросов. Пожалуйста, подождите.', 'warning');
-                throw new Error('Too Many Requests');
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error(`❌ API ошибка (${url}):`, error);
-            throw error;
-        }
-    }
-
-    safeHtml(strings, ...values) {
-        let result = '';
-        for (let i = 0; i < strings.length; i++) {
-            result += strings[i];
-            if (i < values.length) {
-                result += String(values[i])
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;');
-            }
-        }
-        return result;
-    }
-
-    // Метод для экранирования HTML
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-
-
     // Методы рендеринга товаров - исправленная версия
     renderProducts() {
         const container = document.getElementById('productsTableBody');
@@ -901,102 +827,19 @@ class AdminPanel {
         }
     }
 
-
-        // Дополнительный метод для CSRF защиты
-    getCSRFToken() {
-        const token = document.querySelector('meta[name="csrf-token"]');
-        return token ? token.getAttribute('content') : '';
-    }
-
-    // Метод для оповещения о обновлении категорий
-    dispatchCategoriesUpdate() {
-        const event = new CustomEvent('categories-updated', {
-            detail: { categories: this.categories }
-        });
-        document.dispatchEvent(event);
-    }
-
-    // Метод для очистки формы
-    clearCategoryForm() {
-        const input = document.getElementById('newCategoryName');
-        if (input) {
-            input.value = '';
-            input.classList.remove('error');
-        }
-
-        const errorElement = document.querySelector('.category-error');
-        if (errorElement) {
-            errorElement.remove();
-        }
-    }
-
-    // Метод для показа ошибок в форме
-    showCategoryError(message) {
-        const input = document.getElementById('newCategoryName');
-        if (!input) return;
-
-        // Удаляем старую ошибку
-        const oldError = input.parentElement.querySelector('.category-error');
-        if (oldError) oldError.remove();
-
-        // Добавляем новую ошибку
-        const errorElement = document.createElement('div');
-        errorElement.className = 'category-error';
-        errorElement.style.color = '#dc3545';
-        errorElement.style.fontSize = '12px';
-        errorElement.style.marginTop = '5px';
-        errorElement.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
-
-        input.parentElement.appendChild(errorElement);
-        input.classList.add('error');
-    }
-
+    // Методы управления категориями
     async addCategory() {
         const input = document.getElementById('newCategoryName');
         const categoryName = input?.value.trim();
 
-        // Проверка наличия значения
         if (!categoryName) {
-            this.showAlert('Введите название категории', 'error');
+            this.showAlert('❌ Введите название категории', 'error');
             return;
         }
 
-        // Проверка длины
-        if (categoryName.length > 100) {
-            this.showAlert('Название категории не должно превышать 100 символов', 'error');
-            return;
-        }
-
-        // Проверка на минимальную длину
-        if (categoryName.length < 2) {
-            this.showAlert('Название категории должно быть не менее 2 символов', 'error');
-            return;
-        }
-
-        // Проверка допустимых символов
-        // Разрешаем: буквы (русские и английские), цифры, пробелы, дефисы, подчеркивания
-        const validPattern = /^[a-zA-Zа-яА-ЯёЁ0-9\s\-_]+$/;
-        if (!validPattern.test(categoryName)) {
-            this.showAlert(
-                'Название категории может содержать только буквы, цифры, пробелы, дефисы и подчеркивания',
-                'error'
-            );
-            return;
-        }
-
-        // Проверка на запрещенные слова (опционально)
-        const forbiddenWords = ['admin', 'система', 'тест', 'temp'];
-        const lowerCaseName = categoryName.toLowerCase();
-        for (const word of forbiddenWords) {
-            if (lowerCaseName.includes(word)) {
-                this.showAlert('Название категории содержит запрещенное слово', 'error');
-                return;
-            }
-        }
-
-        // Проверка уникальности (уже существующие категории)
+        // Проверка на уникальность
         if (this.categories.includes(categoryName)) {
-            this.showAlert('Такая категория уже существует', 'error');
+            this.showAlert('❌ Такая категория уже существует', 'error');
             return;
         }
 
@@ -1005,45 +848,22 @@ class AdminPanel {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-Token': this.getCSRFToken() // Добавляем CSRF токен
                 },
-                body: JSON.stringify({
-                    name: categoryName,
-                    timestamp: Date.now() // Добавляем timestamp для предотвращения повторных запросов
-                })
+                body: JSON.stringify({ name: categoryName })
             });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
 
             const result = await response.json();
 
             if (result.success) {
-                this.showAlert('Категория успешно создана', 'success');
+                this.showAlert('✅ Категория успешно создана', 'success');
                 input.value = ''; // Очищаем поле ввода
-
-                // Фокус на поле ввода для следующей категории
-                setTimeout(() => input.focus(), 100);
-
                 await this.loadCategories(); // Перезагружаем список
-
-                // Оповещаем другие части приложения о изменении категорий
-                this.dispatchCategoriesUpdate();
-
             } else {
-                this.showAlert(`Ошибка: ${result.error || 'Неизвестная ошибка'}`, 'error');
+                this.showAlert('❌ Ошибка: ' + (result.error || ''), 'error');
             }
         } catch (error) {
             console.error('❌ Ошибка создания категории:', error);
-
-            if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-                this.showAlert('Ошибка соединения с сервером. Проверьте подключение к интернету.', 'error');
-            } else if (error.message.includes('429')) {
-                this.showAlert('Слишком много запросов. Пожалуйста, подождите немного.', 'error');
-            } else {
-                this.showAlert('Ошибка сервера. Пожалуйста, попробуйте позже.', 'error');
-            }
+            this.showAlert('❌ Ошибка соединения с сервером', 'error');
         }
     }
 
@@ -1164,112 +984,118 @@ class AdminPanel {
     async loadOrders() {
         try {
             console.log('📥 Загрузка заказов...');
-            const response = await fetch('/api/admin/orders');
 
+            const response = await fetch('/api/admin/orders');
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                throw new Error(`HTTP ${response.status}`);
             }
 
             const orders = await response.json();
+            console.log('✅ Заказы получены:', orders);
 
-            // Проверяем, что ответ - массив
             if (!Array.isArray(orders)) {
                 console.error('❌ API вернул не массив:', orders);
-                throw new Error('Некорректный формат данных заказов');
+                return;
             }
 
-            this.orders = orders;
-            this.renderOrdersTable();
+            // ИЩЕМ ПРАВИЛЬНЫЙ КОНТЕЙНЕР ДЛЯ ТАБЛИЦЫ
+            let container = document.querySelector('#ordersContainer') ||
+                           document.querySelector('#ordersTable') ||
+                           document.querySelector('.orders-table-container');
 
-            // Обновляем счетчик в заголовке (если есть)
-            const ordersHeader = document.querySelector('#orders h2');
-            if (ordersHeader) {
-                const count = this.orders.length;
-                ordersHeader.innerHTML = `Управление заказами <span class="badge">${count}</span>`;
+            if (!container) {
+                console.error('❌ Контейнер заказов не найден');
+                return;
             }
 
-        } catch (error) {
-            console.error('❌ Ошибка загрузки заказов:', error);
+            // Если контейнер - это tbody, используем его напрямую
+            let tbody;
+            if (container.tagName === 'TBODY') {
+                tbody = container;
+            } else {
+                // Ищем tbody внутри контейнера
+                tbody = container.querySelector('tbody');
+            }
 
-            // Показываем ошибку в таблице
-            const tbody = document.getElementById('ordersTableBody');
-            if (tbody) {
-                tbody.innerHTML = this.safeHtml`
+            if (!tbody) {
+                console.error('❌ Не найден tbody для таблицы заказов');
+                return;
+            }
+
+            // Очищаем таблицу
+            tbody.innerHTML = '';
+
+            if (orders.length === 0) {
+                tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="error-state">
-                            <div style="text-align: center; padding: 20px; color: #dc3545;">
-                                <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 10px;"></i>
-                                <div><strong>Ошибка загрузки заказов</strong></div>
-                                <div style="font-size: 12px; margin-top: 5px;">${this.escapeHtml(error.message)}</div>
-                                <button onclick="admin.loadOrders()"
-                                        style="margin-top: 10px; padding: 5px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                    <i class="fas fa-redo"></i> Повторить
-                                </button>
-                            </div>
+                        <td colspan="6" style="text-align: center; padding: 20px;">
+                            <i class="fas fa-inbox"></i> Нет заказов
                         </td>
                     </tr>
                 `;
+                return;
             }
 
-            this.showAlert(`Ошибка загрузки заказов: ${error.message}`, 'error');
-        }
-    }
+            // Функции для форматирования
+            function formatPrice(price) {
+                return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+            }
 
-    renderOrdersTable() {
-        const tbody = document.getElementById('ordersTableBody');
-        if (!tbody) {
-            console.error('❌ Не найден tbody для таблицы заказов');
-            return;
-        }
+            function getStatusClass(status) {
+                const statusMap = {
+                    'pending': 'status-pending',
+                    'processing': 'status-processing',
+                    'delivering': 'status-delivering',
+                    'delivered': 'status-completed',
+                    'completed': 'status-completed',
+                    'cancelled': 'status-cancelled'
+                };
+                return statusMap[status?.toLowerCase()] || 'status-pending';
+            }
 
-        if (!Array.isArray(this.orders)) {
-            tbody.innerHTML = this.safeHtml`
-                <tr>
-                    <td colspan="6" class="error-state">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        Ошибка формата данных
-                    </td>
-                </tr>
-            `;
-            return;
-        }
+            function getStatusText(status) {
+                const statusText = {
+                    'pending': 'Ожидает',
+                    'processing': 'В обработке',
+                    'delivering': 'Доставляется',
+                    'delivered': 'Выполнен',
+                    'completed': 'Выполнен',
+                    'cancelled': 'Отменен'
+                };
+                return statusText[status?.toLowerCase()] || status;
+            }
 
-        if (this.orders.length === 0) {
-            tbody.innerHTML = this.safeHtml`
-                <tr>
-                    <td colspan="6" class="no-data">
-                        <i class="fas fa-inbox"></i> Нет заказов
-                    </td>
-                </tr>
-            `;
-            return;
-        }
+            // Заполняем таблицу
+            orders.forEach(order => {
+                const row = document.createElement('tr');
 
-        let html = '';
-        this.orders.forEach(order => {
-            const statusClass = this.getStatusClass(order.status);
-            const statusText = this.getStatusText(order.status);
-            const formattedDate = new Date(order.created_at).toLocaleDateString('ru-RU', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            const totalAmount = order.total_with_delivery || order.total_price || order.total || 0;
+                // Форматируем дату
+                const orderDate = new Date(order.created_at || order.timestamp);
+                const formattedDate = orderDate.toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
 
-            html += this.safeHtml`
-                <tr>
+                // Форматируем сумму
+                const totalAmount = order.total_with_delivery || order.total_price || order.total || 0;
+
+                // Определяем статус
+                const status = order.status || 'pending';
+                const statusClass = getStatusClass(status);
+
+                row.innerHTML = `
                     <td>#${order.id || 'N/A'}</td>
                     <td>
-                        ${this.escapeHtml(order.username || order.user_id || 'Гость')}
+                        ${order.username || order.user_id || 'Гость'}
                         ${order.user_id ? `<br><small>ID: ${order.user_id}</small>` : ''}
                     </td>
-                    <td>${this.formatPrice(totalAmount)} ₽</td>
+                    <td>${formatPrice(totalAmount)} ₽</td>
                     <td>
                         <span class="status-badge ${statusClass}">
-                            ${statusText}
+                            ${getStatusText(status)}
                         </span>
                     </td>
                     <td>${formattedDate}</td>
@@ -1277,42 +1103,44 @@ class AdminPanel {
                         <button class="btn-small" onclick="admin.viewOrderDetails(${order.id})">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn-small" onclick="admin.editOrderStatus(${order.id})">
+                        <button class="btn-small" onclick="admin.editOrder(${order.id})">
                             <i class="fas fa-edit"></i>
                         </button>
                     </td>
-                </tr>
-            `;
-        });
+                `;
 
-        tbody.innerHTML = html;
+                tbody.appendChild(row);
+            });
+
+            // Обновляем время последнего обновления
+            const updateTime = document.querySelector('#updateTime');
+            if (updateTime) {
+                updateTime.textContent = new Date().toLocaleTimeString('ru-RU');
+            }
+
+        } catch (error) {
+            console.error('❌ Ошибка загрузки заказов:', error);
+
+            // Показываем сообщение об ошибке в любом доступном контейнере
+            const errorContainer = document.querySelector('#ordersContainer') ||
+                                  document.querySelector('#ordersTable') ||
+                                  document.querySelector('.orders-table-container');
+
+            if (errorContainer) {
+                errorContainer.innerHTML = `
+                    <div style="text-align: center; color: #dc3545; padding: 20px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Ошибка загрузки заказов: ${error.message}
+                        <br>
+                        <button onclick="loadOrders()" style="margin-top: 10px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            <i class="fas fa-redo"></i> Повторить
+                        </button>
+                    </div>
+                `;
+            }
+        }
     }
 
-
-        // Вспомогательные методы для статусов
-    getStatusClass(status) {
-        const statusMap = {
-            'pending': 'status-pending',
-            'processing': 'status-processing',
-            'delivering': 'status-delivering',
-            'delivered': 'status-completed',
-            'completed': 'status-completed',
-            'cancelled': 'status-cancelled'
-        };
-        return statusMap[status?.toLowerCase()] || 'status-pending';
-    }
-
-    getStatusText(status) {
-        const statusTextMap = {
-            'pending': 'Ожидает',
-            'processing': 'В обработке',
-            'delivering': 'Доставляется',
-            'delivered': 'Выполнен',
-            'completed': 'Выполнен',
-            'cancelled': 'Отменен'
-        };
-        return statusTextMap[status?.toLowerCase()] || status;
-    }
 
     async loadCategories() {
         try {
@@ -1378,7 +1206,7 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Ошибка загрузки скидок:', error);
             this.discounts = [];
-                    this.renderDiscounts();
+            this.renderDiscounts();
         }
     }
 
@@ -1932,7 +1760,7 @@ class AdminPanel {
     async loadPromoCodes() {
         console.log('🎟️ Загрузка промокодов...');
         try {
-            const response = await fetch('/api/admin/promo-codes');  // Используйте правильный эндпоинт
+            const response = await fetch('/api/promo-codes');  // Используйте правильный эндпоинт
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2787,6 +2615,122 @@ class AdminPanel {
         });
 
         container.innerHTML = html;
+    }
+
+
+
+    showAddPromoCodeForm() {
+        const container = document.getElementById('promoCodesContainer');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="promo-code-form-container">
+                <div class="form-header">
+                    <h2><i class="fas fa-ticket-alt"></i> Создание нового промокода</h2>
+                    <button class="btn btn-outline" onclick="admin.loadPromoCodes()">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </button>
+                </div>
+
+                <form id="promoCodeForm" onsubmit="return admin.handlePromoCodeSubmit(event)">
+                    <div class="form-section">
+                        <h3>Основная информация</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="promoCode">Код промокода *</label>
+                                <div class="input-with-button">
+                                    <input type="text" id="promoCode" required placeholder="SUMMER2024" style="font-family: monospace; font-size: 16px;">
+                                    <button type="button" class="btn-small" onclick="admin.generatePromoCode()">
+                                        <i class="fas fa-dice"></i> Сгенерировать
+                                    </button>
+                                </div>
+                                <small style="color: #666; margin-top: 5px; display: block;">
+                                    Используйте буквы и цифры, рекомендуется 6-12 символов
+                                </small>
+                            </div>
+                            <div class="form-group">
+                                <label for="promoType">Тип скидки *</label>
+                                <select id="promoType" required onchange="admin.onPromoTypeChange()">
+                                    <option value="">Выберите тип</option>
+                                    <option value="percentage">Процентная скидка</option>
+                                    <option value="fixed">Фиксированная сумма</option>
+                                    <option value="free_delivery">Бесплатная доставка</option>
+                                    <option value="bogo">Купи 1 получи 2</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="promoValueGroup">
+                                <label for="promoValue">Размер скидки *</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="promoValue" step="0.01" placeholder="10" required>
+                                    <span id="promoUnit">%</span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="usageLimit">Лимит использований</label>
+                                <input type="number" id="usageLimit" min="1" placeholder="100 (0 = без лимита)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Срок действия</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="promoStartDate">Дата начала</label>
+                                <input type="datetime-local" id="promoStartDate">
+                            </div>
+                            <div class="form-group">
+                                <label for="promoEndDate">Дата окончания</label>
+                                <input type="datetime-local" id="promoEndDate">
+                            </div>
+                            <div class="form-group">
+                                <label for="minOrderAmountPromo">Мин. сумма заказа</label>
+                                <input type="number" id="minOrderAmountPromo" step="0.01" placeholder="0 (без ограничений)">
+                            </div>
+                            <div class="form-group">
+                                <label for="isActivePromo">Статус</label>
+                                <select id="isActivePromo">
+                                    <option value="1">Активен</option>
+                                    <option value="0">Не активен</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Ограничения</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="onePerCustomer">Одноразовый для пользователя</label>
+                                <select id="onePerCustomer">
+                                    <option value="0">Нет</option>
+                                    <option value="1">Да</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="excludeSaleItems">Исключать товары со скидкой</label>
+                                <select id="excludeSaleItems">
+                                    <option value="0">Нет</option>
+                                    <option value="1">Да</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="admin.loadPromoCodes()">
+                            Отмена
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить промокод
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        // Генерируем код по умолчанию
+        this.generatePromoCode();
     }
 
     generatePromoCode() {
