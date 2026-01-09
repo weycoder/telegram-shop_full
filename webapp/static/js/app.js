@@ -3377,7 +3377,7 @@ class TelegramShop {
 
     selectPaymentMethod(method) {
         if (method === 'cash') {
-            // Рассчитываем общую сумму заказа с учетом промокодов
+            // Рассчитываем сумму товаров
             const itemsTotal = this.cart.reduce((sum, item) => {
                 const priceToShow = item.discounted_price || item.price;
                 return sum + (priceToShow * item.quantity);
@@ -3387,27 +3387,44 @@ class TelegramShop {
             const promoDiscount = this.appliedPromoCode ?
                 this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
 
+            // Рассчитываем стоимость доставки
             let deliveryCost = 0;
+            const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
-            // ЕСЛИ промокод НЕ на бесплатную доставку и сумма меньше 1000
-            if (!(this.appliedPromoCode?.discount_type === 'free_delivery') &&
-                this.deliveryData.type === 'courier' && itemsTotal < 1000) {
-                deliveryCost = 100;
+            console.log('📦 Расчет доставки:', {
+                type: this.deliveryData.type,
+                hasFreeDeliveryPromo,
+                itemsTotal,
+                promoCodeType: this.appliedPromoCode?.discount_type
+            });
+
+            // Логика расчета доставки такая же как в showDeliverySelection()
+            if (this.deliveryData.type === 'courier') {
+                if (hasFreeDeliveryPromo) {
+                    deliveryCost = 0;
+                    console.log('🚚 Доставка бесплатная по промокоду');
+                } else if (itemsTotal < 1000) {
+                    deliveryCost = 100;
+                    console.log('💰 Доставка платная: +100₽');
+                } else {
+                    console.log('✅ Доставка бесплатная (заказ > 1000₽)');
+                }
+            } else if (this.deliveryData.type === 'pickup') {
+                console.log('🏪 Самовывоз - доставка бесплатная');
             }
 
-            // Итоговая сумма с учетом всего
-            const totalWithEverything = itemsTotal + deliveryCost - promoDiscount;
+            // Итоговая сумма
+            const totalAmount = itemsTotal + deliveryCost - promoDiscount;
 
-            console.log('💰 Расчет для наличных:', {
+            console.log('🧮 Итоговый расчет для наличных:', {
                 itemsTotal,
                 deliveryCost,
                 promoDiscount,
-                promoType: this.appliedPromoCode?.discount_type,
-                totalWithEverything
+                totalAmount
             });
 
             // Показываем модальное окно с ПРАВИЛЬНОЙ суммой
-            this.showCashPaymentModal(totalWithEverything);
+            this.showCashPaymentModal(totalAmount);
         } else {
             // Для других методов оплаты
             this.deliveryData.payment_method = method;
