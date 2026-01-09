@@ -800,6 +800,164 @@ body {
     to { transform: scale(1); opacity: 1; }
 }
 
+/* =================== FINAL RESPONSIVE LAYER (NON-DESTRUCTIVE) =================== */
+/* Mobile-first: make grids and typography fluid, override earlier fixed rules where necessary */
+
+html {
+    /* base scaling, users can change in browser */
+    font-size: 14px;
+}
+
+:root {
+    --fluid-min: 14; /* px */
+    --fluid-max: 18; /* px on large screens */
+}
+
+/* Fluid typography using clamp */
+body {
+    font-size: clamp(14px, 1.6vw, 18px);
+}
+
+/* Make products grid fully responsive: auto-fit/minmax for graceful wrapping */
+.products-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+/* On larger viewports increase min width for cards */
+@media (min-width: 768px) {
+    .products-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .products-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+    }
+}
+
+/* Product image container use aspect-ratio to avoid fixed heights */
+.product-image-container {
+    height: auto;
+    aspect-ratio: 4 / 3;
+}
+
+.product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Landing container: keep it centered and fluid */
+.landing-container {
+    width: min(92%, 1100px);
+    margin: 0 auto;
+}
+
+/* Categories wrap on larger screens instead of strict horizontal scroll */
+.categories {
+    flex-wrap: nowrap;
+}
+
+@media (min-width: 1024px) {
+    .categories {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 12px;
+        overflow: visible;
+    }
+}
+
+/* Cart overlay: use full-screen on small devices, side-drawer on larger */
+.cart-overlay {
+    justify-content: center;
+}
+
+.cart-modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    border-radius: 0;
+}
+
+@media (min-width: 768px) {
+    .cart-overlay {
+        justify-content: flex-end;
+    }
+    .cart-modal {
+        width: 100%;
+        max-width: 420px;
+        height: 100%;
+        border-radius: 16px 0 0 16px;
+    }
+}
+
+/* Product modal: responsive width limits */
+.product-modal {
+    width: 100%;
+    max-width: 96%;
+}
+
+@media (min-width: 768px) {
+    .product-modal {
+        max-width: 580px;
+    }
+}
+
+/* Buttons: use clamp for comfortable sizes */
+.btn, .btn-block, .btn-primary, .btn-outline {
+    font-size: clamp(13px, 1.2vw, 16px);
+    padding: clamp(8px, 1.2vw, 14px) clamp(10px, 2vw, 20px);
+}
+
+/* Make forms and inputs fluid */
+.form-group input, .form-group textarea, .form-group select {
+    font-size: clamp(14px, 1.2vw, 16px);
+}
+
+/* Improve accessibility: focus states and reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* Small-screen niceties */
+@media (max-width: 420px) {
+    .shop-header {
+        padding: 10px;
+    }
+
+    .shop-logo h1 { font-size: 16px; }
+
+    .product-title { font-size: 13px; }
+
+    .product-price { font-size: 15px; }
+}
+
+/* Desktop polish */
+@media (min-width: 1400px) {
+    .container { max-width: 1400px; }
+    .landing-container { max-width: 1200px; padding: 56px; }
+    .product-card { border-radius: 20px; }
+}
+
+/* Ensure images and media inside uploads scale */
+.cart-item-image, .product-image, .product-modal img, .preview img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Prevent horizontal overflow */
+html, body { overflow-x: hidden; }
+
+/* End of final responsive layer */
+
+
 .close-product-modal {
     position: absolute;
     top: 12px;

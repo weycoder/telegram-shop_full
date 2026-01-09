@@ -729,6 +729,70 @@ body.admin {
     }
 }
 
+/* Desktop improvements and responsive safeguards */
+@media (min-width: 1200px) {
+    body.admin {
+        font-size: 16px;
+    }
+
+    .admin-sidebar {
+        width: 320px;
+    }
+
+    .admin-main {
+        margin-left: 320px;
+        padding: 40px 60px;
+        max-width: 1300px;
+        margin-right: auto;
+        margin-left: 320px;
+    }
+
+    .stats-grid {
+        gap: 32px;
+    }
+
+    .stat-card {
+        padding: 36px;
+    }
+}
+
+/* Tables small-screen fallback */
+@media (max-width: 768px) {
+    .products-table-container,
+    .orders-table-container {
+        padding: 20px;
+        overflow-x: auto;
+    }
+
+    .products-table th,
+    .orders-table th,
+    .products-table td,
+    .orders-table td {
+        padding: 12px;
+        font-size: 14px;
+    }
+}
+
+/* Modal sizing for phones */
+@media (max-width: 480px) {
+    .modal-content {
+        max-width: 96%;
+        margin: 0 8px;
+        border-radius: 12px;
+    }
+
+    .modal-body {
+        padding: 16px;
+        max-height: calc(90vh - 80px);
+    }
+
+    .btn,
+    .btn-refresh {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+}
+
 /* ========== ЗАГРУЗКА ФАЙЛОВ ========== */
 
 /* Контейнер для загрузки файлов */

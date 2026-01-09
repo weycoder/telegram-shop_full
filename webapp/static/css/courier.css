@@ -1197,3 +1197,64 @@ body {
     font-size: 12px;
     margin-left: auto;
 }
+
+/* Desktop enhancements and non-destructive mobile-first fixes */
+@media (min-width: 1200px) {
+    body {
+        font-size: 16px; /* чуть крупнее для больших экранов */
+    }
+
+    .sidebar {
+        width: 320px;
+    }
+
+    .main-content {
+        margin-left: 320px;
+        padding: 100px 40px 40px;
+    }
+
+    /* Увеличим количество колонок на широких экранах */
+    .orders-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+    }
+
+    .order-card {
+        padding: 28px;
+    }
+}
+
+/* Небольшие правки для очень маленьких экранов */
+@media (max-width: 360px) {
+    .login-card {
+        max-width: 320px;
+        padding: 18px;
+    }
+
+    .logo {
+        width: 56px;
+        height: 56px;
+    }
+
+    .order-card {
+        padding: 16px;
+    }
+
+    .orders-grid {
+        gap: 12px;
+    }
+}
+
+/* Ensure modals are comfortably sized on small screens */
+@media (max-width: 480px) {
+    .modal {
+        max-width: 95%;
+        margin: 0 10px;
+        border-radius: 12px;
+    }
+
+    .modal-body {
+        padding: 16px;
+        max-height: calc(90vh - 70px);
+    }
+}
