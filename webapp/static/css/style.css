@@ -957,6 +957,27 @@ html, body { overflow-x: hidden; }
 
 /* End of final responsive layer */
 
+/* Strong overrides for cart behavior on large screens */
+@media (min-width: 1024px) {
+    .cart-overlay {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: stretch !important;
+        padding: 24px;
+    }
+
+    .cart-modal {
+        max-width: 460px !important;
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 16px 0 0 16px !important;
+        box-shadow: -10px 0 40px rgba(0,0,0,0.12) !important;
+    }
+
+    /* center cart header buttons inside modal */
+    .cart-header { position: sticky; top: 0; z-index: 2; }
+}
+
 
 .close-product-modal {
     position: absolute;

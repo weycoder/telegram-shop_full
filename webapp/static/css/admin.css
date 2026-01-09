@@ -729,6 +729,23 @@ body.admin {
     }
 }
 
+/* Fix for action buttons overlapping category tree on narrow screens */
+@media (max-width: 420px) {
+    .admin-main {
+        padding-right: 18px;
+    }
+
+    .categories-list {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .nav-item,
+    .category-tag {
+        word-break: break-word;
+    }
+}
+
 /* Desktop improvements and responsive safeguards */
 @media (min-width: 1200px) {
     body.admin {
