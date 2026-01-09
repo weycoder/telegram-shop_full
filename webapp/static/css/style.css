@@ -1297,6 +1297,51 @@ body {
     border-radius: 50%;
 }
 
+/* Desktop: увеличим лендинг и масштаб элементов для крупных экранов */
+@media (min-width: 1024px) {
+    body {
+        font-size: 16px; /* чуть крупнее базовый текст на десктопе */
+    }
+
+    .landing-container {
+        max-width: 900px; /* расширенный контейнер на десктопе */
+        padding: 48px 40px;
+    }
+
+    .landing-logo i {
+        font-size: 64px;
+        margin-bottom: 20px;
+    }
+
+    .landing-logo h1 {
+        font-size: 40px;
+    }
+
+    .landing-description p {
+        font-size: 16px;
+    }
+
+    .btn-open-shop {
+        padding: 22px 24px;
+        font-size: 18px;
+        border-radius: 20px;
+    }
+
+    .landing-stats .stat-number {
+        font-size: 28px;
+    }
+
+    /* Немного увеличить заголовок в компактном хедере */
+    .shop-logo h1 {
+        font-size: 20px;
+    }
+
+    /* Продуктовые карточки: крупнее заголовки */
+    .product-title {
+        font-size: 16px;
+    }
+}
+
 /* Адаптивность для очень маленьких экранов */
 @media (max-width: 360px) {
     .container {
@@ -1362,8 +1407,9 @@ body {
         padding: 20px;
     }
 
+    /* Планшеты: 3 колонки (унифицировано с мобильной секцией в начале файла) */
     .products-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 16px;
     }
 
@@ -1375,8 +1421,9 @@ body {
         max-width: 480px;
     }
 
+    /* Сделаем корзину чуть шире на планшетах для удобства */
     .cart-modal {
-        max-width: 380px;
+        max-width: 480px;
     }
 }
 
