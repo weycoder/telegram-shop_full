@@ -2145,7 +2145,6 @@ class TelegramShop {
         const promoDiscount = this.appliedPromoCode ?
             this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
 
-        // ВАЖНО: Объявляем finalTotal здесь, вне блока if
         const finalTotal = itemsTotal + deliveryCost - promoDiscount;
 
         cartOverlay.innerHTML = `
@@ -2162,7 +2161,44 @@ class TelegramShop {
                 <div class="delivery-content" style="padding: 12px; max-height: calc(100vh - 140px); overflow-y: auto;">
                     <div class="compact-promo-section" style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; max-width: 100%; box-sizing: border-box;">
                         <div style="padding: 0; max-width: 100%; box-sizing: border-box;">
-                            <!-- ... существующий HTML для промокода ... -->
+                            <!-- ВОТ ПРОМОКОД ВЕРНУЛ -->
+                            <div style="margin-bottom: 16px; background: white; border-radius: 12px; padding: 12px; border: 1px solid #e0e0e0;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <i class="fas fa-ticket-alt" style="color: #667eea; font-size: 16px;"></i>
+                                    <span style="font-weight: 600; color: #333; font-size: 14px;">Промокод</span>
+                                </div>
+
+                                ${!this.appliedPromoCode ? `
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="text"
+                                               id="compactPromoCodeInput"
+                                               placeholder="Введите код"
+                                               style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; height: 40px; box-sizing: border-box;">
+                                        <button id="applyPromoBtnCompact"
+                                                style="width: 60px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px; height: 40px;">
+                                            OK
+                                        </button>
+                                    </div>
+                                ` : `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; padding: 10px 12px; border-radius: 8px;">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-check-circle" style="color: #4CAF50;"></i>
+                                            <div>
+                                                <div style="font-weight: 600; color: #2e7d32; font-size: 14px;">${this.appliedPromoCode.code}</div>
+                                                <div style="font-size: 12px; color: #388E3C; margin-top: 2px;">
+                                                    ${this.getPromoMessage(this.appliedPromoCode, promoDiscount)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button id="removePromoBtnCompact"
+                                                style="background: none; border: none; color: #dc3545; cursor: pointer; padding: 4px 8px;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                `}
+
+                                <div id="compactPromoMessage" style="margin-top: 6px; font-size: 12px; min-height: 16px;"></div>
+                            </div>
 
                             <!-- СПОСОБ ДОСТАВКИ -->
                             <div style="margin-bottom: 16px;">
@@ -2304,7 +2340,7 @@ class TelegramShop {
                 });
             }
 
-            // Промокод
+            // Промокод (ТЕПЕРЬ ЭТОТ БЛОК БУДЕТ РАБОТАТЬ)
             if (!this.appliedPromoCode) {
                 const applyBtn = document.getElementById('applyPromoBtnCompact');
                 const promoInput = document.getElementById('compactPromoCodeInput');
