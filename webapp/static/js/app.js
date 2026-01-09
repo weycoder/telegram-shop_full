@@ -3299,7 +3299,46 @@ class TelegramShop {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
-        const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        // Рассчитываем сумму товаров
+        const itemsTotal = this.cart.reduce((sum, item) => {
+            const priceToShow = item.discounted_price || item.price;
+            return sum + (priceToShow * item.quantity);
+        }, 0);
+
+        // Рассчитываем скидку от промокода
+        const promoDiscount = this.appliedPromoCode ?
+            this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
+
+        // ВАЖНО: Рассчитываем стоимость доставки ТАК ЖЕ как в showDeliverySelection()
+        let deliveryCost = 0;
+        const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
+
+        console.log('💰 Расчет для оплаты:', {
+            itemsTotal,
+            deliveryType: this.deliveryData.type,
+            hasFreeDeliveryPromo,
+            promoDiscount
+        });
+
+        // ЛОГИКА РАСЧЕТА ДОСТАВКИ (такая же как везде)
+        if (this.deliveryData.type === 'courier') {
+            if (hasFreeDeliveryPromo) {
+                deliveryCost = 0;
+                console.log('🚚 Доставка бесплатная по промокоду');
+            } else if (itemsTotal < 1000) {
+                deliveryCost = 100;
+                console.log('💰 Доставка платная: +100₽');
+            }
+        }
+
+        const totalAmount = itemsTotal + deliveryCost - promoDiscount;
+
+        console.log('✅ Итог для оплаты:', {
+            itemsTotal,
+            deliveryCost,
+            promoDiscount,
+            totalAmount
+        });
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
@@ -3313,6 +3352,12 @@ class TelegramShop {
                 <div class="order-summary">
                     <h3><i class="fas fa-receipt"></i> Сумма к оплате:</h3>
                     <div class="total-amount">${this.formatPrice(totalAmount)} ₽</div>
+                    <!-- ДОБАВЛЯЕМ РАСШИФРОВКУ -->
+                    <div class="price-breakdown" style="font-size: 14px; color: #666; margin-top: 8px;">
+                        <div>Товары: ${this.formatPrice(itemsTotal)} ₽</div>
+                        ${deliveryCost > 0 ? `<div>Доставка: ${this.formatPrice(deliveryCost)} ₽</div>` : ''}
+                        ${promoDiscount > 0 ? `<div>Скидка: -${this.formatPrice(promoDiscount)} ₽</div>` : ''}
+                    </div>
                 </div>
 
                 <div class="payment-options">
@@ -3359,12 +3404,20 @@ class TelegramShop {
         `;
 
         // Назначаем обработчики
-        document.getElementById('cashOption').addEventListener('click', () => this.selectPaymentMethod('cash'));
-        document.getElementById('transferOption').addEventListener('click', () => this.selectPaymentMethod('transfer'));
-        document.getElementById('terminalOption').addEventListener('click', () => this.selectPaymentMethod('terminal'));
+        document.getElementById('cashOption').addEventListener('click', () => {
+            // ВАЖНО: Передаем правильную сумму в selectPaymentMethod
+            this.selectPaymentMethod('cash', totalAmount);
+        });
+
+        document.getElementById('transferOption').addEventListener('click', () => {
+            this.selectPaymentMethod('transfer', totalAmount);
+        });
+
+        document.getElementById('terminalOption').addEventListener('click', () => {
+            this.selectPaymentMethod('terminal', totalAmount);
+        });
 
         document.getElementById('backToAddressBtn').addEventListener('click', () => {
-            // Возвращаемся к выбору адреса или точки самовывоза
             if (this.deliveryData.type === 'courier') {
                 this.showAddressSelection();
             } else {
@@ -3375,56 +3428,15 @@ class TelegramShop {
         document.getElementById('closePaymentSelection').addEventListener('click', () => this.closeCart());
     }
 
-    selectPaymentMethod(method) {
+    selectPaymentMethod(method, totalAmount = null) {
         if (method === 'cash') {
-            // Рассчитываем сумму товаров
-            const itemsTotal = this.cart.reduce((sum, item) => {
-                const priceToShow = item.discounted_price || item.price;
-                return sum + (priceToShow * item.quantity);
-            }, 0);
+            // Если totalAmount передан - используем его, иначе рассчитываем
+            const finalAmount = totalAmount !== null ? totalAmount : this.calculateTotalAmount();
 
-            // Рассчитываем скидку от промокода (если есть)
-            const promoDiscount = this.appliedPromoCode ?
-                this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
-
-            // Рассчитываем стоимость доставки
-            let deliveryCost = 0;
-            const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
-
-            console.log('📦 Расчет доставки:', {
-                type: this.deliveryData.type,
-                hasFreeDeliveryPromo,
-                itemsTotal,
-                promoCodeType: this.appliedPromoCode?.discount_type
-            });
-
-            // Логика расчета доставки такая же как в showDeliverySelection()
-            if (this.deliveryData.type === 'courier') {
-                if (hasFreeDeliveryPromo) {
-                    deliveryCost = 0;
-                    console.log('🚚 Доставка бесплатная по промокоду');
-                } else if (itemsTotal < 1000) {
-                    deliveryCost = 100;
-                    console.log('💰 Доставка платная: +100₽');
-                } else {
-                    console.log('✅ Доставка бесплатная (заказ > 1000₽)');
-                }
-            } else if (this.deliveryData.type === 'pickup') {
-                console.log('🏪 Самовывоз - доставка бесплатная');
-            }
-
-            // Итоговая сумма
-            const totalAmount = itemsTotal + deliveryCost - promoDiscount;
-
-            console.log('🧮 Итоговый расчет для наличных:', {
-                itemsTotal,
-                deliveryCost,
-                promoDiscount,
-                totalAmount
-            });
-
+            console.log('💵 Сумма для наличных:', finalAmount);
+            
             // Показываем модальное окно с ПРАВИЛЬНОЙ суммой
-            this.showCashPaymentModal(totalAmount);
+            this.showCashPaymentModal(finalAmount);
         } else {
             // Для других методов оплаты
             this.deliveryData.payment_method = method;
@@ -3440,6 +3452,26 @@ class TelegramShop {
             // Переходим к оформлению заказа
             this.confirmOrder();
         }
+    }
+
+    // Добавляем вспомогательный метод
+    calculateTotalAmount() {
+        const itemsTotal = this.cart.reduce((sum, item) => {
+            const priceToShow = item.discounted_price || item.price;
+            return sum + (priceToShow * item.quantity);
+        }, 0);
+
+        const promoDiscount = this.appliedPromoCode ?
+            this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
+
+        let deliveryCost = 0;
+        const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
+
+        if (this.deliveryData.type === 'courier' && !hasFreeDeliveryPromo && itemsTotal < 1000) {
+            deliveryCost = 100;
+        }
+
+        return itemsTotal + deliveryCost - promoDiscount;
     }
 
 
