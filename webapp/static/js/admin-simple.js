@@ -58,6 +58,11 @@ class AdminPanel {
             });
         });
 
+        document.addEventListener('DOMContentLoaded', () => {
+            loadOrders();
+            setInterval(loadOrders, 10000); // Обновление каждые 10 секунд
+        });
+
         // Кнопка обновить
         document.getElementById('refreshBtn')?.addEventListener('click', () => {
             this.refreshCurrentPage();
@@ -976,18 +981,117 @@ class AdminPanel {
         }
     }
 
-    async loadOrders() {
+    async function loadOrders() {
         try {
+            console.log('📥 Загрузка заказов...');
+
             const response = await fetch('/api/admin/orders');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
             const orders = await response.json();
-            this.orders = orders;
-            this.renderOrders();
+            console.log('✅ Заказы получены:', orders);
+
+            if (!Array.isArray(orders)) {
+                console.error('❌ API вернул не массив:', orders);
+                return;
+            }
+
+            // Очищаем таблицу
+            const tbody = document.querySelector('#ordersTable tbody');
+            if (!tbody) {
+                console.error('❌ Не найдена таблица заказов');
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            if (orders.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px;">
+                            <i class="fas fa-inbox"></i> Нет заказов
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // Заполняем таблицу
+            orders.forEach(order => {
+                const row = document.createElement('tr');
+
+                // Форматируем дату
+                const orderDate = new Date(order.created_at || order.timestamp);
+                const formattedDate = orderDate.toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                // Форматируем сумму
+                const totalAmount = order.total_with_delivery || order.total || 0;
+
+                // Определяем статус
+                const status = order.status || 'ожидает';
+                const statusClass = getStatusClass(status);
+
+                row.innerHTML = `
+                    <td>#${order.id || 'N/A'}</td>
+                    <td>
+                        ${order.username || order.user_id || 'Гость'}
+                        ${order.user_id ? `<br><small>ID: ${order.user_id}</small>` : ''}
+                    </td>
+                    <td>${formatPrice(totalAmount)} ₽</td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            ${getStatusText(status)}
+                        </span>
+                    </td>
+                    <td>${formattedDate}</td>
+                    <td>
+                        <button class="btn-small" onclick="viewOrderDetails(${order.id})">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-small" onclick="editOrder(${order.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+
+            // Обновляем время
+            const updateTime = document.querySelector('#updateTime');
+            if (updateTime) {
+                updateTime.textContent = new Date().toLocaleTimeString('ru-RU');
+            }
+
         } catch (error) {
             console.error('❌ Ошибка загрузки заказов:', error);
-            this.orders = [];
-            this.renderOrders();
+
+            const tbody = document.querySelector('#ordersTable tbody');
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #dc3545; padding: 20px;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Ошибка загрузки: ${error.message}
+                            <br>
+                            <button onclick="loadOrders()" style="margin-top: 10px;">
+                                <i class="fas fa-redo"></i> Повторить
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
         }
     }
+
 
     async loadCategories() {
         try {
@@ -1029,6 +1133,34 @@ class AdminPanel {
             console.error('❌ Ошибка загрузки статистики:', error);
         }
     }
+
+
+    function formatPrice(price) {
+        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+    }
+
+    function getStatusClass(status) {
+        const statusMap = {
+            'ожидает': 'status-pending',
+            'в обработке': 'status-processing',
+            'доставляется': 'status-delivering',
+            'выполнен': 'status-completed',
+            'отменен': 'status-cancelled'
+        };
+        return statusMap[status.toLowerCase()] || 'status-pending';
+    }
+
+    function getStatusText(status) {
+        const statusText = {
+            'ожидает': 'Ожидает',
+            'в обработке': 'В обработке',
+            'доставляется': 'Доставляется',
+            'выполнен': 'Выполнен',
+            'отменен': 'Отменен'
+        };
+        return statusText[status.toLowerCase()] || status;
+    }
+
 
     async loadAllProducts() {
         try {

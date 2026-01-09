@@ -3434,7 +3434,7 @@ class TelegramShop {
             const finalAmount = totalAmount !== null ? totalAmount : this.calculateTotalAmount();
 
             console.log('💵 Сумма для наличных:', finalAmount);
-            
+
             // Показываем модальное окно с ПРАВИЛЬНОЙ суммой
             this.showCashPaymentModal(finalAmount);
         } else {
