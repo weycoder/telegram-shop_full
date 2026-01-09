@@ -2235,21 +2235,6 @@ body.admin {
     margin: 0 0 20px 0;
 }
 
-/* Модальное окно деталей заказа */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 20px;
-}
-
 .modal-content {
     background: white;
     border-radius: 16px;
@@ -3133,21 +3118,6 @@ body.admin {
     flex: 1;
 }
 
-/* Модальное окно деталей */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    animation: fadeIn 0.3s ease;
-}
-
 .modal-content {
     background: white;
     border-radius: 10px;
@@ -3292,8 +3262,4 @@ body.admin {
 .admin-content {
     position: relative;
     z-index: 1;
-}
-
-.modal-overlay {
-    z-index: 1000; /* Убедитесь, что модалки выше */
 }
