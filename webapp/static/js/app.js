@@ -2586,7 +2586,7 @@ class TelegramShop {
             padding: 10px;
         `;
 
-        // ВАЖНО: Округляем до ближайших 100 рублей вверх
+        // Округляем до ближайших 100 рублей вверх
         const defaultCashAmount = Math.ceil(totalAmount / 100) * 100;
 
         modal.innerHTML = `
@@ -2596,7 +2596,7 @@ class TelegramShop {
                         <h3 style="margin: 0; font-size: 16px; color: #333;">
                             <i class="fas fa-money-bill-wave"></i> Наличные
                         </h3>
-                        <button onclick="this.parentElement.parentElement.parentElement.remove()"
+                        <button id="closeCashModal"
                                 style="background: none; border: none; color: #666; cursor: pointer; font-size: 16px; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
                             <i class="fas fa-times"></i>
                         </button>
@@ -2617,22 +2617,22 @@ class TelegramShop {
                             <input type="number"
                                    id="cashAmountCompact"
                                    value="${defaultCashAmount}"
-                                   min="${totalAmount}"  <!-- ВАЖНО: минимальная сумма -->
+                                   min="${totalAmount}"
                                    step="1"
                                    style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; text-align: center;">
                         </div>
 
                         <!-- Быстрые кнопки -->
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px;">
-                            <button onclick="shop.adjustCashAmountCompact(100)"
+                            <button class="cash-add-btn" data-amount="100"
                                     style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
                                 +100 ₽
                             </button>
-                            <button onclick="shop.adjustCashAmountCompact(500)"
+                            <button class="cash-add-btn" data-amount="500"
                                     style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
                                 +500 ₽
                             </button>
-                            <button onclick="shop.adjustCashAmountCompact(1000)"
+                            <button class="cash-add-btn" data-amount="1000"
                                     style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
                                 +1000 ₽
                             </button>
@@ -2652,12 +2652,11 @@ class TelegramShop {
 
                     <!-- Кнопки действий -->
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="this.parentElement.parentElement.parentElement.remove()"
+                        <button id="cancelCashModal"
                                 style="flex: 1; padding: 12px; background: #f8f9fa; color: #333; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-weight: 500;">
                             Отмена
                         </button>
                         <button id="confirmCashCompact"
-                                onclick="shop.confirmCashPaymentCompact(${totalAmount})"
                                 style="flex: 1; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
                             Готово
                         </button>
@@ -2668,16 +2667,46 @@ class TelegramShop {
 
         document.body.appendChild(modal);
 
+        // Назначаем обработчики событий
         const cashInput = document.getElementById('cashAmountCompact');
+        const closeBtn = document.getElementById('closeCashModal');
+        const cancelBtn = document.getElementById('cancelCashModal');
+        const confirmBtn = document.getElementById('confirmCashCompact');
+        const addBtns = modal.querySelectorAll('.cash-add-btn');
 
-        // ВАЖНО: Устанавливаем минимальное значение
-        cashInput.min = totalAmount;
+        if (cashInput) {
+            // Устанавливаем минимальное значение
+            cashInput.min = totalAmount;
 
-        // Сразу проверяем сдачу
-        this.calculateChangeCompact(totalAmount);
+            // Сразу проверяем сдачу
+            this.calculateChangeCompact(totalAmount);
 
-        // Обработчик изменения суммы
-        cashInput.addEventListener('input', () => this.calculateChangeCompact(totalAmount));
+            // Обработчик изменения суммы
+            cashInput.addEventListener('input', () => this.calculateChangeCompact(totalAmount));
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => modal.remove());
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => modal.remove());
+        }
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+                this.confirmCashPaymentCompact(totalAmount);
+                modal.remove();
+            });
+        }
+
+        // Обработчики для кнопок +100/500/1000
+        addBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const amount = parseInt(e.target.dataset.amount) || 100;
+                this.adjustCashAmountCompact(amount);
+            });
+        });
     }
 
     confirmCashPaymentCompact(totalAmount) {
