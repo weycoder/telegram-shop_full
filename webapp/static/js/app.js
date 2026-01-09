@@ -693,9 +693,10 @@ class TelegramShop {
                 return Math.min(promo.value, subtotal);
 
             case 'free_delivery':
-                // ВАЖНО: Возвращаем 0 для скидки, но отмечаем в логе
-                console.log('🚚 Промокод на бесплатную доставку применен');
-                return 0; // Не влияет на сумму товаров
+                // Возвращаем 0, так как этот промокод влияет только на стоимость доставки
+                // Но логируем для отладки
+                console.log('🚚 Промокод на бесплатную доставку: не влияет на сумму товаров');
+                return 0;
 
             case 'bogo':
                 if (this.cart.length > 0) {
@@ -2133,14 +2134,26 @@ class TelegramShop {
         let deliveryMessage = 'Бесплатно';
         const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
+        if (this.appliedPromoCode?.discount_type === 'free_delivery') {
+            deliveryCost = 0;
+            deliveryMessage = 'Бесплатно';
+            console.log('🚚 Доставка бесплатная по промокоду');
+        } else if (this.deliveryData.type === 'courier' && itemsTotal < 1000) {
+            deliveryCost = 100;
+            deliveryMessage = '100 ₽';
+        }
+
         if (!hasFreeDeliveryPromo && itemsTotal < 1000) {
             deliveryCost = 100;
             deliveryMessage = '100 ₽';
         }
 
+        // Рассчитываем скидку от промокода если есть
         const promoDiscount = this.appliedPromoCode ?
             this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
-        const finalTotal = itemsTotal + deliveryCost - promoDiscount;
+
+        // ВАЖНО: totalWithDelivery использует deliveryCost (уже учитывает промокод на доставку)
+        const totalWithDelivery = itemsTotal + deliveryCost - promoDiscount;
 
         // ВАЖНО: Сохраняем текущий тип доставки перед генерацией HTML
         const currentDeliveryType = this.deliveryData.type;
@@ -3355,19 +3368,37 @@ class TelegramShop {
 
     selectPaymentMethod(method) {
         if (method === 'cash') {
-            // Рассчитываем общую сумму заказа
-            const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            // Рассчитываем общую сумму заказа с учетом промокодов
+            const itemsTotal = this.cart.reduce((sum, item) => {
+                const priceToShow = item.discounted_price || item.price;
+                return sum + (priceToShow * item.quantity);
+            }, 0);
+
+            // Рассчитываем скидку от промокода (если есть)
+            const promoDiscount = this.appliedPromoCode ?
+                this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
+
             let deliveryCost = 0;
 
-            // Добавляем стоимость доставки если нужно
-            if (this.deliveryData.type === 'courier' && itemsTotal < 1000) {
+            // ЕСЛИ промокод НЕ на бесплатную доставку и сумма меньше 1000
+            if (!(this.appliedPromoCode?.discount_type === 'free_delivery') &&
+                this.deliveryData.type === 'courier' && itemsTotal < 1000) {
                 deliveryCost = 100;
             }
 
-            const totalWithDelivery = itemsTotal + deliveryCost;
+            // Итоговая сумма с учетом всего
+            const totalWithEverything = itemsTotal + deliveryCost - promoDiscount;
 
-            // Показываем модальное окно для наличной оплаты
-            this.showCashPaymentModal(totalWithDelivery);
+            console.log('💰 Расчет для наличных:', {
+                itemsTotal,
+                deliveryCost,
+                promoDiscount,
+                promoType: this.appliedPromoCode?.discount_type,
+                totalWithEverything
+            });
+
+            // Показываем модальное окно с ПРАВИЛЬНОЙ суммой
+            this.showCashPaymentModal(totalWithEverything);
         } else {
             // Для других методов оплаты
             this.deliveryData.payment_method = method;
@@ -3384,6 +3415,7 @@ class TelegramShop {
             this.confirmOrder();
         }
     }
+
 
     async selectAddress(addressId) {
         try {
@@ -3462,15 +3494,6 @@ class TelegramShop {
     async confirmOrder() {
         try {
             console.log('🔍 Начинаем оформление заказа...');
-            console.log('📊 Данные пользователя:', { userId: this.userId, username: this.username });
-            console.log('🚚 Данные доставки:', this.deliveryData);
-            console.log('🛒 Товары в корзине:', this.cart.length);
-
-            // Проверка корзины
-            if (this.cart.length === 0) {
-                this.showNotification('❌ Корзина пуста', 'error');
-                return;
-            }
 
             // Рассчитываем сумму товаров
             const itemsTotal = this.cart.reduce((sum, item) => {
@@ -3480,9 +3503,12 @@ class TelegramShop {
 
             // Скидка от промокода
             let promoDiscount = 0;
+            let promoCodeApplied = false;
+
             if (this.appliedPromoCode) {
                 promoDiscount = this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode);
-                console.log(`🎟️ Скидка от промокода "${this.appliedPromoCode.code}": ${promoDiscount} руб`);
+                promoCodeApplied = true;
+                console.log(`🎟️ Промокод "${this.appliedPromoCode.code}": ${promoDiscount} руб, тип: ${this.appliedPromoCode.discount_type}`);
             }
 
             // Стоимость доставки
@@ -3491,12 +3517,17 @@ class TelegramShop {
 
             if (!hasFreeDeliveryPromo && this.deliveryData.type === 'courier' && itemsTotal < 1000) {
                 deliveryCost = 100;
-                console.log(`💰 Доставка платная: +${deliveryCost} руб`);
-            } else {
-                console.log('✅ Доставка бесплатная');
             }
 
             const totalWithDelivery = itemsTotal + deliveryCost - promoDiscount;
+
+            console.log('🧮 Итоговый расчет:', {
+                itemsTotal,
+                deliveryCost,
+                promoDiscount,
+                promoType: this.appliedPromoCode?.discount_type,
+                totalWithDelivery
+            });
 
             // Формируем данные заказа
             const orderItems = this.cart.map(item => ({
@@ -3524,7 +3555,7 @@ class TelegramShop {
             const recipient_name = this.deliveryData.address_details?.recipient_name || this.username || 'Получатель';
             const phone_number = this.deliveryData.address_details?.phone || '';
 
-            const orderData = {
+             const orderData = {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
@@ -3538,8 +3569,8 @@ class TelegramShop {
                 cash_payment: this.deliveryData.cash_payment || null,
                 promo_code: this.appliedPromoCode?.code || null,
                 promo_code_id: this.appliedPromoCode?.id || null,
-                discount_amount: promoDiscount || 0,
-                delivery_cost: deliveryCost,
+                discount_amount: promoDiscount,
+                delivery_cost: deliveryCost, // ВАЖНО: отдельно передаем стоимость доставки
                 total_with_delivery: totalWithDelivery
             };
 
