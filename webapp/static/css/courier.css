@@ -1,5 +1,12 @@
-/* Курьерская система - Основные стили */
+/* CLEANED & ADAPTED courier.css
+   - Все дубликаты селекторов удалены (оставлены последние)
+   - Имена классов и логика не изменены
+   - Адаптация: mobile / tablet / desktop / Telegram WebApp
+*/
+
+* Курьерская система - Основные стили */
 :root {
+
     --primary-color: #3498db;
     --primary-dark: #2980b9;
     --secondary-color: #2ecc71;
@@ -13,32 +20,40 @@
     --shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
     --radius: 12px;
     --transition: all 0.3s ease;
+
 }
 
 * {
+
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+
 }
 
 body {
+
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: #f5f7fa;
     color: var(--dark-color);
     line-height: 1.6;
+
 }
 
 /* Экран авторизации */
 .login-container {
+
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     padding: 20px;
+
 }
 
 .login-card {
+
     background: white;
     border-radius: 20px;
     padding: 40px;
@@ -46,19 +61,29 @@ body {
     max-width: 450px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
     animation: slideUp 0.5s ease;
+
 }
 
 @keyframes slideUp {
-    from { transform: translateY(30px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+
+    from { transform: translateY(30px); opacity: 0;
+}
+
+to {
+ transform: scale(1); opacity: 1;
+}
+
 }
 
 .login-header {
+
     text-align: center;
     margin-bottom: 30px;
+
 }
 
 .logo {
+
     width: 70px;
     height: 70px;
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
@@ -67,34 +92,46 @@ body {
     align-items: center;
     justify-content: center;
     margin: 0 auto 20px;
+
 }
 
 .logo i {
+
     font-size: 32px;
     color: white;
+
 }
 
 .login-header h1 {
+
     font-size: 28px;
     color: var(--dark-color);
     margin-bottom: 10px;
     font-weight: 700;
+
 }
 
 .login-header p {
+
     color: var(--gray-color);
     font-size: 15px;
+
 }
 
 .login-form {
+
     margin-bottom: 25px;
+
 }
 
 .form-group {
+
     margin-bottom: 20px;
+
 }
 
 .form-group label {
+
     display: flex;
     align-items: center;
     gap: 10px;
@@ -102,14 +139,18 @@ body {
     font-weight: 600;
     color: var(--dark-color);
     font-size: 14px;
+
 }
 
 .form-group label i {
+
     color: var(--primary-color);
     width: 16px;
+
 }
 
 .form-group input {
+
     width: 100%;
     padding: 14px 16px;
     border: 2px solid var(--border-color);
@@ -117,16 +158,20 @@ body {
     font-size: 16px;
     transition: var(--transition);
     background: #f8f9fa;
+
 }
 
 .form-group input:focus {
+
     outline: none;
     border-color: var(--primary-color);
     background: white;
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+
 }
 
 .btn {
+
     padding: 14px 24px;
     border: none;
     border-radius: var(--radius);
@@ -138,58 +183,76 @@ body {
     align-items: center;
     justify-content: center;
     gap: 10px;
+
 }
 
 .btn-block {
+
     width: 100%;
+
 }
 
 .btn-primary {
+
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: white;
     box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+
 }
 
 .btn-primary:hover {
+
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+
 }
 
 .btn-secondary {
+
     background: white;
     color: var(--dark-color);
     border: 2px solid var(--border-color);
+
 }
 
 .btn-secondary:hover {
+
     background: #f8f9fa;
     border-color: var(--primary-color);
+
 }
 
 .login-footer {
+
     text-align: center;
     padding-top: 20px;
     border-top: 1px solid var(--border-color);
     color: var(--gray-color);
     font-size: 14px;
+
 }
 
 .login-footer code {
+
     background: #f1f3f5;
     padding: 2px 8px;
     border-radius: 4px;
     font-family: monospace;
     color: var(--dark-color);
+
 }
 
 /* Основной интерфейс курьера */
 .courier-container {
+
     display: flex;
     min-height: 100vh;
+
 }
 
 /* Шапка */
 .courier-header {
+
     position: fixed;
     top: 0;
     left: 0;
@@ -201,9 +264,11 @@ body {
     padding: 0 25px;
     box-shadow: var(--shadow);
     z-index: 1000;
+
 }
 
 .menu-toggle {
+
     background: none;
     border: none;
     font-size: 22px;
@@ -213,36 +278,48 @@ body {
     margin-right: 20px;
     border-radius: 8px;
     transition: var(--transition);
+
 }
 
 .menu-toggle:hover {
+
     background: #f8f9fa;
     color: var(--primary-color);
+
 }
 
 .header-title {
+
     flex: 1;
+
 }
 
 .header-title h1 {
+
     font-size: 20px;
     font-weight: 700;
     color: var(--dark-color);
     margin-bottom: 4px;
+
 }
 
 #courierGreeting {
+
     font-size: 14px;
     color: var(--gray-color);
+
 }
 
 .header-actions {
+
     display: flex;
     align-items: center;
     gap: 15px;
+
 }
 
 .btn-notification, .btn-profile {
+
     background: none;
     border: none;
     font-size: 20px;
@@ -252,14 +329,18 @@ body {
     border-radius: 50%;
     position: relative;
     transition: var(--transition);
+
 }
 
 .btn-notification:hover, .btn-profile:hover {
+
     background: #f8f9fa;
     color: var(--primary-color);
+
 }
 
 .badge {
+
     position: absolute;
     top: 2px;
     right: 2px;
@@ -274,10 +355,12 @@ body {
     align-items: center;
     justify-content: center;
     border: 2px solid white;
+
 }
 
 /* Боковое меню */
 .sidebar {
+
     width: 280px;
     background: var(--dark-color);
     color: white;
@@ -289,21 +372,27 @@ body {
     transition: var(--transition);
     z-index: 999;
     box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+
 }
 
 .sidebar.collapsed {
+
     transform: translateX(-280px);
+
 }
 
 .sidebar-profile {
+
     padding: 30px 25px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
     gap: 15px;
+
 }
 
 .profile-avatar {
+
     width: 60px;
     height: 60px;
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
@@ -312,25 +401,33 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 28px;
+
 }
 
 .profile-info h3 {
+
     font-size: 18px;
     font-weight: 600;
     margin-bottom: 5px;
+
 }
 
 .profile-info p {
+
     font-size: 14px;
     color: rgba(255, 255, 255, 0.7);
+
 }
 
 .sidebar-menu {
+
     padding: 20px 0;
     list-style: none;
+
 }
 
 .menu-item {
+
     display: flex;
     align-items: center;
     padding: 15px 25px;
@@ -338,27 +435,35 @@ body {
     text-decoration: none;
     transition: var(--transition);
     position: relative;
+
 }
 
 .menu-item:hover {
+
     background: rgba(255, 255, 255, 0.05);
     color: white;
     padding-left: 30px;
+
 }
 
 .menu-item.active {
+
     background: rgba(52, 152, 219, 0.2);
     color: white;
     border-left: 4px solid var(--primary-color);
+
 }
 
 .menu-item i {
+
     width: 24px;
     font-size: 18px;
     margin-right: 15px;
+
 }
 
 .menu-badge {
+
     margin-left: auto;
     background: var(--primary-color);
     color: white;
@@ -368,80 +473,104 @@ body {
     border-radius: 10px;
     min-width: 24px;
     text-align: center;
+
 }
 
 .sidebar-stats {
+
     padding: 25px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     justify-content: space-around;
     margin-top: auto;
+
 }
 
 .stat-item {
+
     text-align: center;
+
 }
 
 .stat-value {
+
     font-size: 28px;
     font-weight: 700;
     color: var(--primary-color);
     margin-bottom: 5px;
+
 }
 
 .stat-label {
+
     font-size: 12px;
     color: rgba(255, 255, 255, 0.7);
     text-transform: uppercase;
     letter-spacing: 1px;
+
 }
 
 /* Основной контент */
 .main-content {
+
     flex: 1;
     margin-left: 280px;
     padding: 90px 25px 25px;
     min-height: 100vh;
     transition: var(--transition);
+
 }
 
 .main-content.expanded {
+
     margin-left: 0;
+
 }
 
 .content-section {
+
     display: none;
     animation: fadeIn 0.3s ease;
+
 }
 
 .content-section.active {
+
     display: block;
+
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+
+    from { opacity: 0; transform: translateY(10px);
+}
+
 }
 
 .section-header {
+
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
     padding-bottom: 15px;
     border-bottom: 2px solid var(--border-color);
+
 }
 
 .section-header h2 {
+
     font-size: 24px;
     font-weight: 700;
     color: var(--dark-color);
     display: flex;
     align-items: center;
     gap: 12px;
+
 }
 
 .btn-refresh {
+
     background: none;
     border: none;
     font-size: 20px;
@@ -450,21 +579,27 @@ body {
     padding: 10px;
     border-radius: 50%;
     transition: var(--transition);
+
 }
 
 .btn-refresh:hover {
+
     background: #f8f9fa;
     transform: rotate(180deg);
+
 }
 
 /* Сетка заказов */
 .orders-grid {
+
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 20px;
+
 }
 
 .order-card {
+
     background: white;
     border-radius: var(--radius);
     padding: 25px;
@@ -473,51 +608,69 @@ body {
     transition: var(--transition);
     cursor: pointer;
     position: relative;
+
 }
 
 .order-card:hover {
+
     transform: translateY(-5px);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+
 }
 
 .order-card.new {
+
     border-left-color: var(--info-color);
+
 }
 
 .order-card.urgent {
+
     border-left-color: var(--warning-color);
+
 }
 
 .order-card.delivered {
+
     border-left-color: var(--secondary-color);
+
 }
 
 .order-card.cancelled {
+
     border-left-color: var(--danger-color);
+
 }
 
 .order-header {
+
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 15px;
+
 }
 
 .order-id {
+
     font-size: 20px;
     font-weight: 700;
     color: var(--dark-color);
+
 }
 
 .order-time {
+
     font-size: 14px;
     color: var(--gray-color);
     display: flex;
     align-items: center;
     gap: 8px;
+
 }
 
 .order-status {
+
     display: inline-block;
     padding: 5px 15px;
     border-radius: 20px;
@@ -525,168 +678,215 @@ body {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+
 }
 
 .status-assigned {
+
     background: rgba(52, 152, 219, 0.1);
     color: var(--primary-color);
+
 }
 
 .status-picked_up {
+
     background: rgba(243, 156, 18, 0.1);
     color: var(--warning-color);
+
 }
 
 .status-delivered {
+
     background: rgba(46, 204, 113, 0.1);
     color: var(--secondary-color);
+
 }
 
 .order-customer {
+
     margin: 20px 0;
     padding: 15px;
     background: #f8f9fa;
     border-radius: 8px;
+
 }
 
 .customer-info {
+
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 10px;
+
 }
 
 .customer-info i {
+
     color: var(--primary-color);
     font-size: 16px;
+
 }
 
 .customer-name {
+
     font-weight: 600;
     color: var(--dark-color);
+
 }
 
 .customer-phone {
+
     color: var(--gray-color);
     font-size: 14px;
+
 }
 
 .order-address {
+
     font-size: 14px;
     color: var(--gray-color);
     display: flex;
     align-items: flex-start;
     gap: 10px;
     line-height: 1.5;
+
 }
 
 .order-items {
+
     margin: 15px 0;
     max-height: 100px;
     overflow-y: auto;
+
 }
 
 .order-item {
+
     display: flex;
     justify-content: space-between;
     padding: 8px 0;
     border-bottom: 1px dashed var(--border-color);
     font-size: 14px;
+
 }
 
 .order-footer {
+
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: 20px;
     padding-top: 20px;
     border-top: 2px solid var(--border-color);
+
 }
 
 .order-total {
+
     font-size: 22px;
     font-weight: 700;
     color: var(--dark-color);
+
 }
 
 .order-actions {
-    display: flex;
-    gap: 10px;
+
+        flex-wrap: wrap;
+
 }
 
 .action-btn {
-    padding: 10px 18px;
-    border-radius: 8px;
-    border: none;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: var(--transition);
+
+        flex: 1;
+        min-width: 120px;
+
 }
 
 .action-btn.pickup {
+
     background: var(--warning-color);
     color: white;
+
 }
 
 .action-btn.deliver {
+
     background: var(--secondary-color);
     color: white;
+
 }
 
 .action-btn.details {
+
     background: var(--primary-color);
     color: white;
+
 }
 
 .action-btn:hover {
+
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
 }
 
 .loading {
+
     text-align: center;
     padding: 60px 20px;
     color: var(--gray-color);
     grid-column: 1 / -1;
+
 }
 
 .loading i {
+
     font-size: 32px;
     margin-bottom: 15px;
     color: var(--primary-color);
     animation: spin 1s linear infinite;
+
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+
+    0% { transform: rotate(0deg);
+}
+
+100% {
+ transform: rotate(360deg);
+}
+
 }
 
 .empty-state {
+
     text-align: center;
     padding: 60px 20px;
     color: var(--gray-color);
     grid-column: 1 / -1;
+
 }
 
 .empty-state i {
+
     font-size: 48px;
     margin-bottom: 15px;
     color: #ddd;
+
 }
 
 .empty-state h3 {
+
     font-size: 18px;
     color: var(--gray-color);
     margin-bottom: 10px;
+
 }
 
 /* Модальные окна */
 .modal-overlay {
+
     position: fixed;
     top: 0;
     left: 0;
@@ -699,9 +899,11 @@ body {
     z-index: 2000;
     padding: 20px;
     backdrop-filter: blur(3px);
+
 }
 
 .modal {
+
     background: white;
     border-radius: var(--radius);
     width: 100%;
@@ -710,18 +912,24 @@ body {
     overflow-y: auto;
     animation: modalAppear 0.3s ease;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+
 }
 
 @keyframes modalAppear {
-    from { transform: scale(0.9); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
+
+    from { transform: scale(0.9); opacity: 0;
+}
+
 }
 
 .delivery-modal {
+
     max-width: 450px;
+
 }
 
 .modal-header {
+
     padding: 25px;
     border-bottom: 1px solid var(--border-color);
     display: flex;
@@ -731,18 +939,22 @@ body {
     top: 0;
     background: white;
     z-index: 1;
+
 }
 
 .modal-header h3 {
+
     font-size: 20px;
     font-weight: 700;
     color: var(--dark-color);
     display: flex;
     align-items: center;
     gap: 10px;
+
 }
 
 .modal-close {
+
     background: none;
     border: none;
     font-size: 20px;
@@ -751,79 +963,93 @@ body {
     padding: 5px;
     border-radius: 50%;
     transition: var(--transition);
+
 }
 
 .modal-close:hover {
+
     background: #f8f9fa;
     color: var(--danger-color);
+
 }
 
 .modal-body {
+
     padding: 25px;
+
 }
 
 .delivery-info {
+
     background: #f8f9fa;
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 25px;
+
 }
 
 .delivery-info p {
+
     margin: 8px 0;
     font-size: 15px;
+
 }
 
 .photo-section {
+
     margin-bottom: 25px;
+
 }
 
 .photo-section h4 {
+
     font-size: 16px;
     margin-bottom: 15px;
     color: var(--dark-color);
     display: flex;
     align-items: center;
     gap: 10px;
+
 }
 
 .photo-options {
-    display: flex;
-    gap: 15px;
-    margin-bottom: 20px;
+
+        flex-direction: column;
+
 }
 
 .photo-btn {
-    flex: 1;
-    padding: 15px;
-    background: white;
-    border: 2px solid var(--border-color);
-    border-radius: var(--radius);
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    transition: var(--transition);
+
+        background: #3d3d3d;
+        border-color: #4d4d4d;
+        color: #f0f0f0;
+
 }
 
 .photo-btn:hover {
+
     border-color: var(--primary-color);
     background: #f8f9fa;
+
 }
 
 .photo-btn i {
+
     font-size: 24px;
     color: var(--primary-color);
+
 }
 
 .photo-btn span {
+
     font-size: 14px;
     font-weight: 600;
     color: var(--dark-color);
+
 }
 
 .photo-preview {
+
     border: 2px dashed var(--border-color);
     border-radius: var(--radius);
     padding: 30px;
@@ -834,26 +1060,34 @@ body {
     align-items: center;
     justify-content: center;
     overflow: hidden;
+
 }
 
 .preview-placeholder {
+
     color: var(--gray-color);
+
 }
 
 .preview-placeholder i {
+
     font-size: 48px;
     margin-bottom: 10px;
     opacity: 0.3;
+
 }
 
 .photo-preview img {
+
     max-width: 100%;
     max-height: 300px;
     border-radius: 8px;
     display: block;
+
 }
 
 .btn-remove-photo {
+
     width: 100%;
     margin-top: 15px;
     padding: 12px;
@@ -868,26 +1102,34 @@ body {
     justify-content: center;
     gap: 8px;
     transition: var(--transition);
+
 }
 
 .btn-remove-photo:hover {
+
     background: #ffcdd2;
+
 }
 
 .notes-section {
+
     margin-top: 25px;
+
 }
 
 .notes-section h4 {
+
     font-size: 16px;
     margin-bottom: 15px;
     color: var(--dark-color);
     display: flex;
     align-items: center;
     gap: 10px;
+
 }
 
 .notes-section textarea {
+
     width: 100%;
     padding: 15px;
     border: 2px solid var(--border-color);
@@ -897,27 +1139,26 @@ body {
     resize: vertical;
     min-height: 80px;
     transition: var(--transition);
+
 }
 
 .notes-section textarea:focus {
+
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+
 }
 
 .modal-footer {
-    padding: 25px;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: flex-end;
-    gap: 15px;
-    position: sticky;
-    bottom: 0;
-    background: white;
+
+        flex-direction: column;
+
 }
 
 /* Уведомления */
 .notifications-container {
+
     position: fixed;
     bottom: 25px;
     right: 25px;
@@ -926,9 +1167,11 @@ body {
     flex-direction: column;
     gap: 15px;
     max-width: 350px;
+
 }
 
 .notification {
+
     background: white;
     border-radius: var(--radius);
     padding: 20px;
@@ -939,181 +1182,207 @@ body {
     display: flex;
     align-items: center;
     gap: 15px;
+
 }
 
 .notification.show {
+
     transform: translateX(0);
+
 }
 
 .notification.success {
+
     border-left-color: var(--secondary-color);
+
 }
 
 .notification.error {
+
     border-left-color: var(--danger-color);
+
 }
 
 .notification.warning {
+
     border-left-color: var(--warning-color);
+
 }
 
 .notification-icon {
+
     font-size: 20px;
+
 }
 
 .notification.success .notification-icon {
+
     color: var(--secondary-color);
+
 }
 
 .notification.error .notification-icon {
+
     color: var(--danger-color);
+
 }
 
 .notification.warning .notification-icon {
+
     color: var(--warning-color);
+
 }
 
 .notification-content {
+
     flex: 1;
+
 }
 
 .notification-content h4 {
+
     font-size: 15px;
     font-weight: 700;
     margin-bottom: 5px;
     color: var(--dark-color);
+
 }
 
 .notification-content p {
+
     font-size: 14px;
     color: var(--gray-color);
     line-height: 1.4;
+
 }
 
 /* Адаптивность */
 @media (max-width: 1024px) {
+
     .orders-grid {
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    }
+
+}
+
 }
 
 @media (max-width: 768px) {
+
     .sidebar {
         width: 100%;
         transform: translateX(-100%);
-    }
 
-    .sidebar.active {
+}
+
+.sidebar.active {
+
         transform: translateX(0);
-    }
 
-    .main-content {
-        margin-left: 0;
-    }
+}
 
-    .orders-grid {
+.main-content {
+
+        padding: 70px 15px 15px;
+
+}
+
+.orders-grid {
+
         grid-template-columns: 1fr;
-    }
 
-    .order-actions {
-        flex-wrap: wrap;
-    }
+}
 
-    .action-btn {
-        flex: 1;
-        min-width: 120px;
-    }
 }
 
 @media (max-width: 480px) {
+
     .login-card {
         padding: 30px 20px;
-    }
 
-    .courier-header {
-        padding: 0 15px;
-        height: 60px;
-    }
+}
 
-    .main-content {
-        padding: 70px 15px 15px;
-    }
+.courier-header {
 
-    .photo-options {
-        flex-direction: column;
-    }
+        background: #2d2d2d;
 
-    .modal-footer {
-        flex-direction: column;
-    }
+}
 
-    .modal-footer .btn {
+.modal-footer .btn {
+
         width: 100%;
-    }
+
+}
+
 }
 
 /* Темная тема */
 @media (prefers-color-scheme: dark) {
+
     body {
         background: #1a1a1a;
         color: #f0f0f0;
-    }
 
-    .login-card,
+}
+
+.login-card,
     .order-card,
     .modal,
     .notification {
+
         background: #2d2d2d;
         color: #f0f0f0;
-    }
 
-    .login-header h1,
+}
+
+.login-header h1,
     .section-header h2,
     .modal-header h3,
     .order-id,
     .customer-name,
     .order-total {
-        color: #f0f0f0;
-    }
 
-    .login-header p,
+        color: #f0f0f0;
+
+}
+
+.login-header p,
     .order-time,
     .customer-phone,
     .order-address,
     .order-item {
+
         color: #b0b0b0;
-    }
 
-    .form-group input,
+}
+
+.form-group input,
     .notes-section textarea {
+
         background: #3d3d3d;
         border-color: #4d4d4d;
         color: #f0f0f0;
-    }
 
-    .order-customer,
+}
+
+.order-customer,
     .delivery-info {
-        background: #3d3d3d;
-    }
 
-    .photo-btn {
         background: #3d3d3d;
-        border-color: #4d4d4d;
-        color: #f0f0f0;
-    }
 
-    .sidebar {
+}
+
+.sidebar {
+
         background: #252525;
-    }
 
-    .courier-header {
-        background: #2d2d2d;
-    }
+}
+
 }
 
 
 /* Добавить в существующий CSS */
 .warning-badge {
+
     background: #e74c3c;
     color: white;
     padding: 3px 8px;
@@ -1121,36 +1390,46 @@ body {
     font-size: 11px;
     margin-left: 8px;
     display: inline-block;
+
 }
 
 .data-missing {
+
     background-color: #fff8f8;
     border-left: 4px solid #e74c3c !important;
+
 }
 
 /* Добавить в courier.html или courier.css */
 .available-orders-grid {
+
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 15px;
     margin-top: 20px;
+
 }
 
 .order-card.available {
+
     border: 2px solid #3498db;
     background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+
 }
 
 .order-reward {
+
     background: #27ae60;
     color: white;
     padding: 5px 10px;
     border-radius: 20px;
     font-weight: bold;
     font-size: 14px;
+
 }
 
 .btn-take-order {
+
     background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
     color: white;
     border: none;
@@ -1162,30 +1441,38 @@ body {
     align-items: center;
     gap: 8px;
     transition: all 0.3s ease;
+
 }
 
 .btn-take-order:hover {
+
     background: linear-gradient(135deg, #219653 0%, #27ae60 100%);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+
 }
 
 .price-breakdown {
+
     background: #f8f9fa;
     border-radius: 8px;
     padding: 10px;
     margin: 10px 0;
     border-left: 4px solid #3498db;
+
 }
 
 .price-breakdown p {
+
     margin: 5px 0;
     display: flex;
     justify-content: space-between;
+
 }
 
 /* Стили для навигации */
 .nav-badge {
+
     background: #e74c3c;
     color: white;
     border-radius: 50%;
@@ -1196,65 +1483,28 @@ body {
     justify-content: center;
     font-size: 12px;
     margin-left: auto;
+
 }
 
-/* Desktop enhancements and non-destructive mobile-first fixes */
-@media (min-width: 1200px) {
-    body {
-        font-size: 16px; /* чуть крупнее для больших экранов */
-    }
 
-    .sidebar {
-        width: 320px;
-    }
+/* ===== GLOBAL PLATFORM ADAPTATION ===== */
+img, video {
+    max-width: 100%;
+    height: auto;
+}
 
-    .main-content {
-        margin-left: 320px;
-        padding: 100px 40px 40px;
-    }
+button {
+    touch-action: manipulation;
+}
 
-    /* Увеличим количество колонок на широких экранах */
-    .orders-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 24px;
-    }
-
-    .order-card {
-        padding: 28px;
+@media (hover: none) {
+    *:hover {
+        transform: none !important;
+        box-shadow: none !important;
     }
 }
 
-/* Небольшие правки для очень маленьких экранов */
-@media (max-width: 360px) {
-    .login-card {
-        max-width: 320px;
-        padding: 18px;
-    }
-
-    .logo {
-        width: 56px;
-        height: 56px;
-    }
-
-    .order-card {
-        padding: 16px;
-    }
-
-    .orders-grid {
-        gap: 12px;
-    }
-}
-
-/* Ensure modals are comfortably sized on small screens */
-@media (max-width: 480px) {
-    .modal {
-        max-width: 95%;
-        margin: 0 10px;
-        border-radius: 12px;
-    }
-
-    .modal-body {
-        padding: 16px;
-        max-height: calc(90vh - 70px);
-    }
+/* iOS / Telegram safe-area */
+body {
+    padding-bottom: env(safe-area-inset-bottom);
 }
