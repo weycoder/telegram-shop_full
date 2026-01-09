@@ -36,7 +36,6 @@ class AdminPanel {
             forbiddenWords: ['admin', 'система', 'тест', 'temp', 'root', 'superuser']
         };
     }
-    }
 
     init() {
         this.bindEvents();
