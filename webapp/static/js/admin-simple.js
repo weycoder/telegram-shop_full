@@ -1134,12 +1134,7 @@ class AdminPanel {
         }
     }
 
-
-    function formatPrice(price) {
-        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
-    }
-
-    function getStatusClass(status) {
+    getStatusClass(status) {
         const statusMap = {
             'ожидает': 'status-pending',
             'в обработке': 'status-processing',
@@ -1150,7 +1145,7 @@ class AdminPanel {
         return statusMap[status.toLowerCase()] || 'status-pending';
     }
 
-    function getStatusText(status) {
+    getStatusText(status) {
         const statusText = {
             'ожидает': 'Ожидает',
             'в обработке': 'В обработке',
