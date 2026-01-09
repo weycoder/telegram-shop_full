@@ -981,7 +981,7 @@ class AdminPanel {
         }
     }
 
-    async loadOrders() {
+            async loadOrders() {
         try {
             console.log('📥 Загрузка заказов...');
 
@@ -1100,10 +1100,7 @@ class AdminPanel {
                     </td>
                     <td>${formattedDate}</td>
                     <td>
-                        <button class="btn-small" onclick="admin.viewOrderDetails(${order.id})">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn-small" onclick="admin.editOrder(${order.id})">
+                        <button class="btn-small" onclick="admin.editOrderStatus(${order.id})">
                             <i class="fas fa-edit"></i>
                         </button>
                     </td>
