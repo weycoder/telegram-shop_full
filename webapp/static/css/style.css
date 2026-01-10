@@ -377,10 +377,10 @@ body {
    СЕТКА ТОВАРОВ
 ============================================ */
 .products-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr); /* ВСЕГДА 2 в ряд */
-    gap: 12px;
-    padding: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px;
     width: 100%;
 }
 
@@ -400,19 +400,19 @@ body {
     }
 }
 
-/* Карточки товаров */
+/* КАРТОЧКА ТОВАРА - 2 В РЯД */
 .product-card {
+    flex: 0 0 calc(50% - 5px); /* 50% ширины минус половина gap */
     background: white;
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    transition: all 0.3s;
-    position: relative;
     display: flex;
     flex-direction: column;
     border: 1px solid #e2e8f0;
-    height: 100%; /* Фиксированная высота для всех */
-    min-height: 320px; /* Минимальная высота */
+    margin-bottom: 10px;
+    position: relative;
+    min-height: 320px;
 }
 
 /* Контейнер изображения */
@@ -512,14 +512,7 @@ body {
     font-weight: 600;
 }
 
-/* Контент карточки */
 .product-info {
-    padding: 12px;
-    flex: 1; /* Занимает оставшееся пространство */
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
 
 .product-title {
     font-size: 14px;
@@ -597,24 +590,11 @@ body {
     color: #ef4444;
 }
 
-/* Кнопка */
+/* Кнопка прижимаем к низу */
 .btn-block {
-    width: 100%;
-    padding: 10px 12px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    transition: all 0.2s;
-    margin-top: 8px;
+    margin-top: auto;
 }
+
 
 .btn-block:hover:not(:disabled) {
     transform: translateY(-1px);
@@ -730,6 +710,30 @@ body {
         grid-template-columns: repeat(4, 1fr);
         gap: 20px;
         padding: 20px;
+    }
+}
+
+
+
+/* Для планшетов 3 в ряд */
+@media (min-width: 768px) {
+    .product-card {
+        flex: 0 0 calc(33.333% - 7px); /* 3 в ряд */
+    }
+}
+
+/* Для десктопов 4 в ряд */
+@media (min-width: 1024px) {
+    .product-card {
+        flex: 0 0 calc(25% - 8px); /* 4 в ряд */
+    }
+}
+
+/* Для очень маленьких экранов оставляем 2 в ряд */
+@media (max-width: 360px) {
+    .product-card {
+        flex: 0 0 calc(50% - 5px);
+        min-height: 300px;
     }
 }
 
