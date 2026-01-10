@@ -25,29 +25,7 @@ class AdminPanel {
 
         console.log('✅ Админ панель инициализирована');
         this.init();
-
-
-        showNotification(message, type = 'info') {
-            // Создаем уведомление
-            const notification = document.createElement('div');
-            notification.className = `admin-notification notification-${type}`;
-            notification.innerHTML = `
-                <div class="notification-icon">
-                    <i class="fas fa-${type === 'success' ? 'check-circle' :
-                                     type === 'error' ? 'exclamation-circle' :
-                                     type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
-                </div>
-                <div class="notification-content">${message}</div>
-            `;
-
-            document.body.appendChild(notification);
-
-            setTimeout(() => notification.classList.add('show'), 10);
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
+    }
 
     init() {
         this.bindEvents();
@@ -98,6 +76,30 @@ class AdminPanel {
 
         console.log('✅ Все обработчики назначены');
     }
+
+
+    showNotification(message, type = 'info') {
+        // Создаем уведомление
+        const notification = document.createElement('div');
+        notification.className = `admin-notification notification-${type}`;
+        notification.innerHTML = `
+            <div class="notification-icon">
+                <i class="fas fa-${type === 'success' ? 'check-circle' :
+                                 type === 'error' ? 'exclamation-circle' :
+                                 type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+            </div>
+            <div class="notification-content">${message}</div>
+        `;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => notification.classList.add('show'), 10);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
 
     // ========== ОСНОВНЫЕ МЕТОДЫ ==========
 
