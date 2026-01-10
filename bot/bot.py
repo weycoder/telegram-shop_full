@@ -879,7 +879,6 @@ def main():
     bot_app.add_handler(CommandHandler("myorders", myorders_command))
 
     # Обработчик кнопок
-    bot_app.add_handler(CallbackQueryHandler(button_handler))
     bot_app.add_handler(CallbackQueryHandler(callback_handler))
 
     # Запускаем обработчик уведомлений в отдельной задаче

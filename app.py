@@ -950,7 +950,7 @@ def send_order_notification(order_id, status, courier_id=None):
                 courier_phone = courier.get('phone')
 
         # 1. Отправляем ОСНОВНОЕ уведомление о статусе
-        status_sent = send_telegram_notification_sync(
+        status_sent = send_order_details_notification(
             telegram_id=telegram_id,
             order_id=order_id,
             status=status,
