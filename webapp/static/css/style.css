@@ -2564,3 +2564,84 @@ document.head.appendChild(styleSheet);
 .quantity-selector.small .qty-btn:disabled:hover {
     background: #f8fafc;
 }
+
+// Добавьте в cartStyles или в ваш CSS файл
+const addressFormStyles = `
+    /* Компактная форма адреса */
+    .address-form-compact {
+        padding: 16px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .address-form-compact .form-section {
+        margin-bottom: 20px;
+    }
+
+    .address-form-compact .form-section h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .address-form-compact .form-group {
+        margin-bottom: 12px;
+    }
+
+    .address-form-compact label {
+        font-size: 14px;
+        color: #4a5568;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .address-form-compact input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+    }
+
+    .address-form-compact input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .delivery-actions {
+        padding: 16px;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        gap: 12px;
+    }
+
+    /* Для мобильных устройств */
+    @media (max-width: 480px) {
+        .address-form-compact {
+            padding: 12px;
+        }
+
+        .address-form-compact input {
+            font-size: 16px;
+            padding: 14px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .delivery-actions {
+            flex-direction: column;
+        }
+
+        .delivery-actions button {
+            width: 100%;
+        }
+    }
+`;
+
+// Добавьте стили к существующим
+styleSheet.textContent += addressFormStyles;

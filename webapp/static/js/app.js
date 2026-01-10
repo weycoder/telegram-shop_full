@@ -2538,10 +2538,13 @@ async editOrder(orderId) {
         }
     }
 
+    // ========== МЕТОДЫ АДРЕСА И ДОСТАВКИ ==========
+
     async showAddressForm() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
+        // Компактная версия адресной формы
         cartOverlay.innerHTML = `
             <div class="cart-modal">
                 <div class="cart-header">
@@ -2551,61 +2554,283 @@ async editOrder(orderId) {
                     </button>
                 </div>
 
-                <div class="address-form">
-                    <div class="form-group">
-                        <label><i class="fas fa-user"></i> Имя получателя *</label>
-                        <input type="text" id="recipientName" placeholder="Иван Иванов" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label><i class="fas fa-phone"></i> Телефон</label>
-                        <input type="tel" id="recipientPhone" placeholder="+7 (999) 123-45-67">
-                    </div>
-
-                    <div class="form-group">
-                        <label><i class="fas fa-city"></i> Город *</label>
-                        <input type="text" id="city" placeholder="Москва" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label><i class="fas fa-road"></i> Улица *</label>
-                        <input type="text" id="street" placeholder="Ленина" required>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label><i class="fas fa-home"></i> Дом *</label>
-                            <input type="text" id="house" placeholder="15" required>
+                <div class="address-form-compact" style="
+                    padding: 16px;
+                    max-height: 70vh;
+                    overflow-y: auto;
+                ">
+                    <!-- Основная информация -->
+                    <div class="form-section" style="margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #2c3e50;">
+                            <i class="fas fa-user-circle" style="font-size: 18px;"></i>
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Получатель</h3>
                         </div>
 
-                        <div class="form-group">
-                            <label><i class="fas fa-door-closed"></i> Квартира</label>
-                            <input type="text" id="apartment" placeholder="24">
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-user" style="color: #667eea; font-size: 14px;"></i>
+                                <label style="font-size: 14px; color: #4a5568;">Имя получателя *</label>
+                            </div>
+                            <input type="text"
+                                   id="recipientName"
+                                   placeholder="Иван Иванов"
+                                   required
+                                   style="
+                                       width: 100%;
+                                       padding: 12px;
+                                       border: 2px solid #e2e8f0;
+                                       border-radius: 8px;
+                                       font-size: 16px;
+                                       transition: all 0.3s ease;
+                                   "
+                                   onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                   onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-phone" style="color: #667eea; font-size: 14px;"></i>
+                                <label style="font-size: 14px; color: #4a5568;">Телефон</label>
+                            </div>
+                            <input type="tel"
+                                   id="recipientPhone"
+                                   placeholder="+7 (999) 123-45-67"
+                                   style="
+                                       width: 100%;
+                                       padding: 12px;
+                                       border: 2px solid #e2e8f0;
+                                       border-radius: 8px;
+                                       font-size: 16px;
+                                   "
+                                   onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                   onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
                         </div>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label><i class="fas fa-stairs"></i> Этаж</label>
-                            <input type="text" id="floor" placeholder="2">
+                    <!-- Адрес -->
+                    <div class="form-section" style="margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #2c3e50;">
+                            <i class="fas fa-map-marker-alt" style="font-size: 18px;"></i>
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Адрес доставки</h3>
                         </div>
 
-                        <div class="form-group">
-                            <label><i class="fas fa-key"></i> Домофон</label>
-                            <input type="text" id="doorcode" placeholder="123">
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-city" style="color: #667eea; font-size: 14px;"></i>
+                                <label style="font-size: 14px; color: #4a5568;">Город *</label>
+                            </div>
+                            <input type="text"
+                                   id="city"
+                                   placeholder="Москва"
+                                   required
+                                   style="
+                                       width: 100%;
+                                       padding: 12px;
+                                       border: 2px solid #e2e8f0;
+                                       border-radius: 8px;
+                                       font-size: 16px;
+                                   "
+                                   onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                   onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-road" style="color: #667eea; font-size: 14px;"></i>
+                                <label style="font-size: 14px; color: #4a5568;">Улица *</label>
+                            </div>
+                            <input type="text"
+                                   id="street"
+                                   placeholder="Ленина"
+                                   required
+                                   style="
+                                       width: 100%;
+                                       padding: 12px;
+                                       border: 2px solid #e2e8f0;
+                                       border-radius: 8px;
+                                       font-size: 16px;
+                                   "
+                                   onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                   onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-home" style="color: #667eea; font-size: 14px;"></i>
+                                    <label style="font-size: 14px; color: #4a5568;">Дом *</label>
+                                </div>
+                                <input type="text"
+                                       id="house"
+                                       placeholder="15"
+                                       required
+                                       style="
+                                           width: 100%;
+                                           padding: 12px;
+                                           border: 2px solid #e2e8f0;
+                                           border-radius: 8px;
+                                           font-size: 16px;
+                                       "
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                       onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            </div>
+
+                            <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-door-closed" style="color: #667eea; font-size: 14px;"></i>
+                                    <label style="font-size: 14px; color: #4a5568;">Квартира</label>
+                                </div>
+                                <input type="text"
+                                       id="apartment"
+                                       placeholder="24"
+                                       style="
+                                           width: 100%;
+                                           padding: 12px;
+                                           border: 2px solid #e2e8f0;
+                                           border-radius: 8px;
+                                           font-size: 16px;
+                                       "
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                       onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-stairs" style="color: #667eea; font-size: 14px;"></i>
+                                    <label style="font-size: 14px; color: #4a5568;">Этаж</label>
+                                </div>
+                                <input type="text"
+                                       id="floor"
+                                       placeholder="2"
+                                       style="
+                                           width: 100%;
+                                           padding: 12px;
+                                           border: 2px solid #e2e8f0;
+                                           border-radius: 8px;
+                                           font-size: 16px;
+                                       "
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                       onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            </div>
+
+                            <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-key" style="color: #667eea; font-size: 14px;"></i>
+                                    <label style="font-size: 14px; color: #4a5568;">Домофон</label>
+                                </div>
+                                <input type="text"
+                                       id="doorcode"
+                                       placeholder="123"
+                                       style="
+                                           width: 100%;
+                                           padding: 12px;
+                                           border: 2px solid #e2e8f0;
+                                           border-radius: 8px;
+                                           font-size: 16px;
+                                       "
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                       onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="delivery-actions">
-                    <button class="btn btn-primary" onclick="shop.saveAddress()">
+
+                <div class="delivery-actions" style="
+                    padding: 16px;
+                    border-top: 1px solid #e2e8f0;
+                    display: flex;
+                    gap: 12px;
+                ">
+                    <button class="btn btn-primary"
+                            onclick="shop.saveAddress()"
+                            style="
+                                flex: 1;
+                                padding: 14px;
+                                background: #667eea;
+                                color: white;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 8px;
+                            ">
                         <i class="fas fa-save"></i> Сохранить адрес
                     </button>
-                    <button class="btn btn-outline" onclick="shop.showAddressSelection()">
+                    <button class="btn btn-outline"
+                            onclick="shop.showAddressSelection()"
+                            style="
+                                padding: 14px 20px;
+                                background: white;
+                                color: #4a5568;
+                                border: 2px solid #e2e8f0;
+                                border-radius: 8px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 8px;
+                            ">
                         <i class="fas fa-arrow-left"></i> Назад
                     </button>
                 </div>
             </div>
         `;
+
+        // Автоматическое поднятие экрана при фокусе на поле
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('#recipientName, #recipientPhone, #city, #street, #house, #apartment, #floor, #doorcode');
+
+            inputs.forEach(input => {
+                input.addEventListener('focus', () => {
+                    // Плавное поднятие экрана
+                    setTimeout(() => {
+                        const rect = input.getBoundingClientRect();
+                        const isElementInViewport = (
+                            rect.top >= 0 &&
+                            rect.left >= 0 &&
+                            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+                            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+                        );
+
+                        if (!isElementInViewport) {
+                            input.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center'
+                            });
+                        }
+                    }, 300);
+                });
+
+                // Автоматическое скрытие клавиатуры при нажатии Enter
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        input.blur();
+
+                        // Переход к следующему полю
+                        const nextInput = input.nextElementSibling?.nextElementSibling?.nextElementSibling ||
+                                         input.nextElementSibling?.nextElementSibling;
+                        if (nextInput && nextInput.tagName === 'INPUT') {
+                            nextInput.focus();
+                        }
+                    }
+                });
+            });
+
+            // Автофокус на первом поле
+            const firstInput = document.getElementById('recipientName');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }, 100);
     }
 
     async saveAddress() {
