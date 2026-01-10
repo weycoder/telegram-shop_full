@@ -491,32 +491,50 @@ class TelegramShop {
     }
 
     addToCart(productId, name, price, quantity = 1, image = null) {
+        console.log('🛒 === НАЧАЛО addToCart ===');
+        console.log('📥 Параметры:', { productId, name, price, quantity });
+
         const product = this.products.find(p => p.id === productId);
         const isWeightProduct = product?.product_type === 'weight';
 
+        // Применяем скидку к товару
+        const discount = product ? this.calculateProductDiscount(product) : null;
+        const discountedPrice = discount ? this.calculateDiscountedPrice(price, discount) : price;
+
         // Уникальный ID для весового товара
-        const cartItemId = isWeightProduct ? `${productId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : productId;
+        const cartItemId = isWeightProduct ?
+            `${productId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` :
+            productId;
+
+        console.log('🔍 Поиск существующего товара с ID:', cartItemId);
 
         // Проверяем существующий товар
         const existingIndex = this.cart.findIndex(item => item.id === cartItemId);
 
-        // Для весовых товаров всегда добавляем как новый товар, даже если weight такой же
         if (existingIndex !== -1 && !isWeightProduct) {
             // Для обычных товаров увеличиваем количество
             this.cart[existingIndex].quantity += quantity;
+            this.cart[existingIndex].discounted_price = discountedPrice;
+            this.cart[existingIndex].discount_info = discount;
+            console.log(`📈 Увеличено количество товара ${name} до ${this.cart[existingIndex].quantity}`);
         } else {
             // Для новых товаров (включая весовые) добавляем запись
-            this.cart.push({
+            const cartItem = {
                 id: cartItemId,
                 name: name,
                 price: price,
+                discounted_price: discountedPrice,
+                discount_info: discount,
                 quantity: isWeightProduct ? 1 : quantity,
                 image: image || 'https://via.placeholder.com/100',
                 weight: isWeightProduct ? this.selectedWeight : null,
                 is_weight: isWeightProduct,
                 original_product_id: productId,
                 addedAt: new Date().toISOString()
-            });
+            };
+
+            this.cart.push(cartItem);
+            console.log('➕ Добавлен новый товар:', cartItem);
         }
 
         this.saveCart();
@@ -528,6 +546,7 @@ class TelegramShop {
         }
 
         this.showCartNotification(name, isWeightProduct ? 1 : quantity);
+        console.log('✅ === КОНЕЦ addToCart ===');
     }
 
 
@@ -555,11 +574,19 @@ class TelegramShop {
     }
 
     removeFromCart(cartItemId) {
-        // Находим товар для показа уведомления
-        const itemToRemove = this.cart.find(item => item.id === cartItemId);
+        console.log('🗑️ Удаление товара из корзины:', cartItemId);
 
-        // Используем строгое сравнение ID
-        this.cart = this.cart.filter(item => item.id !== cartItemId);
+        // Находим товар для показа уведомления
+        const itemToRemove = this.cart.find(item => item.id.toString() === cartItemId.toString());
+
+        if (!itemToRemove) {
+            console.error('❌ Товар для удаления не найден:', cartItemId);
+            return;
+        }
+
+        // Удаляем товар из корзины
+        this.cart = this.cart.filter(item => item.id.toString() !== cartItemId.toString());
+
         this.saveCart();
         this.updateCartCount();
 
@@ -570,24 +597,104 @@ class TelegramShop {
 
         if (itemToRemove) {
             this.showNotification(`🗑️ ${itemToRemove.name} удален из корзины`, 'info');
+            console.log('✅ Товар удален из корзины:', itemToRemove.name);
         }
     }
 
-    updateCartItemQuantity(cartItemId, quantity) {
-        const itemIndex = this.cart.findIndex(item => item.id === cartItemId);
-        if (itemIndex !== -1) {
-            if (quantity < 1) {
-                this.removeFromCart(cartItemId);
-            } else {
-                this.cart[itemIndex].quantity = quantity;
+
+        // Новый метод для изменения веса весового товара
+    async updateWeightProductWeight(cartItemId, newWeight) {
+        const itemIndex = this.cart.findIndex(item => item.id.toString() === cartItemId.toString());
+        if (itemIndex === -1) return;
+
+        const item = this.cart[itemIndex];
+        if (!item.is_weight) return;
+
+        try {
+            const response = await fetch(`/api/products/${item.original_product_id}`);
+            if (response.ok) {
+                const product = await response.json();
+                const maxWeight = product.stock_weight || product.max_weight || 5.0;
+                const minWeight = product.min_weight || 0.1;
+
+                // Проверяем границы веса
+                if (newWeight < minWeight) newWeight = minWeight;
+                if (newWeight > maxWeight) newWeight = maxWeight;
+
+                // Обновляем вес и пересчитываем цену
+                item.weight = newWeight;
+                const pricePerKg = product.price_per_kg || product.price;
+                item.price = Math.floor(newWeight * pricePerKg);
+
+                // Если была скидка, пересчитываем
+                if (item.discount_info) {
+                    item.discounted_price = this.calculateDiscountedPrice(item.price, item.discount_info);
+                }
+
                 this.saveCart();
                 this.updateCartCount();
 
-                // Обновляем отображение корзины если она открыта
                 if (this.isCartOpen()) {
                     this.updateCartDisplay();
                 }
+
+                this.showNotification(`✅ Вес обновлен: ${item.name} (${newWeight.toFixed(2)} кг)`, 'success');
             }
+        } catch (error) {
+            console.error('❌ Ошибка обновления веса:', error);
+        }
+    }
+
+    async updateCartItemQuantity(cartItemId, quantity) {
+        console.log('🔄 Обновление количества товара:', { cartItemId, quantity });
+
+        const itemIndex = this.cart.findIndex(item => item.id.toString() === cartItemId.toString());
+        if (itemIndex === -1) {
+            console.error('❌ Товар не найден в корзине:', cartItemId);
+            return;
+        }
+
+        const item = this.cart[itemIndex];
+
+        // Проверяем наличие товара на складе
+        try {
+            const response = await fetch(`/api/products/${item.original_product_id}`);
+            if (response.ok) {
+                const product = await response.json();
+
+                // Для обычных товаров проверяем количество
+                if (!item.is_weight) {
+                    if (quantity > product.stock) {
+                        this.showNotification(`❌ Доступно только ${product.stock} шт.`, 'error');
+                        quantity = product.stock; // Устанавливаем максимальное доступное количество
+                    }
+                }
+                // Для весовых товаров проверяем вес
+                else if (item.is_weight) {
+                    const maxWeight = product.stock_weight || product.max_weight || 5.0;
+                    if (item.weight > maxWeight) {
+                        this.showNotification(`❌ Доступно только ${maxWeight} кг`, 'error');
+                        // Здесь можно предложить изменить вес товара
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ Ошибка проверки наличия товара:', error);
+        }
+
+        if (quantity < 1) {
+            this.removeFromCart(cartItemId);
+        } else {
+            this.cart[itemIndex].quantity = quantity;
+            this.saveCart();
+            this.updateCartCount();
+
+            // Обновляем отображение корзины если она открыта
+            if (this.isCartOpen()) {
+                this.updateCartDisplay();
+            }
+
+            this.showNotification(`✅ Количество обновлено: ${item.name} × ${quantity}`, 'success');
         }
     }
 
@@ -645,7 +752,6 @@ class TelegramShop {
 
             subtotal += originalPrice * item.quantity;
             discountedSubtotal += priceToShow * item.quantity;
-
             // Создаем HTML для товара
             const cartItemHTML = `
                 <div class="cart-item" data-id="${item.id}">
@@ -684,7 +790,7 @@ class TelegramShop {
                                 <button class="qty-btn minus-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})">
                                     <i class="fas fa-minus"></i>
                                 </button>
-                                <span class="quantity">${item.quantity} шт.</span>
+                                <span class="quantity">${item.quantity} ${item.is_weight ? 'шт.' : 'шт.'}</span>
                                 <button class="qty-btn plus-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
                                     <i class="fas fa-plus"></i>
                                 </button>
@@ -889,12 +995,13 @@ class TelegramShop {
             this.saveCart();
             this.updateCartCount();
 
-            // ВАЖНО: обновляем отображение если корзина открыта
+            // Обновляем отображение корзины если она открыта
             if (this.isCartOpen()) {
                 this.updateCartDisplay();
             }
 
             this.showNotification('🗑️ Корзина очищена', 'info');
+            console.log('✅ Корзина очищена');
         }
     }
 
