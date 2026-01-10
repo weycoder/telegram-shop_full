@@ -474,52 +474,100 @@ class AdminPanel {
         try {
             console.log('🔍 Просмотр заказа #', orderId);
 
+            // Загружаем данные заказа
             const response = await fetch(`/api/admin/orders/${orderId}`);
-            const responseText = await response.text(); // Сначала получаем текст
 
-            console.log('📥 Ответ сервера:', responseText);
+            // Сначала получаем как текст
+            const responseText = await response.text();
+            console.log('📥 Ответ сервера (текст):', responseText);
 
             let order;
             try {
+                // Пробуем распарсить JSON
                 order = JSON.parse(responseText);
             } catch (parseError) {
                 console.error('❌ Ошибка парсинга JSON:', parseError);
-                // Попробуем очистить строку от лишних символов
+
+                // Попробуем очистить от лишних символов
                 const cleanedText = responseText.trim();
+                console.log('🧹 Очищенный текст:', cleanedText);
+
+                // Если это строка в кавычках (двойной JSON)
                 if (cleanedText.startsWith('"') && cleanedText.endsWith('"')) {
-                    order = JSON.parse(JSON.parse(cleanedText));
+                    try {
+                        // Убираем внешние кавычки и парсим снова
+                        const innerJson = cleanedText.slice(1, -1);
+                        order = JSON.parse(innerJson);
+                    } catch (innerError) {
+                        throw new Error(`Двойной JSON тоже не парсится: ${innerError.message}`);
+                    }
                 } else {
-                    throw new Error('Некорректный формат данных заказа');
+                    // Пробуем как есть, может это уже готовый объект
+                    try {
+                        order = JSON.parse(cleanedText);
+                    } catch (finalError) {
+                        // Если ничего не помогло, показываем ошибку
+                        throw new Error(`Не удалось распарсить данные заказа. Ответ сервера: ${cleanedText.substring(0, 100)}...`);
+                    }
                 }
             }
+
+            console.log('📦 Полученный заказ:', order);
 
             const modal = document.getElementById('orderDetailsModal');
             const modalContent = document.getElementById('orderDetailsContent');
 
-            if (!modal || !modalContent) return;
+            if (!modal || !modalContent) {
+                console.error('❌ Модальное окно не найдено');
+                return;
+            }
 
-            // ПАРСИМ ITEMS
+            // ПАРСИМ ITEMS (с проверкой на null/undefined)
             let items = [];
+            let itemsText = 'Товары не указаны';
+
             try {
-                if (typeof order.items === 'string') {
-                    items = JSON.parse(order.items);
-                } else if (Array.isArray(order.items)) {
-                    items = order.items;
+                if (order.items) {
+                    if (typeof order.items === 'string') {
+                        // Пробуем распарсить строку
+                        items = JSON.parse(order.items);
+                    } else if (Array.isArray(order.items)) {
+                        items = order.items;
+                    }
+
+                    // Формируем текст для отображения
+                    if (items.length > 0) {
+                        const displayItems = items.slice(0, 3);
+                        itemsText = displayItems.map(item => {
+                            const name = item.name || 'Товар';
+                            const quantity = item.quantity || 1;
+                            return `${name} × ${quantity}`;
+                        }).join(', ');
+
+                        if (items.length > 3) {
+                            itemsText += ` и ещё ${items.length - 3}...`;
+                        }
+                    }
                 }
             } catch (error) {
-                console.error('Ошибка парсинга items:', error);
-                items = [];
+                console.error('❌ Ошибка парсинга items:', error);
+                itemsText = 'Ошибка загрузки товаров';
             }
 
             // Форматируем дату
-            const orderDate = new Date(order.created_at || order.order_date || Date.now());
-            const formattedDate = orderDate.toLocaleDateString('ru-RU', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            let formattedDate = 'Дата не указана';
+            try {
+                const orderDate = new Date(order.created_at || order.order_date || Date.now());
+                formattedDate = orderDate.toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (dateError) {
+                console.error('❌ Ошибка форматирования даты:', dateError);
+            }
 
             // Определяем статус
             const statusConfig = {
@@ -531,6 +579,13 @@ class AdminPanel {
             };
 
             const status = statusConfig[order.status] || statusConfig.pending;
+
+            // Получаем данные клиента
+            const clientName = order.username || order.recipient_name || 'Гость';
+            const phoneNumber = order.phone_number || 'Не указан';
+
+            // Форматируем сумму
+            const totalAmount = this.formatPrice(order.total || 0);
 
             // Создаем HTML для модального окна
             let itemsHTML = '';
@@ -554,11 +609,14 @@ class AdminPanel {
                         </div>
                     `;
                 });
+            } else {
+                itemsHTML = '<p class="no-items">Товары не указаны</p>';
             }
 
+            // Создаем контент модального окна
             modalContent.innerHTML = `
                 <div class="modal-header">
-                    <h3>Детали заказа #${order.id}</h3>
+                    <h3><i class="fas fa-shopping-cart"></i> Детали заказа #${order.id}</h3>
                     <button class="close-modal" onclick="this.closest('.modal-overlay').style.display='none'">
                         <i class="fas fa-times"></i>
                     </button>
@@ -567,10 +625,12 @@ class AdminPanel {
                 <div class="modal-body">
                     <div class="order-info-grid">
                         <div class="info-section">
-                            <h4>Информация о заказе</h4>
+                            <h4><i class="fas fa-info-circle"></i> Информация о заказе</h4>
                             <div class="info-row">
                                 <span>Статус:</span>
-                                <span class="order-status" style="color: ${status.color};">${status.text}</span>
+                                <span class="order-status" style="color: ${status.color}; font-weight: 500;">
+                                    ${status.text}
+                                </span>
                             </div>
                             <div class="info-row">
                                 <span>Дата:</span>
@@ -578,44 +638,50 @@ class AdminPanel {
                             </div>
                             <div class="info-row">
                                 <span>Способ доставки:</span>
-                                <span>${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</span>
+                                <span>${order.delivery_type === 'courier' ? 'Курьер' :
+                                       order.delivery_type === 'pickup' ? 'Самовывоз' : 'Не указан'}</span>
                             </div>
                             <div class="info-row">
                                 <span>Способ оплаты:</span>
-                                <span>${order.payment_method === 'cash' ? 'Наличные' : 'Перевод'}</span>
+                                <span>${order.payment_method === 'cash' ? 'Наличные' :
+                                       order.payment_method === 'transfer' ? 'Перевод' :
+                                       order.payment_method === 'terminal' ? 'Терминал' : 'Не указан'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span>Итого:</span>
+                                <span style="font-weight: bold; color: #2c3e50;">${totalAmount} ₽</span>
                             </div>
                         </div>
 
                         <div class="info-section">
-                            <h4>Информация о клиенте</h4>
+                            <h4><i class="fas fa-user"></i> Информация о клиенте</h4>
                             <div class="info-row">
                                 <span>Имя:</span>
-                                <span>${order.username || order.recipient_name || 'Не указано'}</span>
+                                <span>${clientName}</span>
                             </div>
-                            ${order.phone_number ? `
                             <div class="info-row">
                                 <span>Телефон:</span>
-                                <span>${order.phone_number}</span>
+                                <span>${phoneNumber}</span>
                             </div>
-                            ` : ''}
                             ${order.delivery_address ? `
                             <div class="info-row">
                                 <span>Адрес:</span>
-                                <span>${JSON.parse(order.delivery_address).street || ''}</span>
+                                <span>${order.delivery_address}</span>
                             </div>
                             ` : ''}
                         </div>
                     </div>
 
                     <div class="order-items-section">
-                        <h4>Товары (${items.length})</h4>
+                        <h4><i class="fas fa-box"></i> Товары (${items.length})</h4>
                         <div class="items-list">
-                            ${itemsHTML || '<p>Товары не указаны</p>'}
+                            ${itemsHTML}
                         </div>
 
+                        ${items.length > 0 ? `
                         <div class="order-total-section">
                             <div class="total-row">
-                                <span>Товары:</span>
+                                <span>Сумма товаров:</span>
                                 <span>${this.formatPrice(itemsTotal)} ₽</span>
                             </div>
                             ${order.delivery_cost > 0 ? `
@@ -632,9 +698,10 @@ class AdminPanel {
                             ` : ''}
                             <div class="total-row grand-total">
                                 <span>Итого к оплате:</span>
-                                <span>${this.formatPrice(order.total || 0)} ₽</span>
+                                <span style="font-weight: bold; color: #2c3e50;">${totalAmount} ₽</span>
                             </div>
                         </div>
+                        ` : ''}
                     </div>
 
                     <div class="modal-actions">
@@ -661,10 +728,11 @@ class AdminPanel {
             `;
 
             modal.style.display = 'flex';
+            console.log('✅ Модальное окно открыто');
 
         } catch (error) {
             console.error('❌ Ошибка загрузки деталей заказа:', error);
-            this.showNotification('❌ Не удалось загрузить детали заказа', 'error');
+            this.showNotification(`❌ Ошибка: ${error.message}`, 'error');
         }
     }
 
@@ -676,26 +744,53 @@ class AdminPanel {
 
             // Загружаем данные заказа
             const response = await fetch(`/api/admin/orders/${orderId}`);
-            const order = await response.json();
+            const responseText = await response.text();
+
+            let order;
+            try {
+                order = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('❌ Ошибка парсинга JSON:', parseError);
+                throw new Error('Не удалось загрузить данные заказа');
+            }
 
             // Создаем модальное окно редактирования
             const modal = document.createElement('div');
             modal.className = 'modal-overlay';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+                padding: 20px;
+            `;
+
             modal.innerHTML = `
-                <div class="modal-content" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3><i class="fas fa-edit"></i> Редактирование заказа #${order.id}</h3>
-                        <button class="close-modal">&times;</button>
+                <div style="background: white; border-radius: 12px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto;">
+                    <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; color: #2c3e50;">
+                            <i class="fas fa-edit"></i> Редактирование заказа #${order.id}
+                        </h3>
+                        <button class="close-modal"
+                                style="background: none; border: none; font-size: 20px; color: #64748b; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            &times;
+                        </button>
                     </div>
 
-                    <div class="modal-body">
+                    <div style="padding: 20px;">
                         <form id="editOrderForm">
-                            <div class="form-section">
-                                <h4>Основная информация</h4>
+                            <div style="margin-bottom: 20px;">
+                                <h4 style="margin: 0 0 15px 0; color: #334155;">Основная информация</h4>
 
-                                <div class="form-group">
-                                    <label for="editOrderStatus">Статус заказа *</label>
-                                    <select id="editOrderStatus" required>
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Статус заказа *</label>
+                                    <select id="editOrderStatus" required style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                         <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>Ожидает</option>
                                         <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>В обработке</option>
                                         <option value="delivering" ${order.status === 'delivering' ? 'selected' : ''}>Доставляется</option>
@@ -704,27 +799,28 @@ class AdminPanel {
                                     </select>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="editOrderTotal">Сумма заказа (₽) *</label>
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Сумма заказа (₽) *</label>
                                     <input type="number" id="editOrderTotal"
                                            value="${order.total || 0}"
                                            step="0.01"
                                            min="0"
-                                           required>
+                                           required
+                                           style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                 </div>
 
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="editDeliveryType">Тип доставки</label>
-                                        <select id="editDeliveryType">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Тип доставки</label>
+                                        <select id="editDeliveryType" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                             <option value="courier" ${order.delivery_type === 'courier' ? 'selected' : ''}>Курьер</option>
                                             <option value="pickup" ${order.delivery_type === 'pickup' ? 'selected' : ''}>Самовывоз</option>
                                         </select>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label for="editPaymentMethod">Способ оплаты</label>
-                                        <select id="editPaymentMethod">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Способ оплаты</label>
+                                        <select id="editPaymentMethod" style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                             <option value="cash" ${order.payment_method === 'cash' ? 'selected' : ''}>Наличные</option>
                                             <option value="transfer" ${order.payment_method === 'transfer' ? 'selected' : ''}>Перевод</option>
                                             <option value="terminal" ${order.payment_method === 'terminal' ? 'selected' : ''}>Терминал</option>
@@ -733,61 +829,67 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <div class="form-section">
-                                <h4>Информация о клиенте</h4>
+                            <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+                                <h4 style="margin: 0 0 15px 0; color: #334155;">Информация о клиенте</h4>
 
-                                <div class="form-group">
-                                    <label for="editRecipientName">Имя получателя *</label>
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Имя получателя *</label>
                                     <input type="text" id="editRecipientName"
                                            value="${order.recipient_name || order.username || ''}"
-                                           required>
+                                           required
+                                           style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="editPhoneNumber">Телефон</label>
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Телефон</label>
                                     <input type="tel" id="editPhoneNumber"
                                            value="${order.phone_number || ''}"
-                                           placeholder="+7 (999) 123-45-67">
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="editDeliveryAddress">Адрес доставки</label>
-                                    <textarea id="editDeliveryAddress" rows="2">${order.delivery_address || ''}</textarea>
+                                           placeholder="+7 (999) 123-45-67"
+                                           style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                 </div>
                             </div>
 
-                            <div class="form-section">
-                                <h4>Промокод и скидки</h4>
+                            <div style="margin-bottom: 20px;">
+                                <h4 style="margin: 0 0 15px 0; color: #334155;">Промокод и скидки</h4>
 
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="editPromoCode">Промокод</label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Промокод</label>
                                         <input type="text" id="editPromoCode"
                                                value="${order.promo_code || ''}"
-                                               placeholder="Введите промокод">
+                                               placeholder="Введите промокод"
+                                               style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                     </div>
 
-                                    <div class="form-group">
-                                        <label for="editPromoDiscount">Скидка по промокоду (₽)</label>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Скидка по промокоду (₽)</label>
                                         <input type="number" id="editPromoDiscount"
                                                value="${order.promo_discount || 0}"
                                                step="0.01"
-                                               min="0">
+                                               min="0"
+                                               style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                     </div>
                                 </div>
 
-                                <div class="form-group">
-                                    <label for="editDeliveryCost">Стоимость доставки (₽)</label>
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Стоимость доставки (₽)</label>
                                     <input type="number" id="editDeliveryCost"
                                            value="${order.delivery_cost || 0}"
                                            step="0.01"
-                                           min="0">
+                                           min="0"
+                                           style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
                                 </div>
                             </div>
 
-                            <div class="modal-actions">
-                                <button type="button" class="btn btn-secondary cancel-edit">Отмена</button>
-                                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                                <button type="button" class="cancel-edit"
+                                        style="padding: 10px 20px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; color: #475569; cursor: pointer;">
+                                    Отмена
+                                </button>
+                                <button type="submit"
+                                        style="padding: 10px 20px; border: none; background: #667eea; color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                    Сохранить изменения
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -811,7 +913,6 @@ class AdminPanel {
                         payment_method: document.getElementById('editPaymentMethod').value,
                         recipient_name: document.getElementById('editRecipientName').value,
                         phone_number: document.getElementById('editPhoneNumber').value,
-                        delivery_address: document.getElementById('editDeliveryAddress').value,
                         promo_code: document.getElementById('editPromoCode').value || null,
                         promo_discount: parseFloat(document.getElementById('editPromoDiscount').value) || 0,
                         delivery_cost: parseFloat(document.getElementById('editDeliveryCost').value) || 0
@@ -858,7 +959,7 @@ class AdminPanel {
 
         } catch (error) {
             console.error('❌ Ошибка редактирования заказа:', error);
-            this.showNotification('❌ Не удалось загрузить данные заказа', 'error');
+            this.showNotification(`❌ ${error.message}`, 'error');
         }
     }
 
