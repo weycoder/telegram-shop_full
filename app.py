@@ -40,6 +40,8 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+print(f"🔍 Текущий BOT_TOKEN: {os.getenv('BOT_TOKEN')}")
+
 # ========== БАЗА ДАННЫХ ==========
 def get_db():
     conn = sqlite3.connect(app.config['DATABASE'])

@@ -7,6 +7,7 @@ import sys
 import asyncio
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 
@@ -25,6 +26,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 API_BASE_URL = WEBAPP_URL.rstrip('/')
 
+print(f"🔍 Токен бота: {BOT_TOKEN}")
 
 # ========== API КЛИЕНТ ==========
 
@@ -73,7 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать заказы пользователя"""
+    """Показать заказы пользователя с товарами в блоке"""
     if update.callback_query:
         query = update.callback_query
         user = query.from_user
@@ -83,18 +85,16 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     orders = get_user_orders(user.id)
 
-    # Добавляем уникальный идентификатор (время) к сообщению
-    timestamp = int(datetime.now().timestamp())
-
     if not orders:
-        text = f"📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!\n\n_Обновлено: {datetime.now().strftime('%H:%M:%S')}_"
+        text = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
         keyboard = [[InlineKeyboardButton(
             "🛒 Открыть магазин",
             web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}")
         )]]
     else:
-        text = "📋 *Ваши заказы:*\n\n"
-        for order in orders:
+        text = "📋 *ВАШИ ЗАКАЗЫ*\n\n"
+
+        for idx, order in enumerate(orders, 1):
             status = order.get('status', 'pending')
             status_text = {
                 'pending': '⏳ Ожидает',
@@ -104,31 +104,97 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'cancelled': '❌ Отменен'
             }.get(status, status)
 
-            text += f"📦 *Заказ #{order['id']}*\n"
-            text += f"💰 Сумма: {order.get('total_price', 0)} ₽\n"
+            text += f"━━━━━━━━━━━━━━━━━━━━\n"
+            text += f"📦 *ЗАКАЗ #{order['id']}*\n"
+            text += f"━━━━━━━━━━━━━━━━━━━━\n"
             text += f"📊 Статус: {status_text}\n"
+            text += f"💰 Сумма: {order.get('total_price', 0)} ₽\n"
             text += f"📅 Дата: {order.get('created_at', '')[:10]}\n\n"
 
-        text += f"_Обновлено: {datetime.now().strftime('%H:%M:%S')}_"
+            # Получаем товары
+            try:
+                response = requests.get(f"{API_BASE_URL}/api/bot/get-order/{order['id']}/{user.id}", timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('success'):
+                        order_details = data.get('order', {})
+                        items_list = order_details.get('items_list', [])
+
+                        if items_list:
+                            text += "📦 *СОСТАВ ЗАКАЗА:*\n"
+                            text += "┌───────────────────────\n"
+
+                            total_items = 0
+                            for item in items_list:
+                                name = item.get('name', 'Товар')
+                                quantity = item.get('quantity', 1)
+                                price = item.get('price', 0)
+                                total_items += quantity
+
+                                # Форматируем строку
+                                item_name = name[:20] + "..." if len(name) > 20 else name
+
+                                if item.get('is_weight') and item.get('weight'):
+                                    text += f"│ • {item_name}\n"
+                                    text += f"│   {quantity}шт × {item['weight']}кг = {price}₽\n"
+                                else:
+                                    text += f"│ • {item_name}\n"
+                                    text += f"│   {quantity}шт × {price / quantity if quantity > 0 else price}₽ = {price}₽\n"
+
+                            text += "└───────────────────────\n\n"
+
+            except Exception as e:
+                print(f"⚠️ Ошибка получения товаров заказа: {e}")
+                text += "📦 Товары: _(информация не загружена)_\n\n"
+
+        text += f"_🕒 Обновлено: {datetime.now().strftime('%H:%M:%S')}_"
 
         keyboard = [
-            [InlineKeyboardButton("🛒 Открыть магазин",
+            [InlineKeyboardButton("🛒 ОТКРЫТЬ МАГАЗИН",
                                   web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))],
-            [InlineKeyboardButton("🔄 Обновить", callback_data="my_orders")]
+            [InlineKeyboardButton("🔄 ОБНОВИТЬ", callback_data="my_orders")]
         ]
 
     if update.callback_query:
-        await query.edit_message_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
+        await safe_edit_message(query, text, keyboard)
     else:
         await update.message.reply_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
+
+
+async def safe_edit_message(query, text, keyboard, parse_mode='Markdown'):
+    """Безопасное редактирование сообщения с обработкой ошибки 'Message is not modified'"""
+    try:
+        await query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=parse_mode
+        )
+        return True
+    except BadRequest as e:
+        if "Message is not modified" in str(e):
+            # Игнорируем эту ошибку - это нормально
+            print(f"ℹ️ Сообщение не изменилось (но это не ошибка)")
+            return True
+        else:
+            print(f"⚠️ Ошибка редактирования сообщения: {e}")
+            # Пытаемся отправить новое сообщение
+            try:
+                await query.message.reply_text(
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode=parse_mode
+                )
+                return True
+            except Exception as e2:
+                print(f"❌ Не удалось отправить новое сообщение: {e2}")
+                return False
+    except Exception as e:
+        print(f"❌ Неизвестная ошибка при редактировании сообщения: {e}")
+        return False
 
 
 async def track_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
