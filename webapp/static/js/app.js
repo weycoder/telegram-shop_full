@@ -671,55 +671,46 @@ class TelegramShop {
         // Рассчитываем общую скидку на товары
         const itemsDiscount = subtotal - discountedSubtotal;
 
-        // Обновляем итоговую сумму
-        const cartFooter = document.querySelector('.cart-footer .cart-summary');
-        if (cartFooter) {
-            cartFooter.innerHTML = `
-                <div class="cart-total">
-                    <span>Итого:</span>
-                    <span class="total-price" id="cartTotal">${this.formatPrice(discountedSubtotal)} ₽</span>
-                </div>
+        // Обновляем итоговую сумму в шапке
+        cartTotal.textContent = `${this.formatPrice(discountedSubtotal)} ₽`;
 
-                ${itemsDiscount > 0 ? `
-                    <div class="summary-details">
-                        <div class="summary-row">
-                            <span>Товары:</span>
-                            <span>${this.formatPrice(subtotal)} ₽</span>
-                        </div>
-                        <div class="summary-row promo-discount-row">
-                            <span>Скидка на товары:</span>
-                            <span>-${this.formatPrice(itemsDiscount)} ₽</span>
-                        </div>
-                        <div class="summary-row total-row">
-                            <span>Итого к оплате:</span>
-                            <span class="total-amount">${this.formatPrice(discountedSubtotal)} ₽</span>
-                        </div>
-                    </div>
-                ` : `
-                    <div class="cart-actions">
-                        <button class="btn btn-outline" id="clearCart">
-                            <i class="fas fa-trash"></i> Очистить
-                        </button>
-                        <button class="btn btn-primary" id="checkoutBtn">
-                            <i class="fas fa-paper-plane"></i> Купить
-                        </button>
-                    </div>
-                `}
-            `;
-        }
-
+        // Обновляем содержимое корзины
         cartItems.innerHTML = itemsHTML;
 
-        // Обновляем итоговую сумму в шапке корзины
-        if (cartTotal) {
-            cartTotal.textContent = `${this.formatPrice(discountedSubtotal)} ₽`;
-        }
+        // Добавляем детализацию суммы, если есть скидки
+        const cartFooter = document.querySelector('.cart-footer .cart-summary');
+        if (cartFooter && itemsDiscount > 0) {
+            cartFooter.innerHTML = `
+                <div class="summary-details">
+                    <div class="summary-row">
+                        <span>Товары:</span>
+                        <span>${this.formatPrice(subtotal)} ₽</span>
+                    </div>
+                    <div class="summary-row promo-discount-row">
+                        <span>Скидка на товары:</span>
+                        <span>-${this.formatPrice(itemsDiscount)} ₽</span>
+                    </div>
+                    <div class="summary-row total-row">
+                        <span>Итого к оплате:</span>
+                        <span class="total-amount">${this.formatPrice(discountedSubtotal)} ₽</span>
+                    </div>
+                </div>
+                <div class="cart-actions">
+                    <button class="btn btn-outline" id="clearCart">
+                        <i class="fas fa-trash"></i> Очистить
+                    </button>
+                    <button class="btn btn-primary" id="checkoutBtn">
+                        <i class="fas fa-paper-plane"></i> Купить
+                    </button>
+                </div>
+            `;
 
-        // Переназначаем обработчики
-        setTimeout(() => {
-            this.bindEvent('clearCart', 'click', () => this.clearCart());
-            this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-        }, 100);
+            // Переназначаем обработчики
+            setTimeout(() => {
+                document.getElementById('clearCart')?.addEventListener('click', () => this.clearCart());
+                document.getElementById('checkoutBtn')?.addEventListener('click', () => this.checkout());
+            }, 100);
+        }
     }
 
 
@@ -734,7 +725,7 @@ class TelegramShop {
             existingCart.remove();
         }
 
-        // Создаем новое модальное окно
+        // Создаем новое модальное окно с кнопками
         const cartModal = document.createElement('div');
         cartModal.className = 'cart-modal';
         cartModal.innerHTML = `
@@ -751,6 +742,14 @@ class TelegramShop {
                         <span>Итого:</span>
                         <span class="total-price" id="cartTotal">0 ₽</span>
                     </div>
+                    <div class="cart-actions">
+                        <button class="btn btn-outline" id="clearCart">
+                            <i class="fas fa-trash"></i> Очистить
+                        </button>
+                        <button class="btn btn-primary" id="checkoutBtn">
+                            <i class="fas fa-paper-plane"></i> Купить
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -763,7 +762,12 @@ class TelegramShop {
         // Назначаем обработчики
         setTimeout(() => {
             const closeBtn = document.getElementById('closeCart');
+            const clearBtn = document.getElementById('clearCart');
+            const checkoutBtn = document.getElementById('checkoutBtn');
+
             if (closeBtn) closeBtn.addEventListener('click', () => this.closeCart());
+            if (clearBtn) clearBtn.addEventListener('click', () => this.clearCart());
+            if (checkoutBtn) checkoutBtn.addEventListener('click', () => this.checkout());
         }, 100);
 
         cartOverlay.style.display = 'flex';
