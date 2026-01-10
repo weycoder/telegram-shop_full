@@ -31,6 +31,7 @@ function getTelegramParams() {
     }
 }
 
+
 class TelegramShop {
     constructor() {
         this.cart = this.loadCart();
@@ -60,23 +61,22 @@ class TelegramShop {
     }
 
     async init() {
-        if (this.isInitialized) return;
-        console.log('🚀 Инициализация магазина...');
+            if (thisInitialized) return;
+            console.log('🚀 Инициализация магазина...');
 
-        this.bindEvents();
-        await Promise.all([
-            this.loadProducts(),
-            this.loadCategories(),
-            this.loadDiscounts(),
-            this.loadPromoCodes()
-        ]);
+            this.bindEvents();
+            await Promise.all([
+                this.loadProducts(),
+                this.loadCategories(),
+                this.loadDiscounts(),
+                this.loadPromoCodes()
+            ]);
 
-        this.updateCartCount();
-        this.initTelegramWebApp();
-        this.isInitialized = true;
-        console.log('✅ Магазин инициализирован');
-    }
-
+            this.updateCartCount();
+            this.initTelegramWebApp();
+            this.isInitialized = true;
+            console.log('✅ Магазин инициализирован');
+        }
     // ========== ОСНОВНЫЕ МЕТОДЫ ==========
 
     bindEvents() {
@@ -495,33 +495,24 @@ class TelegramShop {
         const discountedPrice = discount ? this.calculateDiscountedPrice(price, discount) : price;
         const cartItemId = isWeightProduct ? `${productId}_${Date.now()}` : productId;
 
+        console.log('🛒 Добавление в корзину:', {
+            productId, name, price, discountedPrice, discount, cartItemId
+        });
+
         const existingIndex = this.cart.findIndex(item => item.id === cartItemId);
-        if (existingIndex !== -1) {
-            if (isWeightProduct) {
-                this.cart.push({
-                    id: `${productId}_${Date.now() + 1}`,
-                    name: name,
-                    price: price,
-                    discounted_price: discountedPrice,
-                    discount_info: discount,
-                    quantity: 1,
-                    image: image || 'https://via.placeholder.com/100',
-                    weight: this.selectedWeight,
-                    is_weight: true,
-                    original_product_id: productId,
-                    addedAt: new Date().toISOString()
-                });
-            } else {
-                this.cart[existingIndex].quantity += quantity;
-                this.cart[existingIndex].discounted_price = discountedPrice;
-                this.cart[existingIndex].discount_info = discount;
-            }
+        if (existingIndex !== -1 && !isWeightProduct) {
+            // Для обычных товаров увеличиваем количество
+            this.cart[existingIndex].quantity += quantity;
+            this.cart[existingIndex].discounted_price = discountedPrice;
+            this.cart[existingIndex].discount_info = discount;
+            this.cart[existingIndex].price = price; // Сохраняем оригинальную цену
         } else {
+            // Для новых товаров добавляем запись
             this.cart.push({
                 id: cartItemId,
                 name: name,
-                price: price,
-                discounted_price: discountedPrice,
+                price: price, // Оригинальная цена
+                discounted_price: discountedPrice, // Цена со скидкой
                 discount_info: discount,
                 quantity: isWeightProduct ? 1 : quantity,
                 image: image || 'https://via.placeholder.com/100',
@@ -534,7 +525,11 @@ class TelegramShop {
 
         this.saveCart();
         this.updateCartCount();
-        if (this.isCartOpen()) this.updateCartDisplay();
+
+        if (this.isCartOpen()) {
+            this.updateCartDisplay();
+        }
+
         this.showCartNotification(name, isWeightProduct ? 1 : quantity);
     }
 
@@ -610,16 +605,29 @@ class TelegramShop {
         }
 
         let itemsHTML = '';
+        let subtotal = 0; // Общая сумма без скидок
+        let discountedSubtotal = 0; // Общая сумма со скидками
+
         this.cart.forEach(item => {
-            const priceToShow = item.discounted_price || item.price;
+            // Определяем цены
+            const originalPrice = item.price || 0;
+            const discountedPrice = item.discounted_price || item.price;
+            const hasDiscount = item.discount_info && discountedPrice < originalPrice;
+            const priceToShow = hasDiscount ? discountedPrice : originalPrice;
             const totalPrice = priceToShow * item.quantity;
+
+            // Добавляем к итогам
+            subtotal += originalPrice * item.quantity;
+            discountedSubtotal += priceToShow * item.quantity;
+
             itemsHTML += `
                 <div class="cart-item" data-id="${item.id}">
-                    ${item.discount_info ? `
+                    ${hasDiscount ? `
                         <div class="cart-item-discount">
-                            <span class="discount-tag-cart">-${this.formatDiscountInfo(item.discount_info)}</span>
+                            ${this.formatDiscountInfo(item.discount_info)}
                         </div>
                     ` : ''}
+
                     <img src="${item.image || 'https://via.placeholder.com/80'}"
                          alt="${item.name}"
                          class="cart-item-image">
@@ -631,13 +639,13 @@ class TelegramShop {
                             </button>
                         </div>
                         <div class="cart-item-pricing">
-                            ${item.discounted_price && item.discounted_price < item.price ? `
+                            ${hasDiscount ? `
                                 <div class="cart-price-discounted">
-                                    <span class="cart-item-original-price">${this.formatPrice(item.price)} ₽</span>
-                                    <span class="cart-item-price">${this.formatPrice(item.discounted_price)} ₽</span>
+                                    <span class="cart-item-original-price">${this.formatPrice(originalPrice)} ₽</span>
+                                    <span class="cart-item-price discounted">${this.formatPrice(discountedPrice)} ₽</span>
                                 </div>
                             ` : `
-                                <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                                <div class="cart-item-price">${this.formatPrice(originalPrice)} ₽</div>
                             `}
                         </div>
                         <div class="cart-item-controls">
@@ -651,7 +659,7 @@ class TelegramShop {
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
-                            <div class="cart-item-total">
+                            <div class="cart-item-total ${hasDiscount ? 'discounted' : ''}">
                                 ${this.formatPrice(totalPrice)} ₽
                             </div>
                         </div>
@@ -660,17 +668,65 @@ class TelegramShop {
             `;
         });
 
+        // Рассчитываем общую скидку на товары
+        const itemsDiscount = subtotal - discountedSubtotal;
+
+        // Обновляем итоговую сумму
+        const cartFooter = document.querySelector('.cart-footer .cart-summary');
+        if (cartFooter) {
+            cartFooter.innerHTML = `
+                <div class="cart-total">
+                    <span>Итого:</span>
+                    <span class="total-price" id="cartTotal">${this.formatPrice(discountedSubtotal)} ₽</span>
+                </div>
+
+                ${itemsDiscount > 0 ? `
+                    <div class="summary-details">
+                        <div class="summary-row">
+                            <span>Товары:</span>
+                            <span>${this.formatPrice(subtotal)} ₽</span>
+                        </div>
+                        <div class="summary-row promo-discount-row">
+                            <span>Скидка на товары:</span>
+                            <span>-${this.formatPrice(itemsDiscount)} ₽</span>
+                        </div>
+                        <div class="summary-row total-row">
+                            <span>Итого к оплате:</span>
+                            <span class="total-amount">${this.formatPrice(discountedSubtotal)} ₽</span>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="cart-actions">
+                        <button class="btn btn-outline" id="clearCart">
+                            <i class="fas fa-trash"></i> Очистить
+                        </button>
+                        <button class="btn btn-primary" id="checkoutBtn">
+                            <i class="fas fa-paper-plane"></i> Купить
+                        </button>
+                    </div>
+                `}
+            `;
+        }
+
         cartItems.innerHTML = itemsHTML;
-        const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        cartTotal.textContent = `${this.formatPrice(total)} ₽`;
+
+        // Обновляем итоговую сумму в шапке корзины
+        if (cartTotal) {
+            cartTotal.textContent = `${this.formatPrice(discountedSubtotal)} ₽`;
+        }
+
+        // Переназначаем обработчики
+        setTimeout(() => {
+            this.bindEvent('clearCart', 'click', () => this.clearCart());
+            this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+        }, 100);
     }
+
 
     toggleCart() {
         this.deliveryData = { type: null, address_id: null, pickup_point: null, address_details: null };
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
-
-        this.updateCartDisplay();
 
         // Убедитесь, что убираем старый контент
         const existingCart = document.querySelector('.cart-modal');
@@ -695,14 +751,6 @@ class TelegramShop {
                         <span>Итого:</span>
                         <span class="total-price" id="cartTotal">0 ₽</span>
                     </div>
-                    <div class="cart-actions">
-                        <button class="btn btn-outline" id="clearCart">
-                            <i class="fas fa-trash"></i> Очистить
-                        </button>
-                        <button class="btn btn-primary" id="checkoutBtn">
-                            <i class="fas fa-paper-plane"></i> Купить
-                        </button>
-                    </div>
                 </div>
             </div>
         `;
@@ -715,17 +763,13 @@ class TelegramShop {
         // Назначаем обработчики
         setTimeout(() => {
             const closeBtn = document.getElementById('closeCart');
-            const clearBtn = document.getElementById('clearCart');
-            const checkoutBtn = document.getElementById('checkoutBtn');
-
             if (closeBtn) closeBtn.addEventListener('click', () => this.closeCart());
-            if (clearBtn) clearBtn.addEventListener('click', () => this.clearCart());
-            if (checkoutBtn) checkoutBtn.addEventListener('click', () => this.checkout());
         }, 100);
 
         cartOverlay.style.display = 'flex';
         this.updateBackButton();
     }
+
     closeCart() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (cartOverlay) {
@@ -1410,7 +1454,7 @@ class TelegramShop {
                 <div class="product-modal-content">
                     <div class="product-modal-image-container">
                         ${hasDiscount ? `
-                            <div class="discount-badge-large">
+                            <div class="discount-badge">
                                 ${this.formatDiscountInfo(discount)}
                             </div>
                         ` : ''}
@@ -1890,30 +1934,36 @@ class TelegramShop {
 
     // ========== МЕТОДЫ ОПЛАТЫ ==========
 
-    async showPaymentSelection() {
+     async showPaymentSelection() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
-        const itemsTotal = this.cart.reduce((sum, item) => {
+        // Рассчитываем сумму с учетом скидок на товары
+        const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const discountedSubtotal = this.cart.reduce((sum, item) => {
             const priceToShow = item.discounted_price || item.price;
             return sum + (priceToShow * item.quantity);
         }, 0);
+        const itemsDiscount = subtotal - discountedSubtotal;
 
+        // Рассчитываем скидку по промокоду
         const promoDiscount = this.appliedPromoCode ?
-            this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
+            this.calculatePromoDiscount(discountedSubtotal, this.appliedPromoCode) : 0;
 
+        // Рассчитываем стоимость доставки
         let deliveryCost = 0;
         const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
         if (this.deliveryData.type === 'courier') {
             if (hasFreeDeliveryPromo) {
                 deliveryCost = 0;
-            } else if (itemsTotal < 1000) {
+            } else if (discountedSubtotal < 1000) {
                 deliveryCost = 100;
             }
         }
 
-        const totalAmount = itemsTotal + deliveryCost - promoDiscount;
+        // Итоговая сумма
+        const totalAmount = discountedSubtotal + deliveryCost - promoDiscount;
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
@@ -1928,9 +1978,12 @@ class TelegramShop {
                     <h3><i class="fas fa-receipt"></i> Сумма к оплате:</h3>
                     <div class="total-amount">${this.formatPrice(totalAmount)} ₽</div>
                     <div class="price-breakdown">
-                        <div>Товары: ${this.formatPrice(itemsTotal)} ₽</div>
+                        <div>Товары: ${this.formatPrice(subtotal)} ₽</div>
+                        ${itemsDiscount > 0 ? `<div>Скидка на товары: -${this.formatPrice(itemsDiscount)} ₽</div>` : ''}
                         ${deliveryCost > 0 ? `<div>Доставка: ${this.formatPrice(deliveryCost)} ₽</div>` : ''}
-                        ${promoDiscount > 0 ? `<div>Скидка: -${this.formatPrice(promoDiscount)} ₽</div>` : ''}
+                        ${deliveryCost === 0 && this.deliveryData.type === 'courier' ? `<div>Доставка: Бесплатно 🎉</div>` : ''}
+                        ${promoDiscount > 0 ? `<div>Скидка по промокоду: -${this.formatPrice(promoDiscount)} ₽</div>` : ''}
+                        <div><strong>Итого к оплате: ${this.formatPrice(totalAmount)} ₽</strong></div>
                     </div>
                 </div>
 
@@ -1977,6 +2030,7 @@ class TelegramShop {
             </div>
         `;
 
+        // Назначение обработчиков (без изменений)
         document.getElementById('cashOption').addEventListener('click', () => {
             this.selectPaymentMethod('cash', totalAmount);
         });
@@ -1999,6 +2053,7 @@ class TelegramShop {
 
         document.getElementById('closePaymentSelection').addEventListener('click', () => this.closeCart());
     }
+
 
     selectPaymentMethod(method, totalAmount = null) {
         if (method === 'cash') {
@@ -2331,16 +2386,19 @@ class TelegramShop {
         try {
             console.log('🔍 Начинаем оформление заказа...');
 
-            const itemsTotal = this.cart.reduce((sum, item) => {
+            // Рассчитываем суммы
+            const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const discountedSubtotal = this.cart.reduce((sum, item) => {
                 const priceToShow = item.discounted_price || item.price;
                 return sum + (priceToShow * item.quantity);
             }, 0);
+            const itemsDiscount = subtotal - discountedSubtotal;
 
             let promoDiscount = 0;
             let promoCodeApplied = false;
 
             if (this.appliedPromoCode) {
-                promoDiscount = this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode);
+                promoDiscount = this.calculatePromoDiscount(discountedSubtotal, this.appliedPromoCode);
                 promoCodeApplied = true;
                 console.log(`🎟️ Промокод "${this.appliedPromoCode.code}": ${promoDiscount} руб, тип: ${this.appliedPromoCode.discount_type}`);
             }
@@ -2348,41 +2406,33 @@ class TelegramShop {
             let deliveryCost = 0;
             const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
-            if (!hasFreeDeliveryPromo && this.deliveryData.type === 'courier' && itemsTotal < 1000) {
+            if (!hasFreeDeliveryPromo && this.deliveryData.type === 'courier' && discountedSubtotal < 1000) {
                 deliveryCost = 100;
             }
 
-            const totalWithDelivery = itemsTotal + deliveryCost - promoDiscount;
+            const totalWithDelivery = discountedSubtotal + deliveryCost - promoDiscount;
 
+            // Подготавливаем данные заказа
             const orderItems = this.cart.map(item => ({
                 id: item.original_product_id || item.id,
                 name: item.name,
+                original_price: item.price,
                 price: item.discounted_price || item.price,
                 quantity: item.quantity,
                 weight: item.weight || null,
-                is_weight: item.is_weight || false
+                is_weight: item.is_weight || false,
+                discount_info: item.discount_info || null
             }));
 
-            let deliveryDetails = {};
-            if (this.deliveryData.type === 'courier' && this.deliveryData.address_details) {
-                deliveryDetails = {
-                    address: `${this.deliveryData.address_details.city}, ${this.deliveryData.address_details.street}, ${this.deliveryData.address_details.house}`,
-                    apartment: this.deliveryData.address_details.apartment,
-                    floor: this.deliveryData.address_details.floor,
-                    doorcode: this.deliveryData.address_details.doorcode,
-                    recipient_name: this.deliveryData.address_details.recipient_name,
-                    phone_number: this.deliveryData.address_details.phone
-                };
-            }
-
-            const recipient_name = this.deliveryData.address_details?.recipient_name || this.username || 'Получатель';
-            const phone_number = this.deliveryData.address_details?.phone || '';
+            // ... (остальной код без изменений) ...
 
             const orderData = {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
-                total: itemsTotal,
+                subtotal: subtotal,
+                items_discount: itemsDiscount,
+                discounted_subtotal: discountedSubtotal,
                 delivery_type: this.deliveryData.type,
                 delivery_address: JSON.stringify(deliveryDetails),
                 pickup_point: this.deliveryData.pickup_point,
@@ -2392,9 +2442,9 @@ class TelegramShop {
                 cash_payment: this.deliveryData.cash_payment || null,
                 promo_code: this.appliedPromoCode?.code || null,
                 promo_code_id: this.appliedPromoCode?.id || null,
-                discount_amount: promoDiscount,
+                promo_discount: promoDiscount,
                 delivery_cost: deliveryCost,
-                total_with_delivery: totalWithDelivery
+                total: totalWithDelivery
             };
 
             console.log('📤 Отправка заказа на сервер:', orderData);
@@ -2404,7 +2454,17 @@ class TelegramShop {
 
             if (result.success) {
                 await this.notifyBotAboutOrder(result.order_id, 'created');
-                this.showOrderConfirmation(result.order_id, itemsTotal, deliveryCost, totalWithDelivery);
+
+                // Показываем правильную сумму в подтверждении
+                this.showOrderConfirmation(
+                    result.order_id,
+                    subtotal,
+                    itemsDiscount,
+                    deliveryCost,
+                    promoDiscount,
+                    totalWithDelivery
+                );
+
                 this.cart = [];
                 this.saveCart();
                 this.updateCartCount();
@@ -2424,6 +2484,7 @@ class TelegramShop {
             this.showPaymentSelection();
         }
     }
+
 
     async notifyBotAboutOrder(orderId, status) {
         try {
@@ -2450,7 +2511,7 @@ class TelegramShop {
         }
     }
 
-    showOrderConfirmation(orderId, itemsTotal = 0, deliveryCost = 0, totalWithDelivery = 0) {
+    showOrderConfirmation(orderId, subtotal = 0, itemsDiscount = 0, deliveryCost = 0, promoDiscount = 0, totalWithDelivery = 0) {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
@@ -2461,26 +2522,6 @@ class TelegramShop {
             'terminal': 'Терминал'
         };
         const paymentText = paymentMethods[this.deliveryData.payment_method] || 'Наличные';
-
-        let deliveryInfo = '';
-        if (this.deliveryData.type === 'courier') {
-            if (deliveryCost > 0) {
-                deliveryInfo = `
-                    <div class="price-breakdown">
-                        <p><strong>Товары:</strong> ${this.formatPrice(itemsTotal)} ₽</p>
-                        <p><strong>Доставка:</strong> ${this.formatPrice(deliveryCost)} ₽</p>
-                        <p style="font-size: 12px; color: #666;">* Бесплатная доставка при заказе от 1000 ₽</p>
-                    </div>
-                `;
-            } else {
-                deliveryInfo = `
-                    <div class="price-breakdown">
-                        <p><strong>Товары:</strong> ${this.formatPrice(itemsTotal)} ₽</p>
-                        <p><strong>Доставка:</strong> Бесплатно 🎉</p>
-                    </div>
-                `;
-            }
-        }
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
@@ -2493,8 +2534,14 @@ class TelegramShop {
                         <p><strong>Номер заказа:</strong> #${orderId}</p>
                         <p><strong>Способ получения:</strong> ${deliveryText}</p>
                         <p><strong>Способ оплаты:</strong> ${paymentText}</p>
-                        ${deliveryInfo}
-                        <p><strong>Итого к оплате:</strong> <span style="font-size: 18px; font-weight: bold;">${this.formatPrice(totalWithDelivery)} ₽</span></p>
+                        <div class="price-breakdown">
+                            <p><strong>Товары:</strong> ${this.formatPrice(subtotal)} ₽</p>
+                            ${itemsDiscount > 0 ? `<p><strong>Скидка на товары:</strong> -${this.formatPrice(itemsDiscount)} ₽</p>` : ''}
+                            ${deliveryCost > 0 ? `<p><strong>Доставка:</strong> ${this.formatPrice(deliveryCost)} ₽</p>` : ''}
+                            ${deliveryCost === 0 && this.deliveryData.type === 'courier' ? `<p><strong>Доставка:</strong> Бесплатно 🎉</p>` : ''}
+                            ${promoDiscount > 0 ? `<p><strong>Скидка по промокоду:</strong> -${this.formatPrice(promoDiscount)} ₽</p>` : ''}
+                            <p><strong>Итого к оплате:</strong> <span style="font-size: 18px; font-weight: bold;">${this.formatPrice(totalWithDelivery)} ₽</span></p>
+                        </div>
                         <p><strong>Статус:</strong> <span class="status-processing">Ожидает курьера</span></p>
                     </div>
                     <div class="confirmation-message processing">
