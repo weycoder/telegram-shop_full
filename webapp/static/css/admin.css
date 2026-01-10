@@ -1,4 +1,7 @@
-
+/* admin.css */
+/* ============================================
+   СБРОС И БАЗОВЫЕ СТИЛИ
+============================================ */
 * {
     margin: 0;
     padding: 0;
@@ -1205,34 +1208,34 @@ body {
     .admin-sidebar {
         width: 80px;
     }
-
+    
     .admin-main {
         margin-left: 80px;
     }
-
+    
     .admin-logo h2,
     .admin-user span,
     .nav-item span,
     .btn-logout span {
         display: none;
     }
-
+    
     .admin-logo i {
         width: 40px;
         height: 40px;
         font-size: 20px;
     }
-
+    
     .nav-item {
         justify-content: center;
         padding: 15px;
     }
-
+    
     .nav-item i {
         font-size: 20px;
         width: auto;
     }
-
+    
     .sidebar-header,
     .sidebar-footer {
         padding: 20px 10px;
@@ -1243,75 +1246,75 @@ body {
     .admin-container {
         flex-direction: column;
     }
-
+    
     .admin-sidebar {
         width: 100%;
         height: auto;
         position: relative;
     }
-
+    
     .admin-nav {
         display: flex;
         overflow-x: auto;
         padding: 15px;
         white-space: nowrap;
     }
-
+    
     .nav-item {
         flex-direction: column;
         min-width: 70px;
         text-align: center;
         padding: 10px;
     }
-
+    
     .nav-item span {
         display: block;
         font-size: 12px;
         margin-top: 5px;
     }
-
+    
     .admin-main {
         margin-left: 0;
     }
-
+    
     .admin-header {
         flex-direction: column;
         gap: 15px;
         text-align: center;
         padding: 20px;
     }
-
+    
     .header-left h1 {
         font-size: 24px;
     }
-
+    
     .stats-grid {
         grid-template-columns: 1fr;
     }
-
+    
     .form-grid {
         grid-template-columns: 1fr;
     }
-
+    
     .categories-container {
         grid-template-columns: 1fr;
     }
-
+    
     .product-type-selector {
         grid-template-columns: 1fr;
     }
-
+    
     .modal-content {
         width: 95%;
         margin: 0 auto;
     }
-
+    
     .products-table th,
     .orders-table th {
         padding: 12px;
         font-size: 12px;
     }
-
+    
     .products-table td,
     .orders-table td {
         padding: 12px;
@@ -1323,28 +1326,28 @@ body {
     .admin-content {
         padding: 15px;
     }
-
+    
     .btn {
         padding: 10px 15px;
         font-size: 13px;
     }
-
+    
     .form-actions {
         flex-direction: column;
     }
-
+    
     .form-actions .btn {
         width: 100%;
     }
-
+    
     .category-input-group {
         flex-direction: column;
     }
-
+    
     .category-input-group input {
         width: 100%;
     }
-
+    
     .alert {
         left: 15px;
         right: 15px;
@@ -1393,35 +1396,6 @@ body {
 
 .shadow-hover:hover {
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-}
-
-/* ============================================
-   АНИМАЦИИ
-============================================ */
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.5;
-    }
-}
-
-.pulse {
-    animation: pulse 2s infinite;
-}
-
-@keyframes bounce {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-10px);
-    }
-}
-
-.bounce {
-    animation: bounce 0.5s;
 }
 
 /* ============================================

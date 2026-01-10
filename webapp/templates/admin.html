@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Админ панель - Telegram Shop</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
-
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="admin">
     <div class="admin-container">
@@ -138,7 +137,7 @@
                         </div>
                     </div>
 
-                    <div class="products-table-container">
+                    <div class="table-container">
                         <table class="products-table">
                             <thead>
                                 <tr>
@@ -167,7 +166,7 @@
                     <div class="orders-header">
                         <h2>Управление заказами</h2>
                     </div>
-                    <div class="orders-table-container">
+                    <div class="table-container">
                         <table class="orders-table">
                             <thead>
                                 <tr>
@@ -176,6 +175,7 @@
                                     <th>Сумма</th>
                                     <th>Статус</th>
                                     <th>Дата</th>
+                                    <th>Действия</th>
                                 </tr>
                             </thead>
                             <tbody id="ordersTableBody">
@@ -188,62 +188,28 @@
                         </table>
                     </div>
                 </div>
-                                <!-- ДОБАВЛЕНИЕ ТОВАРА -->
+
+                <!-- ДОБАВЛЕНИЕ ТОВАРА -->
                 <div class="page" id="add-product">
                     <div class="add-product-header">
                         <h2>Добавить новый товар</h2>
-                        <button type="button" class="btn btn-outline" onclick="admin.showPage('products')" style="margin-left: auto;">
+                        <button type="button" class="btn btn-outline" onclick="admin.showPage('products')">
                             <i class="fas fa-arrow-left"></i> Назад к товарам
                         </button>
                     </div>
 
-                    <!-- ВЫНЕСИТЕ СЕЛЕКТОР ТИПА ТОВАРА ЗА ПРЕДЕЛЫ ФОРМЫ -->
-                    <div class="product-type-selector" style="
-                        display: flex;
-                        gap: 15px;
-                        margin-bottom: 30px;
-                        padding: 0 20px;
-                    ">
-                        <button type="button" class="type-btn active" data-type="piece"
-                                onclick="admin.selectProductType('piece')"
-                                style="
-                                    flex: 1;
-                                    display: flex;
-                                    flex-direction: column;
-                                    align-items: center;
-                                    gap: 10px;
-                                    padding: 20px;
-                                    background: white;
-                                    border: 2px solid #667eea;
-                                    border-radius: 12px;
-                                    cursor: pointer;
-                                    transition: all 0.3s;
-                                ">
-                            <i class="fas fa-cube" style="font-size: 32px; color: #667eea;"></i>
-                            <span style="font-weight: 600; color: #2c3e50;">Штучный товар</span>
+                    <div class="product-type-selector">
+                        <button type="button" class="type-btn active" data-type="piece" onclick="admin.selectProductType('piece')">
+                            <i class="fas fa-cube"></i>
+                            <span>Штучный товар</span>
                         </button>
-                        <button type="button" class="type-btn" data-type="weight"
-                                onclick="admin.selectProductType('weight')"
-                                style="
-                                    flex: 1;
-                                    display: flex;
-                                    flex-direction: column;
-                                    align-items: center;
-                                    gap: 10px;
-                                    padding: 20px;
-                                    background: white;
-                                    border: 2px solid #e0e0e0;
-                                    border-radius: 12px;
-                                    cursor: pointer;
-                                    transition: all 0.3s;
-                                ">
-                            <i class="fas fa-weight-hanging" style="font-size: 32px; color: #667eea;"></i>
-                            <span style="font-weight: 600; color: #2c3e50;">Весовой товар</span>
+                        <button type="button" class="type-btn" data-type="weight" onclick="admin.selectProductType('weight')">
+                            <i class="fas fa-weight-hanging"></i>
+                            <span>Весовой товар</span>
                         </button>
                     </div>
 
-                    <!-- ФОРМА - ТОЛЬКО ФОРМОВЫЕ ЭЛЕМЕНТЫ -->
-                    <form class="add-product-form" id="addProductForm" style="padding: 0 20px;">
+                    <form class="add-product-form" id="addProductForm">
                         <!-- Основная информация -->
                         <div class="form-section">
                             <h3>Основная информация</h3>
@@ -279,7 +245,6 @@
                                     <label for="productCategory">Категория</label>
                                     <select id="productCategory">
                                         <option value="">Выберите категорию</option>
-                                        <!-- Категории загружаются динамически -->
                                     </select>
                                 </div>
                             </div>
@@ -330,18 +295,15 @@
                                 <textarea id="productDescription" rows="4" placeholder="Подробное описание товара..."></textarea>
                             </div>
                         </div>
+
                         <div class="form-section">
                             <h3>Изображение товара</h3>
-
-                            <!-- Секция загрузки файла -->
                             <div class="form-group">
                                 <label for="productImageFile">Загрузите изображение *</label>
-                                <div style="margin-top: 10px;">
-                                    <input type="file" id="productImageFile" accept="image/*" style="display: block; width: 100%; padding: 10px;">
-                                    <div id="filePreview" style="margin-top: 10px;"></div>
-                                    <small style="color: #666; display: block; margin-top: 5px;">
-                                        Поддерживаемые форматы: PNG, JPG, JPEG, GIF, WEBP (максимум 10MB)
-                                    </small>
+                                <div>
+                                    <input type="file" id="productImageFile" accept="image/*">
+                                    <div id="filePreview"></div>
+                                    <small>Поддерживаемые форматы: PNG, JPG, JPEG, GIF, WEBP (максимум 10MB)</small>
                                 </div>
                             </div>
                         </div>
@@ -429,7 +391,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Модальное окно деталей заказа -->
             <div class="modal-overlay" id="orderDetailsModal">
                 <div class="modal-content" id="orderDetailsContent">
@@ -439,6 +401,6 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='js/admin-simple.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>
