@@ -558,9 +558,14 @@ class TelegramShop {
 
     removeFromCart(productId) {
         this.cart = this.cart.filter(item => item.id != productId);
-        localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+        this.saveCart();
         this.updateCartCount();
-        this.updateCartDisplay();
+
+        // ВАЖНО: обновляем отображение корзины если она открыта
+        if (this.isCartOpen()) {
+            this.updateCartDisplay();
+        }
+
         this.showNotification('🗑️ Товар удален из корзины', 'info');
     }
 
@@ -573,10 +578,15 @@ class TelegramShop {
                 this.cart[itemIndex].quantity = quantity;
                 this.saveCart();
                 this.updateCartCount();
-                if (this.isCartOpen()) this.updateCartDisplay();
+
+                // ВАЖНО: обновляем отображение корзины если она открыта
+                if (this.isCartOpen()) {
+                    this.updateCartDisplay();
+                }
             }
         }
     }
+
 
     updateCartCount() {
         const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -601,25 +611,25 @@ class TelegramShop {
                 </div>
             `;
             cartTotal.textContent = '0 ₽';
+            this.hideCartButtons();
             return;
         }
 
         let itemsHTML = '';
-        let subtotal = 0; // Общая сумма без скидок
-        let discountedSubtotal = 0; // Общая сумма со скидками
+        let subtotal = 0;
+        let discountedSubtotal = 0;
 
         this.cart.forEach(item => {
-            // Определяем цены
             const originalPrice = item.price || 0;
             const discountedPrice = item.discounted_price || item.price;
             const hasDiscount = item.discount_info && discountedPrice < originalPrice;
             const priceToShow = hasDiscount ? discountedPrice : originalPrice;
             const totalPrice = priceToShow * item.quantity;
 
-            // Добавляем к итогам
             subtotal += originalPrice * item.quantity;
             discountedSubtotal += priceToShow * item.quantity;
 
+            // ГЕНЕРИРУЕМ ОБРАБОТЧИКИ НЕПОСРЕДСТВЕННО В HTML
             itemsHTML += `
                 <div class="cart-item" data-id="${item.id}">
                     ${hasDiscount ? `
@@ -650,12 +660,11 @@ class TelegramShop {
                         </div>
                         <div class="cart-item-controls">
                             <div class="quantity-selector small">
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
-                                        ${item.quantity <= 1 ? 'disabled' : ''}>
+                                <button class="qty-btn minus-btn" data-id="${item.id}" data-action="minus">
                                     <i class="fas fa-minus"></i>
                                 </button>
                                 <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                                <button class="qty-btn plus-btn" data-id="${item.id}" data-action="plus">
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
@@ -677,41 +686,110 @@ class TelegramShop {
         // Обновляем содержимое корзины
         cartItems.innerHTML = itemsHTML;
 
-        // Добавляем детализацию суммы, если есть скидки
+        // НАЗНАЧАЕМ ОБРАБОТЧИКИ ДЛЯ КНОПОК КОЛИЧЕСТВА
+        this.bindCartItemQuantityButtons();
+
+        // Обновляем детализацию суммы
+        this.updateCartSummary(discountedSubtotal, subtotal, itemsDiscount);
+    }
+
+        // Новый метод для назначения обработчиков кнопок количества
+    bindCartItemQuantityButtons() {
+        // Обработчики для кнопок минус
+        document.querySelectorAll('.minus-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const productId = btn.dataset.id;
+                const item = this.cart.find(item => item.id.toString() === productId.toString());
+                if (item) {
+                    this.updateCartItemQuantity(productId, item.quantity - 1);
+                }
+            });
+        });
+
+        // Обработчики для кнопок плюс
+        document.querySelectorAll('.plus-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const productId = btn.dataset.id;
+                const item = this.cart.find(item => item.id.toString() === productId.toString());
+                if (item) {
+                    this.updateCartItemQuantity(productId, item.quantity + 1);
+                }
+            });
+        });
+
+        // Обработчики для кнопок удаления (на всякий случай)
+        document.querySelectorAll('.remove-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cartItem = btn.closest('.cart-item');
+                if (cartItem) {
+                    const productId = cartItem.dataset.id;
+                    this.removeFromCart(productId);
+                }
+            });
+        });
+    }
+
+        // Метод для обновления итоговой суммы в корзине
+    updateCartSummary(discountedSubtotal, subtotal, itemsDiscount) {
         const cartFooter = document.querySelector('.cart-footer .cart-summary');
-        if (cartFooter && itemsDiscount > 0) {
-            cartFooter.innerHTML = `
-                <div class="summary-details">
-                    <div class="summary-row">
-                        <span>Товары:</span>
-                        <span>${this.formatPrice(subtotal)} ₽</span>
-                    </div>
+        if (!cartFooter) return;
+
+        const cartTotalElement = cartFooter.querySelector('.cart-total');
+        if (cartTotalElement) {
+            cartTotalElement.innerHTML = `
+                <span>Итого:</span>
+                <span class="total-price">${this.formatPrice(discountedSubtotal)} ₽</span>
+            `;
+        }
+        
+        // Обновляем детализацию если есть скидки
+        const existingDetails = cartFooter.querySelector('.summary-details');
+        if (existingDetails) {
+            existingDetails.innerHTML = `
+                <div class="summary-row">
+                    <span>Товары:</span>
+                    <span>${this.formatPrice(subtotal)} ₽</span>
+                </div>
+                ${itemsDiscount > 0 ? `
                     <div class="summary-row promo-discount-row">
                         <span>Скидка на товары:</span>
                         <span>-${this.formatPrice(itemsDiscount)} ₽</span>
                     </div>
-                    <div class="summary-row total-row">
-                        <span>Итого к оплате:</span>
-                        <span class="total-amount">${this.formatPrice(discountedSubtotal)} ₽</span>
-                    </div>
-                </div>
-                <div class="cart-actions">
-                    <button class="btn btn-outline" id="clearCart">
-                        <i class="fas fa-trash"></i> Очистить
-                    </button>
-                    <button class="btn btn-primary" id="checkoutBtn">
-                        <i class="fas fa-paper-plane"></i> Купить
-                    </button>
+                ` : ''}
+                <div class="summary-row total-row">
+                    <span>Итого к оплате:</span>
+                    <span class="total-amount">${this.formatPrice(discountedSubtotal)} ₽</span>
                 </div>
             `;
-
-            // Переназначаем обработчики
-            setTimeout(() => {
-                document.getElementById('clearCart')?.addEventListener('click', () => this.clearCart());
-                document.getElementById('checkoutBtn')?.addEventListener('click', () => this.checkout());
-            }, 100);
         }
     }
+
+    // Метод для скрытия кнопок когда корзина пуста
+    hideCartButtons() {
+        const cartActions = document.querySelector('.cart-actions');
+        if (cartActions) {
+            cartActions.style.display = 'none';
+        }
+    }
+
+    // Метод для показа кнопок когда в корзине есть товары
+    showCartButtons() {
+        const cartActions = document.querySelector('.cart-actions');
+        if (cartActions) {
+            cartActions.style.display = 'flex';
+        }
+    }
+
+    // Проверка открыта ли корзина
+    isCartOpen() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        return cartOverlay && cartOverlay.style.display === 'flex';
+    }
+
+
 
 
     toggleCart() {
