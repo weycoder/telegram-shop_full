@@ -1,52 +1,33 @@
-// Telegram Shop - Полная версия с всеми функциями
-console.log('🟢 app.js начал загружаться');
+// Telegram Shop - Полная версия
+console.log('🟢 Telegram Shop загружается...');
 
 function getTelegramParams() {
     try {
         const urlParams = new URLSearchParams(window.location.search);
-
-        // 1. Пробуем получить из URL
         let userId = parseInt(urlParams.get('user_id')) || 0;
         let username = urlParams.get('username') || 'Гость';
 
-        console.log('🔗 Параметры из URL:', { userId, username });
-
-        // 2. Если userId = 0, пробуем получить из localStorage
         if (userId === 0) {
             const savedId = localStorage.getItem('telegram_user_id');
             const savedUsername = localStorage.getItem('telegram_username');
-
             if (savedId && savedId !== '0') {
                 userId = parseInt(savedId);
                 username = savedUsername || 'Пользователь';
-                console.log('💾 Восстановлено из localStorage:', { userId, username });
             }
         }
 
-        // 3. Если все еще 0, но есть Telegram Web App данные
         if (userId === 0 && window.Telegram?.WebApp?.initDataUnsafe?.user) {
             const tgUser = Telegram.WebApp.initDataUnsafe.user;
             userId = tgUser.id || 0;
             username = tgUser.username || tgUser.first_name || 'Telegram User';
-            console.log('🤖 Получено из Telegram WebApp:', { userId, username });
-
-            // Сохраняем в localStorage
             localStorage.setItem('telegram_user_id', userId);
             localStorage.setItem('telegram_username', username);
         }
 
-        console.log('✅ Итоговые параметры пользователя:', { userId, username });
-
-        return {
-            userId: userId,
-            username: username
-        };
+        return { userId, username };
     } catch (error) {
-        console.error('❌ Ошибка получения параметров Telegram:', error);
-        return {
-            userId: 0,
-            username: 'Гость'
-        };
+        console.error('❌ Ошибка получения параметров:', error);
+        return { userId: 0, username: 'Гость' };
     }
 }
 
@@ -56,302 +37,62 @@ class TelegramShop {
         this.currentProduct = null;
         this.products = [];
         this.categories = [];
-        this.isInitialized = false;
+        this.discounts = [];
+        this.promo_codes = [];
+        this.appliedPromoCode = null;
         this.deliveryData = {
             type: null,
             address_id: null,
             pickup_point: null,
-            address_details: null
+            address_details: null,
+            payment_method: null
         };
-        this.discounts = [];
-        this.promo_codes = [];
-
-        // Новые свойства для весовых товаров
         this.selectedWeight = 0.1;
         this.selectedWeightPrice = 0;
+        this.isInitialized = false;
 
-        // Получаем параметры Telegram
         const params = getTelegramParams();
         this.userId = params.userId;
         this.username = params.username;
-
         this.saveUserToLocalStorage();
-        console.log('🛍️ Telegram Shop создан для пользователя:', this.username, 'ID:', this.userId);
-    }
 
+        console.log('🛍️ Telegram Shop создан для:', this.username, 'ID:', this.userId);
+    }
 
     async init() {
         if (this.isInitialized) return;
-
         console.log('🚀 Инициализация магазина...');
 
-        this.addStyles();
         this.bindEvents();
-
-        // Загружаем данные параллельно
         await Promise.all([
             this.loadProducts(),
             this.loadCategories(),
-            this.loadDiscounts(),  // ДОБАВЛЕНО
-            this.loadPromoCodes()  // ДОБАВЛЕНО
+            this.loadDiscounts(),
+            this.loadPromoCodes()
         ]);
 
         this.updateCartCount();
-
-        // Telegram Web App интеграция
-        if (window.Telegram && Telegram.WebApp) {
-            this.initTelegramWebApp();
-        }
-
+        this.initTelegramWebApp();
         this.isInitialized = true;
         console.log('✅ Магазин инициализирован');
     }
 
+    // ========== ОСНОВНЫЕ МЕТОДЫ ==========
 
-    appliedPromoCode = null;
-
-    async applyPromoCode() {
-        const codeInput = document.getElementById('promoCodeInput')
-    }
-
-    // ДОБАВЬ ЭТИ МЕТОДЫ В КЛАСС:
-    saveUserToLocalStorage() {
-        if (this.userId && this.userId !== 0) {
-            localStorage.setItem('telegram_user_id', this.userId);
-            localStorage.setItem('telegram_username', this.username);
-            console.log('💾 Пользователь сохранен в localStorage:', { id: this.userId, username: this.username });
-        }
-    }
-
-    loadUserFromLocalStorage() {
-        const savedId = localStorage.getItem('telegram_user_id');
-        const savedUsername = localStorage.getItem('telegram_username');
-
-        if (savedId && savedId !== '0') {
-            this.userId = parseInt(savedId);
-            this.username = savedUsername || 'Пользователь';
-            console.log('🔍 Пользователь восстановлен из localStorage:', { id: this.userId, username: this.username });
-            return true;
-        }
-        return false;
-    }
-
-        // Методы для работы со скидками
-    async loadDiscounts() {
-        try {
-            console.log('🏷️ Загрузка скидок...');
-            const response = await fetch('/api/discounts');  // Измененный путь
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            this.discounts = await response.json();
-            console.log(`✅ Загружено ${this.discounts.length} скидок`);
-        } catch (error) {
-            console.error('❌ Ошибка загрузки скидок:', error);
-            this.discounts = [];
-        }
-    }
-
-    async loadPromoCodes() {
-        try {
-            console.log('🎟️ Загрузка промокодов...');
-            const response = await fetch('/api/promo-codes');  // Измененный путь
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            this.promo_codes = await response.json();
-            console.log(`✅ Загружено ${this.promo_codes.length} промокодов`);
-        } catch (error) {
-            console.error('❌ Ошибка загрузки промокодов:', error);
-            this.promo_codes = [];
-        }
-    }
-
-        // Расчет цены со скидкой
-    calculateDiscountedPrice(originalPrice, discount) {
-        if (!discount) return originalPrice;
-
-        let discountedPrice = originalPrice;
-
-        switch (discount.discount_type) {
-            case 'percentage':
-                discountedPrice = originalPrice * (1 - discount.value / 100);
-                break;
-
-            case 'fixed':
-                discountedPrice = originalPrice - discount.value;
-                break;
-
-            case 'bogo':
-                // "Купи 1 получи 2" - не меняем цену здесь, показываем отдельно
-                return originalPrice;
-
-            case 'free_delivery':
-                // Бесплатная доставка - не влияет на цену товара
-                return originalPrice;
-        }
-
-        // Цена не может быть меньше 0
-        return Math.max(discountedPrice, 0);
-    }
-
-    // Форматирование скидки для отображения
-    formatDiscountInfo(discount) {
-        if (!discount) return '';
-
-        switch (discount.discount_type) {
-            case 'percentage':
-                return `-${discount.value}%`;
-            case 'fixed':
-                return `-${this.formatPrice(discount.value)} ₽`;
-            case 'bogo':
-                return '2 по цене 1';
-            case 'free_delivery':
-                return 'Бесплатная доставка';
-            default:
-                return discount.discount_type;
-        }
-    }
-
-    // Расчет скидки для товара
-    calculateProductDiscount(product) {
-        if (!this.discounts || this.discounts.length === 0) {
-            return null;
-        }
-
-        const now = new Date();
-        const activeDiscounts = this.discounts.filter(discount =>
-            discount.is_active &&
-            (!discount.start_date || new Date(discount.start_date) <= now) &&
-            (!discount.end_date || new Date(discount.end_date) >= now)
-        );
-
-        for (const discount of activeDiscounts) {
-            let applies = false;
-
-            switch (discount.apply_to) {
-                case 'all':
-                    applies = true;
-                    break;
-
-                case 'category':
-                    applies = product.category === discount.target_category;
-                    break;
-
-                case 'product':
-                    applies = product.id === discount.target_product_id;
-                    break;
-            }
-
-            if (applies) {
-                return discount;
-            }
-        }
-
-        return null;
-    }
-
-    getPromoMessage(promo, discount) {
-        if (!promo) return '';
-
-        switch (promo.discount_type) {
-            case 'percentage':
-                return `Скидка ${promo.value}%`;
-            case 'fixed':
-                return `Скидка ${this.formatPrice(promo.value)} ₽`;
-            case 'free_delivery':
-                return 'Бесплатная доставка';
-            case 'bogo':
-                return '2 по цене 1';
-            default:
-                return 'Скидка';
-        }
-    }
-
-    async createOrder(orderData) {
-        if (this.userId && this.userId !== 0) {
-            localStorage.setItem('telegram_user_id', this.userId);
-            localStorage.setItem('telegram_username', this.username || 'Пользователь');
-            console.log('💾 Пользователь сохранен в localStorage:', { id: this.userId, username: this.username });
-        } else {
-            // Если userId = 0, пробуем получить из localStorage
-            const savedId = localStorage.getItem('telegram_user_id');
-            const savedUsername = localStorage.getItem('telegram_username');
-
-            if (savedId && savedId !== '0') {
-                this.userId = parseInt(savedId);
-                this.username = savedUsername || 'Пользователь';
-                console.log('🔍 Восстановлен пользователь из localStorage:', { id: this.userId, username: this.username });
-            }
-        }
-
-        // УБЕДИТЕСЬ, что total - это ЧИСЛО, а не строка
-        if (orderData.total && typeof orderData.total === 'string') {
-            orderData.total = parseFloat(orderData.total);
-        }
-
-        // Также преобразуем user_id в число
-        orderData.user_id = parseInt(this.userId) || 0;
-        orderData.username = this.username || 'Гость';
-
-        // Преобразуем все числа в товарах
-        if (orderData.items && Array.isArray(orderData.items)) {
-            orderData.items = orderData.items.map(item => ({
-                ...item,
-                id: parseInt(item.id) || 0,
-                quantity: parseInt(item.quantity) || 1,
-                price: parseFloat(item.price) || 0
-            }));
-        }
-
-        console.log('📦 Создание заказа с данными:', orderData);
-
-        try {
-            const response = await fetch('/api/create-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(orderData)
-            });
-
-            return await response.json();
-        } catch (error) {
-            console.error('❌ Ошибка создания заказа:', error);
-            throw error;
-        }
-    }
-
-    // Обновленный bindEvents
     bindEvents() {
-        console.log('🔗 Назначаем обработчики событий...');
+        console.log('🔗 Назначаем обработчики...');
 
-        // Корзина
         this.bindEvent('cartBtn', 'click', () => this.toggleCart());
         this.bindEvent('closeCart', 'click', () => this.closeCart());
         this.bindEvent('clearCart', 'click', () => this.clearCart());
         this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-
-        // Модальное окно товара
         this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
 
-        // Закрытие по клику на оверлей
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('cart-overlay')) this.closeCart();
             if (e.target.classList.contains('product-modal-overlay')) this.closeProductModal();
         });
 
-        // Показываем приветствие
-        if (this.userId && this.userId !== 0) {
-            const welcomeElement = document.getElementById('welcome-text');
-            if (welcomeElement) {
-                welcomeElement.innerText = `👋 Привет, ${this.username}!`;
-            }
-        }
-
-        // Escape для закрытия
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeCart();
-                this.closeProductModal();
-            }
-        });
-
-        // Категории (делегирование)
         const categoriesContainer = document.getElementById('categories');
         if (categoriesContainer) {
             categoriesContainer.addEventListener('click', (e) => {
@@ -363,21 +104,16 @@ class TelegramShop {
             });
         }
 
-        // ДЕЛЕГИРОВАНИЕ ДЛЯ КНОПОК "ПОДРОБНЕЕ"
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-block');
             if (btn && btn.textContent.includes('Подробнее')) {
                 e.preventDefault();
                 e.stopPropagation();
-
-                // Получаем productId из атрибута onclick
                 const onclickAttr = btn.getAttribute('onclick');
                 if (onclickAttr && onclickAttr.includes('shop.viewProduct')) {
                     const match = onclickAttr.match(/shop\.viewProduct\((\d+)\)/);
                     if (match && match[1]) {
-                        const productId = parseInt(match[1]);
-                        console.log('🖱️ Нажата кнопка "Подробнее" для товара ID:', productId);
-                        this.viewProduct(productId);
+                        this.viewProduct(parseInt(match[1]));
                     }
                 }
             }
@@ -388,490 +124,40 @@ class TelegramShop {
 
     bindEvent(id, event, handler) {
         const element = document.getElementById(id);
-        if (element) {
-            element.addEventListener(event, handler);
-        }
+        if (element) element.addEventListener(event, handler);
     }
 
     initTelegramWebApp() {
-        try {
-            // Проверяем, что Telegram Web App действительно существует
-            if (window.Telegram && Telegram.WebApp) {
-                console.log('✅ Telegram Web App доступен');
+        if (window.Telegram && Telegram.WebApp) {
+            Telegram.WebApp.expand();
+            Telegram.WebApp.setHeaderColor('#667eea');
+            Telegram.WebApp.setBackgroundColor('#f5f7fa');
+            Telegram.WebApp.enableClosingConfirmation();
 
-                // Расширяем на весь экран
-                if (Telegram.WebApp.expand) Telegram.WebApp.expand();
-
-                // Настраиваем цвета
-                if (Telegram.WebApp.setHeaderColor) Telegram.WebApp.setHeaderColor('#667eea');
-                if (Telegram.WebApp.setBackgroundColor) Telegram.WebApp.setBackgroundColor('#f5f7fa');
-
-                // Включаем подтверждение закрытия
-                if (Telegram.WebApp.enableClosingConfirmation) Telegram.WebApp.enableClosingConfirmation();
-
-                // Проверяем BackButton
-                if (Telegram.WebApp.BackButton) {
-                    // Скрываем кнопку "Назад" по умолчанию
-                    if (Telegram.WebApp.BackButton.hide) Telegram.WebApp.BackButton.hide();
-
-                    // Добавляем обработчик
-                    Telegram.WebApp.BackButton.onClick(() => {
-                        console.log('🔙 Нажата кнопка "Назад"');
-                        if (this.isCartOpen()) {
-                            this.closeCart();
-                        } else if (this.isProductModalOpen()) {
-                            this.closeProductModal();
-                        } else {
-                            if (Telegram.WebApp.close) Telegram.WebApp.close();
-                        }
-                    });
-                } else {
-                    console.warn('⚠️ Telegram.WebApp.BackButton недоступен');
-                }
-
-            } else {
-                console.log('ℹ️ Telegram Web App недоступен, работаем в браузере');
-                // Создаем заглушку для отладки в браузере
-                this.createWebAppStub();
-            }
-        } catch (error) {
-            console.warn('⚠️ Ошибка инициализации Telegram Web App:', error);
-            this.createWebAppStub();
-        }
-    }
-
-    createWebAppStub() {
-        // Создаем заглушку для работы в браузере
-        if (!window.Telegram) window.Telegram = {};
-        if (!window.Telegram.WebApp) {
-            window.Telegram.WebApp = {
-                expand: function () { console.log('[Stub] WebApp расширен'); },
-                setHeaderColor: function () { console.log('[Stub] Цвет заголовка изменен'); },
-                setBackgroundColor: function () { console.log('[Stub] Фон изменен'); },
-                enableClosingConfirmation: function () { console.log('[Stub] Подтверждение закрытия включено'); },
-                close: function () {
-                    console.log('[Stub] Закрытие WebApp');
-                    if (confirm('Закрыть приложение?')) {
-                        window.close();
-                    }
-                },
-                BackButton: {
-                    isVisible: false,
-                    show: function () {
-                        console.log('[Stub] Кнопка "Назад" показана');
-                        this.isVisible = true;
-                    },
-                    hide: function () {
-                        console.log('[Stub] Кнопка "Назад" скрыта');
-                        this.isVisible = false;
-                    },
-                    onClick: function (callback) {
-                        console.log('[Stub] Обработчик кнопки "Назад" установлен');
-                        this.callback = callback;
-                    }
-                },
-                colorScheme: 'light'
-            };
-        }
-    }
-
-    updateCartDisplay() {
-        console.log('🔄 Обновление корзины...');
-
-        const cartItems = document.getElementById('cartItems');
-        const cartTotal = document.getElementById('cartTotal');
-        const cartFooter = document.querySelector('.cart-footer');
-
-        if (!cartItems || !cartTotal) {
-            console.error('❌ Элементы корзины не найдены!');
-            return;
-        }
-
-        // ЕСЛИ КОРЗИНА ПУСТА
-        if (this.cart.length === 0) {
-            console.log('🛒 Корзина пуста - показываем сообщение');
-
-            // Скрываем промокод если был применен
-            this.appliedPromoCode = null;
-
-            cartItems.innerHTML = `
-                <div class="empty-cart">
-                    <i class="fas fa-shopping-cart"></i>
-                    <p>Корзина пуста</p>
-                    <p>Добавьте товары из каталога</p>
-                </div>
-            `;
-
-            cartTotal.textContent = '0 ₽';
-
-            if (cartFooter) {
-                cartFooter.style.display = 'none';
-            }
-
-            return;
-        }
-
-        // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
-        console.log(`📦 В корзине ${this.cart.length} товаров`);
-
-        // ВАЖНО: Используем discounted_price везде
-        const itemsSubtotal = this.cart.reduce((sum, item) => {
-            return sum + ((item.discounted_price || item.price) * item.quantity);
-        }, 0);
-
-        // Применяем промокод если есть
-        let promoDiscount = 0;
-        let promoMessage = '';
-        let finalTotal = itemsSubtotal;
-
-        if (this.appliedPromoCode) {
-            promoDiscount = this.calculatePromoDiscount(itemsSubtotal, this.appliedPromoCode);
-            finalTotal = Math.max(itemsSubtotal - promoDiscount, 0);
-            promoMessage = this.getPromoMessage(this.appliedPromoCode, promoDiscount);
-        }
-
-        // Генерируем HTML для товаров
-        let itemsHTML = '';
-
-        this.cart.forEach(item => {
-            const priceToShow = item.discounted_price || item.price; // ВАЖНО: discounted_price
-            const totalPrice = priceToShow * item.quantity;
-
-         itemsHTML += `
-                    <div class="cart-item" data-id="${item.id}">
-                        ${item.discount_info ? `
-                            <div class="cart-item-discount">
-                                <span class="discount-tag-cart">-${this.formatDiscountInfo(item.discount_info)}</span>
-                            </div>
-                        ` : ''}
-                        <img src="${item.image || 'https://via.placeholder.com/80'}"
-                             alt="${item.name}"
-                             class="cart-item-image">
-                        <div class="cart-item-info">
-                            <div class="cart-item-header">
-                                <h4 class="cart-item-name">${item.name}</h4>
-                                <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                            <div class="cart-item-pricing">
-                                ${item.discounted_price && item.discounted_price < item.price ? `
-                                    <div class="cart-price-discounted">
-                                        <span class="cart-item-original-price">${this.formatPrice(item.price)} ₽</span>
-                                        <span class="cart-item-price">${this.formatPrice(item.discounted_price)} ₽</span>
-                                    </div>
-                                ` : `
-                                    <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
-                                `}
-                            </div>
-                            <div class="cart-item-controls">
-                                <div class="quantity-selector small">
-                                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
-                                            ${item.quantity <= 1 ? 'disabled' : ''}>
-                                        <i class="fas fa-minus"></i>
-                                    </button>
-                                    <span class="quantity">${item.quantity} шт.</span>
-                                    <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
-                                        <i class="fas fa-plus"></i>
-                                    </button>
-                                </div>
-                                <div class="cart-item-total">
-                                    ${this.formatPrice(totalPrice)} ₽
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-
-
-        // Добавляем блок с промокодом
-        itemsHTML += `
-            <div class="cart-promo-section">
-                <div class="promo-code-input-container">
-                    <input type="text"
-                           id="cartPromoCodeInput"
-                           placeholder="Введите промокод"
-                           value="${this.appliedPromoCode?.code || ''}"
-                           ${this.appliedPromoCode ? 'readonly' : ''}
-                           class="promo-code-input">
-                    ${!this.appliedPromoCode ? `
-                        <button id="applyCartPromoBtn" class="btn-apply-promo">
-                            <i class="fas fa-check"></i> Применить
-                        </button>
-                    ` : `
-                        <button id="removeCartPromoBtn" class="btn-remove-promo">
-                            <i class="fas fa-times"></i> Удалить
-                        </button>
-                    `}
-                </div>
-                ${promoMessage ? `
-                    <div class="promo-applied-message success">
-                        <i class="fas fa-check-circle"></i> ${promoMessage}
-                    </div>
-                ` : ''}
-                <div id="promoErrorMessage" class="promo-error-message"></div>
-            </div>
-        `;
-
-        cartItems.innerHTML = itemsHTML;
-
-        // Обновляем итоговую сумму с учетом промокода
-        cartTotal.textContent = `${this.formatPrice(finalTotal)} ₽`;
-
-        // Показываем блок с детализацией сумм
-        const summaryHTML = `
-            <div class="cart-summary">
-                <div class="summary-details">
-                    <div class="summary-row">
-                        <span>Сумма товаров:</span>
-                        <span>${this.formatPrice(itemsSubtotal)} ₽</span>
-                    </div>
-
-                    ${this.appliedPromoCode ? `
-                        <div class="summary-row promo-discount-row">
-                            <span>Скидка по промокоду:</span>
-                            <span class="discount-amount">-${this.formatPrice(promoDiscount)} ₽</span>
-                        </div>
-                    ` : ''}
-
-                    <div class="summary-row total-row">
-                        <span><strong>Итого к оплате:</strong></span>
-                        <span class="total-amount"><strong>${this.formatPrice(finalTotal)} ₽</strong></span>
-                    </div>
-                </div>
-
-                <div class="cart-actions">
-                    <button class="btn btn-outline" id="clearCart">
-                        <i class="fas fa-trash"></i> Очистить
-                    </button>
-                    <button class="btn btn-primary" id="checkoutBtn">
-                        <i class="fas fa-paper-plane"></i> Перейти к оплате
-                    </button>
-                </div>
-            </div>
-        `;
-
-        if (cartFooter) {
-            cartFooter.innerHTML = summaryHTML;
-            cartFooter.style.display = 'block';
-
-            // Назначаем обработчики для кнопок промокода
-            if (!this.appliedPromoCode) {
-                document.getElementById('applyCartPromoBtn').addEventListener('click', () => {
-                    this.applyPromoCodeInCart();
-                });
-
-                document.getElementById('cartPromoCodeInput').addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        this.applyPromoCodeInCart();
+            if (Telegram.WebApp.BackButton) {
+                Telegram.WebApp.BackButton.hide();
+                Telegram.WebApp.BackButton.onClick(() => {
+                    if (this.isCartOpen()) {
+                        this.closeCart();
+                    } else if (this.isProductModalOpen()) {
+                        this.closeProductModal();
+                    } else {
+                        Telegram.WebApp.close();
                     }
                 });
-            } else {
-                document.getElementById('removeCartPromoBtn').addEventListener('click', () => {
-                    this.removePromoCodeFromCart();
-                });
             }
-
-            // Назначаем обработчики для других кнопок
-            this.bindEvent('clearCart', 'click', () => this.clearCart());
-            this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-        }
-
-        console.log('✅ Корзина обновлена с промокодом:', this.appliedPromoCode?.code || 'нет');
-    }
-
-
-    calculatePromoDiscount(subtotal, promo) {
-        if (!promo) return 0;
-
-        switch (promo.discount_type) {
-            case 'percentage':
-                return subtotal * (promo.value / 100);
-
-            case 'fixed':
-                return Math.min(promo.value, subtotal);
-
-            case 'free_delivery':
-                // Возвращаем 0, так как этот промокод влияет только на стоимость доставки
-                // Но логируем для отладки
-                console.log('🚚 Промокод на бесплатную доставку: не влияет на сумму товаров');
-                return 0;
-
-            case 'bogo':
-                if (this.cart.length > 0) {
-                    const mostExpensive = Math.max(...this.cart.map(item =>
-                        (item.discounted_price || item.price) * item.quantity));
-                    return mostExpensive * 0.5;
-                }
-                return 0;
-
-            default:
-                return 0;
         }
     }
-
-
-    removePromoCodeFromCart() {
-        this.appliedPromoCode = null;
-        console.log('🗑️ Промокод удален');
-
-        // Показываем сообщение об удалении
-        const notification = document.createElement('div');
-        notification.className = 'promo-applied-message info';
-        notification.innerHTML = `
-            <i class="fas fa-info-circle"></i>
-            Промокод удален
-        `;
-
-        const promoSection = document.querySelector('.cart-promo-section');
-        if (promoSection) {
-            const oldMessage = promoSection.querySelector('.promo-applied-message');
-            if (oldMessage) oldMessage.remove();
-            promoSection.appendChild(notification);
-        }
-
-        // Обновляем отображение
-        setTimeout(() => {
-            this.updateCartDisplay();
-        }, 500);
-    }
-
-
 
     updateBackButton() {
         if (window.Telegram?.WebApp?.BackButton) {
-            try {
-                if (this.isCartOpen() || this.isProductModalOpen()) {
-                    if (Telegram.WebApp.BackButton.show) Telegram.WebApp.BackButton.show();
-                } else {
-                    if (Telegram.WebApp.BackButton.hide) Telegram.WebApp.BackButton.hide();
-                }
-            } catch (error) {
-                console.warn('⚠️ Ошибка обновления BackButton:', error);
-            }
-        }
-    }
-
-
-    async applyPromoCodeInCart() {
-        const input = document.getElementById('cartPromoCodeInput');
-        const code = input?.value.trim().toUpperCase();
-        const errorMessage = document.getElementById('promoErrorMessage');
-
-        if (!code) {
-            if (errorMessage) {
-                errorMessage.textContent = '❌ Введите промокод';
-                errorMessage.style.display = 'block';
-            }
-            return;
-        }
-
-        try {
-            console.log(`🎟️ Проверка промокода: ${code}`);
-
-            const response = await fetch('/api/check-promo-code', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ code: code })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // Проверяем минимальную сумму заказа
-                const itemsSubtotal = this.cart.reduce((sum, item) => {
-                    const priceToShow = item.discounted_price || item.price;
-                    return sum + (priceToShow * item.quantity);
-                }, 0);
-
-                if (result.promo_code.min_order_amount > 0 &&
-                    itemsSubtotal < result.promo_code.min_order_amount) {
-                    const minAmount = this.formatPrice(result.promo_code.min_order_amount);
-                    const currentAmount = this.formatPrice(itemsSubtotal);
-                    if (errorMessage) {
-                        errorMessage.innerHTML = `
-                            ❌ Промокод требует минимальную сумму заказа ${minAmount} ₽<br>
-                            <small>Ваша текущая сумма: ${currentAmount} ₽</small>
-                        `;
-                        errorMessage.style.display = 'block';
-                    }
-                    return;
-                }
-
-                // Проверяем лимит использований
-                if (result.promo_code.usage_limit &&
-                    result.promo_code.used_count >= result.promo_code.usage_limit) {
-                    if (errorMessage) {
-                        errorMessage.textContent = '❌ Промокод уже использован максимальное количество раз';
-                        errorMessage.style.display = 'block';
-                    }
-                    return;
-                }
-
-                // Проверяем срок действия
-                if (result.promo_code.end_date) {
-                    const endDate = new Date(result.promo_code.end_date);
-                    const now = new Date();
-                    if (endDate < now) {
-                        if (errorMessage) {
-                            errorMessage.textContent = '❌ Срок действия промокода истек';
-                            errorMessage.style.display = 'block';
-                        }
-                        return;
-                    }
-                }
-
-                // Сохраняем промокод
-                this.appliedPromoCode = {
-                    ...result.promo_code,
-                    code: code
-                };
-
-                // Показываем успешное сообщение
-                const promoMessage = document.querySelector('.promo-applied-message') ||
-                                    document.createElement('div');
-                promoMessage.className = 'promo-applied-message success';
-                promoMessage.innerHTML = `
-                    <i class="fas fa-check-circle"></i>
-                    Промокод "${code}" успешно применен!
-                `;
-
-                const promoSection = document.querySelector('.cart-promo-section');
-                if (promoSection) {
-                    promoSection.insertBefore(promoMessage, errorMessage);
-                }
-
-                if (errorMessage) {
-                    errorMessage.style.display = 'none';
-                }
-
-                console.log('✅ Промокод применен:', this.appliedPromoCode);
-
-                // Обновляем отображение корзины
-                setTimeout(() => {
-                    this.updateCartDisplay();
-                }, 500);
-
+            if (this.isCartOpen() || this.isProductModalOpen()) {
+                Telegram.WebApp.BackButton.show();
             } else {
-                if (errorMessage) {
-                    errorMessage.textContent = `❌ ${result.error}`;
-                    errorMessage.style.display = 'block';
-                }
-                console.log('❌ Ошибка промокода:', result.error);
-            }
-
-        } catch (error) {
-            console.error('❌ Ошибка проверки промокода:', error);
-            if (errorMessage) {
-                errorMessage.textContent = '❌ Ошибка соединения с сервером';
-                errorMessage.style.display = 'block';
+                Telegram.WebApp.BackButton.hide();
             }
         }
     }
-
 
     isCartOpen() {
         const cart = document.getElementById('cartOverlay');
@@ -883,7 +169,40 @@ class TelegramShop {
         return modal && modal.style.display === 'flex';
     }
 
-    // ========== ПРОДУКТЫ И КАТЕГОРИИ ==========
+    formatPrice(price) {
+        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+    }
+
+    showNotification(message, type = 'info') {
+        const container = document.getElementById('notifications') || this.createNotificationsContainer();
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <div class="notification-icon">
+                <i class="fas fa-${type === 'success' ? 'check-circle' :
+                                 type === 'error' ? 'exclamation-circle' :
+                                 type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+            </div>
+            <div class="notification-content">${message}</div>
+        `;
+
+        container.appendChild(notification);
+        setTimeout(() => notification.classList.add('show'), 10);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    createNotificationsContainer() {
+        const container = document.createElement('div');
+        container.id = 'notifications';
+        document.body.appendChild(container);
+        return container;
+    }
+
+    // ========== ТОВАРЫ И КАТЕГОРИИ ==========
+
     async loadProducts(category = 'all') {
         try {
             console.log(`📥 Загрузка товаров${category !== 'all' ? ` категории "${category}"` : ''}...`);
@@ -894,14 +213,11 @@ class TelegramShop {
                 : '/api/products';
 
             const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             this.products = await response.json();
             console.log(`✅ Загружено ${this.products.length} товаров`);
-
-            // СРАЗУ применяем скидки к товарам
             await this.applyDiscountsToProducts();
-
             this.renderProducts();
 
         } catch (error) {
@@ -914,31 +230,50 @@ class TelegramShop {
         }
     }
 
-    // Добавьте эту функцию в класс TelegramShop
-    forceCartRefresh() {
-        console.log('🔄 Принудительное обновление корзины');
-        this.updateCartDisplay();
+    async loadCategories() {
+        try {
+            const response = await fetch('/api/categories');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            this.categories = await response.json();
+            console.log(`✅ Загружено ${this.categories.length} категорий`);
+            this.renderCategories();
+        } catch (error) {
+            console.error('❌ Ошибка загрузки категорий:', error);
+            this.categories = [];
+        }
+    }
 
-        // Также обновляем счетчик
-        this.updateCartCount();
+    async loadDiscounts() {
+        try {
+            const response = await fetch('/api/discounts');
+            this.discounts = await response.json();
+            console.log(`✅ Загружено ${this.discounts.length} скидок`);
+        } catch (error) {
+            console.error('❌ Ошибка загрузки скидок:', error);
+            this.discounts = [];
+        }
+    }
 
-        // Проверяем состояние
-        console.log(`Состояние корзины: ${this.cart.length} товаров`);
-        console.log('Содержимое корзины:', this.cart);
+    async loadPromoCodes() {
+        try {
+            const response = await fetch('/api/promo-codes');
+            this.promo_codes = await response.json();
+            console.log(`✅ Загружено ${this.promo_codes.length} промокодов`);
+        } catch (error) {
+            console.error('❌ Ошибка загрузки промокодов:', error);
+            this.promo_codes = [];
+        }
     }
 
     async applyDiscountsToProducts() {
         try {
-            // Загружаем активные скидки
             if (this.discounts.length === 0) {
                 await this.loadDiscounts();
             }
 
-            // Применяем скидки к каждому товару
             this.products = this.products.map(product => {
                 const discount = this.calculateProductDiscount(product);
                 if (discount) {
-                    // Добавляем информацию о скидке в объект товара
                     product.discount = discount;
                     product.has_discount = true;
                     product.discounted_price = this.calculateDiscountedPrice(product.price, discount);
@@ -949,67 +284,84 @@ class TelegramShop {
                 }
                 return product;
             });
-
-            console.log(`🏷️ Скидки применены к ${this.products.length} товарам`);
-
         } catch (error) {
             console.error('❌ Ошибка применения скидок:', error);
         }
     }
 
-    async loadCategories() {
-        try {
-            console.log('📂 Загрузка категорий...');
+    calculateProductDiscount(product) {
+        if (!this.discounts || this.discounts.length === 0) return null;
 
-            const response = await fetch('/api/categories');
+        const now = new Date();
+        const activeDiscounts = this.discounts.filter(discount =>
+            discount.is_active &&
+            (!discount.start_date || new Date(discount.start_date) <= now) &&
+            (!discount.end_date || new Date(discount.end_date) >= now)
+        );
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        for (const discount of activeDiscounts) {
+            let applies = false;
+            switch (discount.apply_to) {
+                case 'all': applies = true; break;
+                case 'category': applies = product.category === discount.target_category; break;
+                case 'product': applies = product.id === discount.target_product_id; break;
             }
+            if (applies) return discount;
+        }
+        return null;
+    }
 
-            this.categories = await response.json();
-            console.log(`✅ Загружено ${this.categories.length} категорий`);
+    calculateDiscountedPrice(originalPrice, discount) {
+        if (!discount) return originalPrice;
 
-            this.renderCategories();
+        let discountedPrice = originalPrice;
+        switch (discount.discount_type) {
+            case 'percentage':
+                discountedPrice = originalPrice * (1 - discount.value / 100);
+                break;
+            case 'fixed':
+                discountedPrice = originalPrice - discount.value;
+                break;
+        }
+        return Math.max(discountedPrice, 0);
+    }
 
-        } catch (error) {
-            console.error('❌ Ошибка загрузки категорий:', error);
-            this.categories = [];
+    formatDiscountInfo(discount) {
+        if (!discount) return '';
+        switch (discount.discount_type) {
+            case 'percentage': return `-${discount.value}%`;
+            case 'fixed': return `-${this.formatPrice(discount.value)} ₽`;
+            case 'bogo': return '2 по цене 1';
+            case 'free_delivery': return 'Бесплатная доставка';
+            default: return discount.discount_type;
         }
     }
 
     renderProducts() {
         const productsGrid = document.getElementById('products');
-        if (!productsGrid) {
-            console.error('❌ Контейнер товаров не найден');
-            return;
-        }
+        if (!productsGrid) return;
 
         if (this.products.length === 0) {
             productsGrid.innerHTML = `
-                <div class="no-products" style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--gray-color);">
-                    <i class="fas fa-box-open" style="font-size: 48px; opacity: 0.3; margin-bottom: 16px;"></i>
-                    <h3 style="margin: 0 0 8px 0;">Товары не найдены</h3>
-                    <p style="margin: 0;">Попробуйте выбрать другую категорию</p>
+                <div class="no-products">
+                    <i class="fas fa-box-open"></i>
+                    <h3>Товары не найдены</h3>
+                    <p>Попробуйте выбрать другую категорию</p>
                 </div>
             `;
             return;
         }
 
-        // Используем сетку 2 в ряд
         let html = '';
         this.products.forEach(product => {
             html += this.createProductCard(product);
         });
-
         productsGrid.innerHTML = html;
     }
 
     createProductCard(product) {
         const inStock = product.stock > 0 || product.stock_weight > 0;
         const isWeightProduct = product.product_type === 'weight';
-
-        // Используем уже рассчитанные значения скидки
         const hasDiscount = product.has_discount === true;
         const discount = product.discount;
         const discountedPrice = product.discounted_price || product.price;
@@ -1018,9 +370,7 @@ class TelegramShop {
         return `
             <div class="product-card ${hasDiscount ? 'has-discount' : ''}">
                 ${hasDiscount ? `
-                    <div class="discount-badge">
-                        ${this.formatDiscountInfo(discount)}
-                    </div>
+                    <div class="discount-badge">${this.formatDiscountInfo(discount)}</div>
                 ` : ''}
 
                 <div class="product-image-container">
@@ -1041,12 +391,8 @@ class TelegramShop {
                     <div class="product-pricing">
                         ${hasDiscount ? `
                             <div class="price-container">
-                                <div class="original-price">
-                                    ${this.formatPrice(originalPrice)} ₽
-                                </div>
-                                <div class="discounted-price">
-                                    ${this.formatPrice(discountedPrice)} ₽
-                                </div>
+                                <div class="original-price">${this.formatPrice(originalPrice)} ₽</div>
+                                <div class="discounted-price">${this.formatPrice(discountedPrice)} ₽</div>
                             </div>
                         ` : `
                             <div class="product-price">
@@ -1079,11 +425,9 @@ class TelegramShop {
         const container = document.getElementById('categories');
         if (!container) return;
 
-        // Находим кнопку "Все товары"
         const allButton = container.querySelector('.category-btn[data-category="all"]');
         const buttons = allButton ? [allButton.outerHTML] : [];
 
-        // Добавляем остальные категории
         this.categories.forEach(category => {
             buttons.push(`
                 <button class="category-btn" data-category="${category}">
@@ -1097,124 +441,677 @@ class TelegramShop {
 
     filterByCategory(categoryBtn) {
         const category = categoryBtn.dataset.category;
-
-        // Обновляем активную кнопку
-        document.querySelectorAll('.category-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
+        document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
         categoryBtn.classList.add('active');
-
-        // Загружаем товары выбранной категории
         this.loadProducts(category);
     }
 
-    setExactWeight(weight) {
-        const input = document.getElementById('exactWeight');
-        const slider = document.getElementById('weightSlider');
-        const min = parseFloat(slider.min);
-        const max = parseFloat(slider.max);
+    async viewProduct(productId) {
+        try {
+            this.openProductModalLoading();
+            const response = await fetch(`/api/products/${productId}`);
+            const product = await response.json();
+            if (product.error) throw new Error(product.error);
 
-        if (weight < min) weight = min;
-        if (weight > max) weight = max;
-
-        input.value = weight.toFixed(2);
-        slider.value = weight;
-        this.updateWeightFromInput();
+            this.currentProduct = product;
+            if (product.product_type === 'weight') {
+                this.renderWeightProductModal(product);
+            } else {
+                this.renderProductModal(product);
+            }
+        } catch (error) {
+            console.error('❌ Ошибка загрузки товара:', error);
+            this.showNotification('❌ Не удалось загрузить товар', 'error');
+            this.closeProductModal();
+        }
     }
 
+    // ========== КОРЗИНА ==========
 
-    updateWeightFromInput() {
-        const input = document.getElementById('exactWeight');
-        const slider = document.getElementById('weightSlider');
-        const min = parseFloat(slider.min);
-        const max = parseFloat(slider.max);
-
-        let value = parseFloat(input.value) || min;
-        if (value < min) value = min;
-        if (value > max) value = max;
-
-        input.value = value.toFixed(2);
-        slider.value = value;
-
-        const currentWeightSpan = document.getElementById('currentWeightValue');
-        const selectedWeightSpan = document.getElementById('selectedWeight');
-        const calculatedPriceSpan = document.getElementById('calculatedPrice');
-
-        const unit = this.currentProduct?.unit || 'кг';
-        const pricePerKg = this.currentProduct?.price_per_kg || 0;
-        const price = Math.floor(value * pricePerKg); // Округляем вниз
-
-        currentWeightSpan.textContent = value.toFixed(2) + ' ' + unit;
-        selectedWeightSpan.textContent = value.toFixed(2) + ' ' + unit;
-        calculatedPriceSpan.textContent = this.formatPrice(price) + ' ₽';
-
-        this.selectedWeight = value;
-        this.selectedWeightPrice = price;
+    loadCart() {
+        try {
+            const cartData = localStorage.getItem('telegram_shop_cart');
+            return cartData ? JSON.parse(cartData) : [];
+        } catch (error) {
+            console.error('❌ Ошибка загрузки корзины:', error);
+            return [];
+        }
     }
 
-    // Метод добавления весового товара в корзину
-    addWeightProductToCart(productId) {
-        if (!this.currentProduct) return;
+    saveCart() {
+        try {
+            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+        } catch (error) {
+            console.error('❌ Ошибка сохранения корзины:', error);
+        }
+    }
 
-        const weight = this.selectedWeight || this.currentProduct.min_weight || 0.1;
-        const price = this.selectedWeightPrice || 0;
+    addToCart(productId, name, price, quantity = 1, image = null) {
+        const product = this.products.find(p => p.id === productId);
+        const isWeightProduct = product?.product_type === 'weight';
+        const discount = product ? this.calculateProductDiscount(product) : null;
+        const discountedPrice = discount ? this.calculateDiscountedPrice(price, discount) : price;
+        const cartItemId = isWeightProduct ? `${productId}_${Date.now()}` : productId;
 
-        if (weight <= 0) {
-            this.showNotification('❌ Выберите вес товара', 'error');
+        const existingIndex = this.cart.findIndex(item => item.id === cartItemId);
+        if (existingIndex !== -1) {
+            if (isWeightProduct) {
+                this.cart.push({
+                    id: `${productId}_${Date.now() + 1}`,
+                    name: name,
+                    price: price,
+                    discounted_price: discountedPrice,
+                    discount_info: discount,
+                    quantity: 1,
+                    image: image || 'https://via.placeholder.com/100',
+                    weight: this.selectedWeight,
+                    is_weight: true,
+                    original_product_id: productId,
+                    addedAt: new Date().toISOString()
+                });
+            } else {
+                this.cart[existingIndex].quantity += quantity;
+                this.cart[existingIndex].discounted_price = discountedPrice;
+                this.cart[existingIndex].discount_info = discount;
+            }
+        } else {
+            this.cart.push({
+                id: cartItemId,
+                name: name,
+                price: price,
+                discounted_price: discountedPrice,
+                discount_info: discount,
+                quantity: isWeightProduct ? 1 : quantity,
+                image: image || 'https://via.placeholder.com/100',
+                weight: isWeightProduct ? this.selectedWeight : null,
+                is_weight: isWeightProduct,
+                original_product_id: productId,
+                addedAt: new Date().toISOString()
+            });
+        }
+
+        this.saveCart();
+        this.updateCartCount();
+        if (this.isCartOpen()) this.updateCartDisplay();
+        this.showCartNotification(name, isWeightProduct ? 1 : quantity);
+    }
+
+    showCartNotification(name, quantity) {
+        const notification = document.createElement('div');
+        notification.className = 'cart-notification';
+        notification.innerHTML = `
+            <div class="notification-content">
+                <div class="notification-message">
+                    <i class="fas fa-check-circle"></i>
+                    <span>${name} × ${quantity} добавлен в корзину!</span>
+                </div>
+                <button class="notification-action" onclick="shop.toggleCart()">
+                    <i class="fas fa-shopping-cart"></i> Перейти в корзину
+                </button>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+        setTimeout(() => notification.classList.add('show'), 10);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 5000);
+    }
+
+    removeFromCart(productId) {
+        this.cart = this.cart.filter(item => item.id != productId);
+        localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+        this.updateCartCount();
+        this.updateCartDisplay();
+        this.showNotification('🗑️ Товар удален из корзины', 'info');
+    }
+
+    updateCartItemQuantity(productId, quantity) {
+        const itemIndex = this.cart.findIndex(item => item.id.toString() === productId.toString());
+        if (itemIndex !== -1) {
+            if (quantity < 1) {
+                this.removeFromCart(productId);
+            } else {
+                this.cart[itemIndex].quantity = quantity;
+                this.saveCart();
+                this.updateCartCount();
+                if (this.isCartOpen()) this.updateCartDisplay();
+            }
+        }
+    }
+
+    updateCartCount() {
+        const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+        const cartCount = document.getElementById('cartCount');
+        if (cartCount) {
+            cartCount.textContent = totalItems;
+            cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
+        }
+    }
+
+    updateCartDisplay() {
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
+        if (!cartItems || !cartTotal) return;
+
+        if (this.cart.length === 0) {
+            cartItems.innerHTML = `
+                <div class="empty-cart">
+                    <i class="fas fa-shopping-cart"></i>
+                    <p>Корзина пуста</p>
+                    <p>Добавьте товары из каталога</p>
+                </div>
+            `;
+            cartTotal.textContent = '0 ₽';
             return;
         }
 
-        this.addToCart(
-            productId,
-            `${this.currentProduct.name} (${weight.toFixed(2)} ${this.currentProduct.unit || 'кг'})`,
-            price,
-            1, // Количество всегда 1 для весового товара
-            this.currentProduct.image_url
-        );
+        let itemsHTML = '';
+        this.cart.forEach(item => {
+            const priceToShow = item.discounted_price || item.price;
+            const totalPrice = priceToShow * item.quantity;
+            itemsHTML += `
+                <div class="cart-item" data-id="${item.id}">
+                    ${item.discount_info ? `
+                        <div class="cart-item-discount">
+                            <span class="discount-tag-cart">-${this.formatDiscountInfo(item.discount_info)}</span>
+                        </div>
+                    ` : ''}
+                    <img src="${item.image || 'https://via.placeholder.com/80'}"
+                         alt="${item.name}"
+                         class="cart-item-image">
+                    <div class="cart-item-info">
+                        <div class="cart-item-header">
+                            <h4 class="cart-item-name">${item.name}</h4>
+                            <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="cart-item-pricing">
+                            ${item.discounted_price && item.discounted_price < item.price ? `
+                                <div class="cart-price-discounted">
+                                    <span class="cart-item-original-price">${this.formatPrice(item.price)} ₽</span>
+                                    <span class="cart-item-price">${this.formatPrice(item.discounted_price)} ₽</span>
+                                </div>
+                            ` : `
+                                <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
+                            `}
+                        </div>
+                        <div class="cart-item-controls">
+                            <div class="quantity-selector small">
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})"
+                                        ${item.quantity <= 1 ? 'disabled' : ''}>
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="quantity">${item.quantity} шт.</span>
+                                <button class="qty-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="cart-item-total">
+                                ${this.formatPrice(totalPrice)} ₽
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
 
-        this.closeProductModal();
+        cartItems.innerHTML = itemsHTML;
+        const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        cartTotal.textContent = `${this.formatPrice(total)} ₽`;
     }
-        // Методы для работы с весом
-    adjustWeight(delta) {
-        const input = document.getElementById('exactWeight');
-        const slider = document.getElementById('weightSlider');
-        const min = parseFloat(slider.min);
-        const max = parseFloat(slider.max);
 
-        let currentValue = parseFloat(input.value) || min;
-        let newValue = currentValue + delta;
+    toggleCart() {
+        this.deliveryData = { type: null, address_id: null, pickup_point: null, address_details: null };
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
 
-        if (newValue < min) newValue = min;
-        if (newValue > max) newValue = max;
+        this.updateCartDisplay();
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
+                    <button class="close-cart" id="closeCart">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="cart-items" id="cartItems"></div>
+                <div class="cart-footer">
+                    <div class="cart-summary">
+                        <div class="cart-total">
+                            <span>Итого:</span>
+                            <span class="total-price" id="cartTotal">0 ₽</span>
+                        </div>
+                        <div class="cart-actions">
+                            <button class="btn btn-outline" id="clearCart">
+                                <i class="fas fa-trash"></i> Очистить
+                            </button>
+                            <button class="btn btn-primary" id="checkoutBtn">
+                                <i class="fas fa-paper-plane"></i> Купить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
-        input.value = newValue.toFixed(2);
-        slider.value = newValue;
+        this.updateCartDisplay();
+        this.bindEvent('closeCart', 'click', () => this.closeCart());
+        this.bindEvent('clearCart', 'click', () => this.clearCart());
+        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
 
-        this.updateWeightFromInput();
+        cartOverlay.style.display = 'flex';
+        this.updateBackButton();
+    }
+
+    closeCart() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (cartOverlay) {
+            cartOverlay.style.display = 'none';
+            this.updateBackButton();
+        }
+    }
+
+    clearCart() {
+        if (this.cart.length === 0) {
+            this.showNotification('Корзина уже пуста', 'info');
+            return;
+        }
+        if (confirm('Вы уверены, что хотите очистить корзину?')) {
+            this.cart = [];
+            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+            this.updateCartCount();
+            this.updateCartDisplay();
+            this.showNotification('🗑️ Корзина очищена', 'info');
+        }
+    }
+
+    async checkout() {
+        if (this.cart.length === 0) {
+            this.showNotification('❌ Корзина пуста!', 'error');
+            return;
+        }
+
+        // Проверка доступности товаров
+        const unavailableItems = [];
+        for (const item of this.cart) {
+            try {
+                const response = await fetch(`/api/products/${item.id}`);
+                if (response.ok) {
+                    const product = await response.json();
+                    if (product.stock < item.quantity) {
+                        unavailableItems.push({
+                            name: item.name,
+                            available: product.stock,
+                            requested: item.quantity
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Ошибка проверки товара ${item.id}:`, error);
+            }
+        }
+
+        if (unavailableItems.length > 0) {
+            let message = 'Некоторые товары недоступны:\n';
+            unavailableItems.forEach(item => {
+                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
+            });
+            this.showNotification(message, 'error');
+            return;
+        }
+
+        await this.showDeliverySelection();
+    }
+
+    // ========== ДОСТАВКА И ОПЛАТА ==========
+
+    async showDeliverySelection() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        const itemsTotal = this.cart.reduce((sum, item) => {
+            const priceToShow = item.discounted_price || item.price;
+            return sum + (priceToShow * item.quantity);
+        }, 0);
+
+        let deliveryCost = 0;
+        let deliveryMessage = 'Бесплатно';
+        const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
+
+        if (!hasFreeDeliveryPromo && itemsTotal < 1000) {
+            deliveryCost = 100;
+            deliveryMessage = '100 ₽';
+        }
+
+        const promoDiscount = this.appliedPromoCode ?
+            this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
+        const finalTotal = itemsTotal + deliveryCost - promoDiscount;
+
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C); color: white;">
+                    <h2><i class="fas fa-truck"></i> Доставка</h2>
+                    <button class="close-cart" id="closeDeliverySelection">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="delivery-content">
+                    <div class="compact-promo-section">
+                        <div style="margin-bottom: 16px; background: white; border-radius: 12px; padding: 12px; border: 1px solid #e0e0e0;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <i class="fas fa-ticket-alt" style="color: #667eea;"></i>
+                                <span style="font-weight: 600; color: #333; font-size: 14px;">Промокод</span>
+                            </div>
+
+                            ${!this.appliedPromoCode ? `
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="compactPromoCodeInput" placeholder="Введите код" style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;">
+                                    <button id="applyPromoBtnCompact" style="width: 60px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                        OK
+                                    </button>
+                                </div>
+                            ` : `
+                                <div style="display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; padding: 10px 12px; border-radius: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-check-circle" style="color: #4CAF50;"></i>
+                                        <div>
+                                            <div style="font-weight: 600; color: #2e7d32;">${this.appliedPromoCode.code}</div>
+                                            <div style="font-size: 12px; color: #388E3C;">
+                                                ${this.getPromoMessage(this.appliedPromoCode, promoDiscount)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button id="removePromoBtnCompact" style="background: none; border: none; color: #dc3545; cursor: pointer;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            `}
+
+                            <div id="compactPromoMessage" style="margin-top: 6px; font-size: 12px;"></div>
+                        </div>
+
+                        <div style="margin-bottom: 16px;">
+                            <div style="margin-bottom: 8px; font-weight: 600; color: #333;">Способ получения</div>
+
+                            <div id="courierOption" style="margin-bottom: 8px; padding: 12px; border: ${this.deliveryData.type === 'courier' ? '2px solid #667eea' : '1px solid #e0e0e0'}; border-radius: 10px; background: ${this.deliveryData.type === 'courier' ? '#f8f9ff' : 'white'}; cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'courier' ? '#667eea' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                            <i class="fas fa-truck" style="color: white;"></i>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 600; color: #333;">Курьер</div>
+                                            <div style="font-size: 13px; color: #666;">До двери, 30-60 мин</div>
+                                        </div>
+                                    </div>
+                                    <div style="font-weight: 600; color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? '#28a745' : '#dc3545'};">
+                                        ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="pickupOption" style="padding: 12px; border: ${this.deliveryData.type === 'pickup' ? '2px solid #667eea' : '1px solid #e0e0e0'}; border-radius: 10px; background: ${this.deliveryData.type === 'pickup' ? '#f8f9ff' : 'white'}; cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'pickup' ? '#667eea' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                            <i class="fas fa-store" style="color: white;"></i>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 600; color: #333;">Самовывоз</div>
+                                            <div style="font-size: 13px; color: #666;">Из точки, 15-30 мин</div>
+                                        </div>
+                                    </div>
+                                    <div style="font-weight: 600; color: #28a745;">Бесплатно</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: white; border-radius: 12px; padding: 16px; border: 1px solid #e0e0e0; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="color: #666;">Товары:</span>
+                                <span>${this.formatPrice(itemsTotal)} ₽</span>
+                            </div>
+
+                            ${promoDiscount > 0 ? `
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="color: #28a745;">Скидка:</span>
+                                    <span style="color: #28a745;">-${this.formatPrice(promoDiscount)} ₽</span>
+                                </div>
+                            ` : ''}
+
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                                <span style="color: #666;">Доставка:</span>
+                                <span style="color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? '#28a745' : '#dc3545'};">
+                                    ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? 'Бесплатно' : '100 ₽'}
+                                </span>
+                            </div>
+
+                            <div style="border-top: 1px solid #eee; padding-top: 12px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="font-weight: 600;">Итого:</span>
+                                    <span style="font-weight: 700; color: #2c3e50;">${this.formatPrice(finalTotal)} ₽</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onclick="shop.returnToCartFromDelivery()" style="width: 100%; padding: 14px; background: white; color: #333; border: 1px solid #ddd; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-arrow-left"></i>
+                            <span>Назад в корзину</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Назначение обработчиков
+        setTimeout(() => {
+            document.getElementById('courierOption').addEventListener('click', () => {
+                this.deliveryData.type = 'courier';
+                this.showAddressSelection();
+            });
+
+            document.getElementById('pickupOption').addEventListener('click', () => {
+                this.deliveryData.type = 'pickup';
+                this.showPickupPoints();
+            });
+
+            document.getElementById('closeDeliverySelection').addEventListener('click', () => this.closeCart());
+
+            const backBtn = document.querySelector('button[onclick="shop.returnToCartFromDelivery()"]');
+            if (backBtn) backBtn.addEventListener('click', () => this.returnToCartFromDelivery());
+
+            if (!this.appliedPromoCode) {
+                document.getElementById('applyPromoBtnCompact').addEventListener('click', () => this.applyCompactPromoCode());
+                document.getElementById('compactPromoCodeInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.applyCompactPromoCode();
+                });
+            } else {
+                document.getElementById('removePromoBtnCompact').addEventListener('click', () => this.removeCompactPromoCode());
+            }
+        }, 100);
+    }
+
+    returnToCartFromDelivery() {
+        this.deliveryData = { type: null, address_id: null, pickup_point: null, address_details: null };
+        this.closeCart();
+        setTimeout(() => {
+            this.resetCartInterface();
+            this.updateCartDisplay();
+            const cartOverlay = document.getElementById('cartOverlay');
+            if (cartOverlay) {
+                cartOverlay.style.display = 'flex';
+                this.updateBackButton();
+            }
+        }, 300);
+    }
+
+    resetCartInterface() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+        cartOverlay.innerHTML = `
+            <div class="cart-modal">
+                <div class="cart-header">
+                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
+                    <button class="close-cart" id="closeCart">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="cart-items" id="cartItems"></div>
+                <div class="cart-footer">
+                    <div class="cart-summary">
+                        <div class="cart-total">
+                            <span>Итого:</span>
+                            <span class="total-price" id="cartTotal">0 ₽</span>
+                        </div>
+                        <div class="cart-actions">
+                            <button class="btn btn-outline" id="clearCart">
+                                <i class="fas fa-trash"></i> Очистить
+                            </button>
+                            <button class="btn btn-primary" id="checkoutBtn">
+                                <i class="fas fa-paper-plane"></i> Купить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.bindEvent('closeCart', 'click', () => this.closeCart());
+        this.bindEvent('clearCart', 'click', () => this.clearCart());
+        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+    }
+
+    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+
+    calculatePromoDiscount(subtotal, promo) {
+        if (!promo) return 0;
+        switch (promo.discount_type) {
+            case 'percentage': return subtotal * (promo.value / 100);
+            case 'fixed': return Math.min(promo.value, subtotal);
+            case 'free_delivery': return 0;
+            case 'bogo': return this.cart.length > 0 ? Math.max(...this.cart.map(item => (item.discounted_price || item.price) * item.quantity)) * 0.5 : 0;
+            default: return 0;
+        }
+    }
+
+    getPromoMessage(promo, discount) {
+        if (!promo) return '';
+        switch (promo.discount_type) {
+            case 'percentage': return `Скидка ${promo.value}%`;
+            case 'fixed': return `Скидка ${this.formatPrice(promo.value)} ₽`;
+            case 'free_delivery': return 'Бесплатная доставка';
+            case 'bogo': return '2 по цене 1';
+            default: return 'Скидка';
+        }
+    }
+
+    async applyCompactPromoCode() {
+        const input = document.getElementById('compactPromoCodeInput');
+        const messageDiv = document.getElementById('compactPromoMessage');
+        const code = input?.value.trim().toUpperCase();
+
+        if (!code) {
+            this.showCompactPromoMessage('Введите промокод', 'error');
+            return;
+        }
+
+        try {
+            this.showCompactPromoMessage('<i class="fas fa-spinner fa-spin"></i> Проверка...', 'loading');
+            const response = await fetch('/api/check-promo-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                const itemsTotal = this.cart.reduce((sum, item) => sum + ((item.discounted_price || item.price) * item.quantity), 0);
+                const promo = result.promo_code;
+
+                if (promo.min_order_amount > 0 && itemsTotal < promo.min_order_amount) {
+                    this.showCompactPromoMessage(`Минимум ${this.formatPrice(promo.min_order_amount)} ₽`, 'error');
+                    return;
+                }
+
+                this.appliedPromoCode = { ...promo, code: code };
+                this.showCompactPromoMessage('✅ Промокод применен!', 'success');
+                setTimeout(() => this.showDeliverySelection(), 800);
+            } else {
+                this.showCompactPromoMessage(`❌ ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка:', error);
+            this.showCompactPromoMessage('❌ Ошибка соединения', 'error');
+        }
+    }
+
+    showCompactPromoMessage(message, type = 'info') {
+        const messageDiv = document.getElementById('compactPromoMessage');
+        if (!messageDiv) return;
+        messageDiv.innerHTML = message;
+        messageDiv.style.color = type === 'error' ? '#dc3545' :
+                                type === 'success' ? '#28a745' :
+                                type === 'loading' ? '#0c5460' : '#6c757d';
+        if (type === 'success') {
+            setTimeout(() => {
+                if (messageDiv.textContent.includes('✅')) messageDiv.innerHTML = '';
+            }, 2000);
+        }
+    }
+
+    removeCompactPromoCode() {
+        this.appliedPromoCode = null;
+        this.showDeliverySelection();
+    }
+
+    saveUserToLocalStorage() {
+        if (this.userId && this.userId !== 0) {
+            localStorage.setItem('telegram_user_id', this.userId);
+            localStorage.setItem('telegram_username', this.username);
+        }
+    }
+
+    showLoading(show) {
+        const loading = document.getElementById('loading');
+        if (loading) loading.style.display = show ? 'block' : 'none';
+    }
+
+    // ========== ОБРАБОТЧИКИ ДЛЯ ВЕСОВЫХ ТОВАРОВ ==========
+
+    openProductModalLoading() {
+        const modal = document.getElementById('productModal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="product-modal">
+                <div class="modal-content">
+                    <div class="loading-modal">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Загрузка товара...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        modal.style.display = 'flex';
     }
 
 
 
-        // Новый метод для отображения весового товара
+    // ========== МЕТОДЫ ДЛЯ ВЕСОВЫХ ТОВАРОВ ==========
+
     renderWeightProductModal(product) {
         const modal = document.getElementById('productModal');
-        if (!modal) {
-            console.error('❌ Модальное окно не найдено');
-            return;
-        }
+        if (!modal) return;
 
         const pricePerKg = product.price_per_kg || 0;
         const minWeight = product.min_weight || 0.1;
-        const maxWeight = product.max_weight || 5.0;
+        const maxWeight = Math.min(product.max_weight || 5.0, product.stock_weight || 5.0);
         const stepWeight = product.step_weight || 0.1;
         const stockWeight = product.stock_weight || 0;
         const unit = product.unit || 'кг';
 
-        // Округляем до целых рублей
-        const calculatePrice = (weight) => {
-            const exactPrice = weight * pricePerKg;
-            return Math.floor(exactPrice); // Округляем вниз до целых рублей
-        };
+        const calculatePrice = (weight) => Math.floor(weight * pricePerKg);
 
         modal.innerHTML = `
             <div class="product-modal">
@@ -1253,7 +1150,7 @@ class TelegramShop {
                             <div class="weight-info">
                                 <div class="weight-limits">
                                     <span>От: ${minWeight} ${unit}</span>
-                                    <span>До: ${Math.min(maxWeight, stockWeight)} ${unit}</span>
+                                    <span>До: ${maxWeight} ${unit}</span>
                                 </div>
                                 ${stockWeight > 0 ? `
                                     <div class="stock-weight">
@@ -1263,23 +1160,21 @@ class TelegramShop {
                                 ` : ''}
                             </div>
 
-                            <!-- Ползунок для выбора веса -->
                             <div class="weight-slider-container">
                                 <input type="range"
                                        id="weightSlider"
                                        min="${minWeight}"
-                                       max="${Math.min(maxWeight, stockWeight)}"
+                                       max="${maxWeight}"
                                        step="${stepWeight}"
                                        value="${minWeight}"
                                        class="weight-slider">
                                 <div class="slider-labels">
                                     <span>${minWeight} ${unit}</span>
                                     <span id="currentWeightValue">${minWeight} ${unit}</span>
-                                    <span>${Math.min(maxWeight, stockWeight)} ${unit}</span>
+                                    <span>${maxWeight} ${unit}</span>
                                 </div>
                             </div>
 
-                            <!-- Точный ввод веса -->
                             <div class="weight-input-container">
                                 <label for="exactWeight">Точный вес (${unit}):</label>
                                 <div class="weight-input-group">
@@ -1290,7 +1185,7 @@ class TelegramShop {
                                            id="exactWeight"
                                            value="${minWeight}"
                                            min="${minWeight}"
-                                           max="${Math.min(maxWeight, stockWeight)}"
+                                           max="${maxWeight}"
                                            step="${stepWeight}"
                                            onchange="shop.updateWeightFromInput()">
                                     <button class="weight-btn" onclick="shop.adjustWeight(${stepWeight})">
@@ -1299,12 +1194,11 @@ class TelegramShop {
                                 </div>
                             </div>
 
-                            <!-- Быстрый выбор -->
                             <div class="quick-weight-selection">
                                 <h5>Быстрый выбор:</h5>
                                 <div class="quick-weights">
                                     ${[0.1, 0.25, 0.5, 1, 2, 3, 5]
-                                        .filter(w => w >= minWeight && w <= Math.min(maxWeight, stockWeight))
+                                        .filter(w => w >= minWeight && w <= maxWeight)
                                         .map(w => `
                                         <button class="quick-weight-btn" onclick="shop.setExactWeight(${w})">
                                             ${w} ${unit}
@@ -1343,24 +1237,26 @@ class TelegramShop {
         `;
 
         modal.style.display = 'flex';
+        this.initializeWeightControls(product);
+    }
 
-        // Инициализация ползунка
+    initializeWeightControls(product) {
         const weightSlider = document.getElementById('weightSlider');
         const exactWeightInput = document.getElementById('exactWeight');
-        const currentWeightSpan = document.getElementById('currentWeightValue');
-        const selectedWeightSpan = document.getElementById('selectedWeight');
-        const calculatedPriceSpan = document.getElementById('calculatedPrice');
+
+        if (!weightSlider || !exactWeightInput) return;
 
         const updateDisplay = () => {
             const weight = parseFloat(weightSlider.value);
-            const price = calculatePrice(weight);
+            const unit = product.unit || 'кг';
+            const pricePerKg = product.price_per_kg || 0;
+            const price = Math.floor(weight * pricePerKg);
 
-            currentWeightSpan.textContent = weight.toFixed(2) + ' ' + unit;
-            selectedWeightSpan.textContent = weight.toFixed(2) + ' ' + unit;
-            calculatedPriceSpan.textContent = this.formatPrice(price) + ' ₽';
+            document.getElementById('currentWeightValue').textContent = weight.toFixed(2) + ' ' + unit;
+            document.getElementById('selectedWeight').textContent = weight.toFixed(2) + ' ' + unit;
+            document.getElementById('calculatedPrice').textContent = this.formatPrice(price) + ' ₽';
             exactWeightInput.value = weight.toFixed(2);
 
-            // Сохраняем выбранный вес
             this.selectedWeight = weight;
             this.selectedWeightPrice = price;
         };
@@ -1371,104 +1267,120 @@ class TelegramShop {
         });
 
         exactWeightInput.addEventListener('input', () => {
-            let value = parseFloat(exactWeightInput.value) || minWeight;
-            if (value < minWeight) value = minWeight;
-            if (value > Math.min(maxWeight, stockWeight)) value = Math.min(maxWeight, stockWeight);
+            let value = parseFloat(exactWeightInput.value) || parseFloat(weightSlider.min);
+            const min = parseFloat(weightSlider.min);
+            const max = parseFloat(weightSlider.max);
+
+            if (value < min) value = min;
+            if (value > max) value = max;
 
             weightSlider.value = value;
             updateDisplay();
         });
 
-        // Инициализация
         updateDisplay();
-
-        // Назначаем обработчики
         this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
     }
 
+    adjustWeight(delta) {
+        const input = document.getElementById('exactWeight');
+        const slider = document.getElementById('weightSlider');
+        if (!input || !slider) return;
 
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
+        let currentValue = parseFloat(input.value) || min;
+        let newValue = currentValue + delta;
 
-    async viewProduct(productId) {
-        try {
-            console.log(`👁️ Загрузка товара #${productId}...`);
-            this.openProductModalLoading();
+        if (newValue < min) newValue = min;
+        if (newValue > max) newValue = max;
 
-            const response = await fetch(`/api/products/${productId}`);
-            const product = await response.json();
+        input.value = newValue.toFixed(2);
+        slider.value = newValue;
+        this.updateWeightFromInput();
+    }
 
-            if (product.error) {
-                throw new Error(product.error);
-            }
+    setExactWeight(weight) {
+        const input = document.getElementById('exactWeight');
+        const slider = document.getElementById('weightSlider');
+        if (!input || !slider) return;
 
-            console.log('✅ Товар загружен:', product);
-            this.currentProduct = product;
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
 
-            // Если это весовой товар, показываем специальное модальное окно
-            if (product.product_type === 'weight') {
-                this.renderWeightProductModal(product);
-            } else {
-                this.renderProductModal(product);
-            }
+        if (weight < min) weight = min;
+        if (weight > max) weight = max;
 
-        } catch (error) {
-            console.error('❌ Ошибка загрузки товара:', error);
-            this.showNotification('❌ Не удалось загрузить товар', 'error');
-            this.closeProductModal();
+        input.value = weight.toFixed(2);
+        slider.value = weight;
+        this.updateWeightFromInput();
+    }
+
+    updateWeightFromInput() {
+        const input = document.getElementById('exactWeight');
+        const slider = document.getElementById('weightSlider');
+        if (!input || !slider) return;
+
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
+        let value = parseFloat(input.value) || min;
+
+        if (value < min) value = min;
+        if (value > max) value = max;
+
+        input.value = value.toFixed(2);
+        slider.value = value;
+
+        const currentWeightSpan = document.getElementById('currentWeightValue');
+        const selectedWeightSpan = document.getElementById('selectedWeight');
+        const calculatedPriceSpan = document.getElementById('calculatedPrice');
+
+        if (currentWeightSpan && selectedWeightSpan && calculatedPriceSpan) {
+            // Обновляем отображение
+            const unit = this.currentProduct?.unit || 'кг';
+            const pricePerKg = this.currentProduct?.price_per_kg || 0;
+            const price = Math.floor(value * pricePerKg);
+
+            currentWeightSpan.textContent = value.toFixed(2) + ' ' + unit;
+            selectedWeightSpan.textContent = value.toFixed(2) + ' ' + unit;
+            calculatedPriceSpan.textContent = this.formatPrice(price) + ' ₽';
+
+            this.selectedWeight = value;
+            this.selectedWeightPrice = price;
         }
     }
 
-    async testAllEndpoints() {
-        const endpoints = [
-            '/api/products',
-            '/api/products/1',
-            '/api/products/2',
-            '/api/products/3',
-            '/api/products/4',
-            '/api/products/5',
-            '/api/products/6',
-            '/api/categories',
-            '/api/test'
-        ];
+    addWeightProductToCart(productId) {
+        if (!this.currentProduct) return;
 
-        for (let endpoint of endpoints) {
-            try {
-                const response = await fetch(endpoint);
-                console.log(`${endpoint}: ${response.status} ${response.ok ? '✅' : '❌'}`);
-            } catch (e) {
-                console.log(`${endpoint}: ❌ Ошибка ${e.message}`);
-            }
+        const weight = this.selectedWeight || this.currentProduct.min_weight || 0.1;
+        const price = this.selectedWeightPrice || 0;
+
+        if (weight <= 0) {
+            this.showNotification('❌ Выберите вес товара', 'error');
+            return;
         }
+
+        this.addToCart(
+            productId,
+            `${this.currentProduct.name} (${weight.toFixed(2)} ${this.currentProduct.unit || 'кг'})`,
+            price,
+            1,
+            this.currentProduct.image_url
+        );
+
+        this.closeProductModal();
     }
 
-    openProductModalLoading() {
-        const modal = document.getElementById('productModal');
-        if (!modal) return;
-
-        modal.innerHTML = `
-            <div class="product-modal">
-                <div class="modal-content">
-                    <div class="loading-modal">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>Загрузка товара...</p>
-                    </div>
-                </div>
-            </div>
-        `;
-        modal.style.display = 'flex';
-    }
+    // ========== МЕТОДЫ ДЛЯ ШТУЧНЫХ ТОВАРОВ ==========
 
     renderProductModal(product) {
-        console.log('🎨 Рендерим модальное окно товара:', product.name);
+        const modal = document.getElementById('productModal');
+        if (!modal) return;
 
         const discount = this.calculateProductDiscount(product);
         const discountedPrice = discount ? this.calculateDiscountedPrice(product.price, discount) : product.price;
         const hasDiscount = discount && discountedPrice < product.price;
-
-        const modal = document.getElementById('productModal');
-        if (!modal) {
-            console.error('❌ Модальное окно не найдено');
-            return;
-        }
 
         modal.innerHTML = `
             <div class="product-modal">
@@ -1523,18 +1435,20 @@ class TelegramShop {
                             <div class="product-modal-actions">
                                 <div class="quantity-selector">
                                     <h4><i class="fas fa-sort-amount-up"></i> Количество:</h4>
-                                    <button class="qty-btn minus" id="qtyMinus">
-                                        <i class="fas fa-minus"></i>
-                                    </button>
-                                    <input type="number"
-                                           id="quantity"
-                                           value="1"
-                                           min="1"
-                                           max="${product.stock}"
-                                           onchange="shop.validateQuantity(${product.stock})">
-                                    <button class="qty-btn plus" id="qtyPlus">
-                                        <i class="fas fa-plus"></i>
-                                    </button>
+                                    <div class="quantity-selector-controls">
+                                        <button class="qty-btn minus" id="qtyMinus">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                        <input type="number"
+                                               id="quantity"
+                                               value="1"
+                                               min="1"
+                                               max="${product.stock}"
+                                               onchange="shop.validateQuantity(${product.stock})">
+                                        <button class="qty-btn plus" id="qtyPlus">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <button class="btn btn-primary" id="addToCartModal">
@@ -1552,28 +1466,20 @@ class TelegramShop {
         `;
 
         modal.style.display = 'flex';
-
-        // Назначаем обработчики событий
         this.bindModalEvents(product);
         this.updateBackButton();
     }
 
     bindModalEvents(product) {
-        // Закрытие модального окна
         this.bindEvent('closeProductModal', 'click', () => this.closeProductModal());
-
-        // Кнопки +/-
         this.bindEvent('qtyMinus', 'click', () => this.changeQuantity(-1));
         this.bindEvent('qtyPlus', 'click', () => this.changeQuantity(1));
-
-        // Добавление в корзину
         this.bindEvent('addToCartModal', 'click', () => {
             const quantityInput = document.getElementById('quantity');
             const quantity = quantityInput ? parseInt(quantityInput.value) || 1 : 1;
             this.addToCartFromModal(product, quantity);
         });
 
-        // Валидация количества при прямом вводе
         const quantityInput = document.getElementById('quantity');
         if (quantityInput) {
             quantityInput.addEventListener('input', () => {
@@ -1587,7 +1493,6 @@ class TelegramShop {
         if (!input) return;
 
         let value = parseInt(input.value) || 1;
-
         if (value < 1) value = 1;
         if (value > maxStock) value = maxStock;
 
@@ -1601,7 +1506,6 @@ class TelegramShop {
         let currentValue = parseInt(input.value) || 1;
         let newValue = currentValue + delta;
 
-        // Проверяем минимальное и максимальное значение
         const max = parseInt(input.max) || 100;
         const min = parseInt(input.min) || 1;
 
@@ -1643,1342 +1547,19 @@ class TelegramShop {
         this.updateBackButton();
     }
 
-        // ========== КОРЗИНА ==========
-        // В методе addToCart добавьте обработку весовых товаров:
-    addToCart(productId, name, price, quantity = 1, image = null) {
-        // Для весовых товаров проверяем тип
-        const product = this.products.find(p => p.id === productId);
-        const isWeightProduct = product?.product_type === 'weight';
-
-        const discount = product ? this.calculateProductDiscount(product) : null;
-        const discountedPrice = discount ? this.calculateDiscountedPrice(price, discount) : price;
-
-        // Для весовых товаров создаем уникальный ID с весом
-        const cartItemId = isWeightProduct ? `${productId}_${Date.now()}` : productId;
-
-        const existingIndex = this.cart.findIndex(item => item.id === cartItemId);
-
-        if (existingIndex !== -1) {
-            // Для весовых товаров не увеличиваем количество, а создаем новую запись
-            if (isWeightProduct) {
-                this.cart.push({
-                    id: `${productId}_${Date.now() + 1}`, // Уникальный ID
-                    name: name,
-                    price: price,
-                    discounted_price: discountedPrice,
-                    discount_info: discount,
-                    quantity: 1,
-                    image: image || 'https://via.placeholder.com/100',
-                    weight: this.selectedWeight,
-                    is_weight: true,
-                    original_product_id: productId,
-                    addedAt: new Date().toISOString()
-                });
-            } else {
-                // Для штучных товаров увеличиваем количество
-                this.cart[existingIndex].quantity += quantity;
-                this.cart[existingIndex].discounted_price = discountedPrice;
-                this.cart[existingIndex].discount_info = discount;
-            }
-        } else {
-            this.cart.push({
-                id: cartItemId,
-                name: name,
-                price: price,
-                discounted_price: discountedPrice,
-                discount_info: discount,
-                quantity: isWeightProduct ? 1 : quantity,
-                image: image || 'https://via.placeholder.com/100',
-                weight: isWeightProduct ? this.selectedWeight : null,
-                is_weight: isWeightProduct,
-                original_product_id: productId,
-                addedAt: new Date().toISOString()
-            });
-        }
-
-        this.saveCart();
-        this.updateCartCount();
-
-        if (this.isCartOpen()) {
-            this.updateCartDisplay();
-        }
-
-        this.showCartNotification(name, isWeightProduct ? 1 : quantity);
-    }
-
-    showCartNotification(name, quantity) {
-        const notification = document.createElement('div');
-        notification.className = 'cart-notification';
-        notification.innerHTML = `
-            <div class="notification-content">
-                <div class="notification-message">
-                    <i class="fas fa-check-circle"></i>
-                    <span>${name} × ${quantity} добавлен в корзину!</span>
-                </div>
-                <button class="notification-action" onclick="shop.toggleCart()">
-                    <i class="fas fa-shopping-cart"></i> Перейти в корзину
-                </button>
-            </div>
-        `;
-
-        document.body.appendChild(notification);
-
-        // Анимация появления
-        setTimeout(() => notification.classList.add('show'), 10);
-
-        // Автоматическое скрытие через 5 секунд
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 5000);
-    }
-
-    removeFromCart(productId) {
-        console.log('🗑️ Удаление товара ID:', productId);
-
-        // Удаляем товар
-        this.cart = this.cart.filter(item => item.id != productId);
-
-        // Сохраняем
-        localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
-
-        // Обновляем счетчик
-        this.updateCartCount();
-
-        // Всегда обновляем отображение корзины
-        this.updateCartDisplay();
-
-        // Показываем уведомление
-        this.showNotification('🗑️ Товар удален из корзины', 'info');
-
-        // Если корзина стала пустой, дополнительное сообщение
-        if (this.cart.length === 0) {
-            setTimeout(() => {
-                this.showNotification('🛒 Корзина пуста', 'info');
-            }, 300);
-        }
-    }
-
-    updateCartItem(productId, quantity) {
-        const itemIndex = this.cart.findIndex(item => item.id === productId);
-
-        if (itemIndex !== -1) {
-            if (quantity < 1) {
-                this.removeFromCart(productId);
-            } else {
-                this.cart[itemIndex].quantity = quantity;
-                this.saveCart();
-                this.updateCartCount();
-
-                // СРАЗУ обновляем отображение корзины
-                this.updateCartDisplay();
-            }
-        }
-    }
-
-    updateCartItemQuantity(productId, quantity) {
-        const itemIndex = this.cart.findIndex(item => item.id.toString() === productId.toString());
-
-        if (itemIndex !== -1) {
-            if (quantity < 1) {
-                this.removeFromCart(productId);
-            } else {
-                this.cart[itemIndex].quantity = quantity;
-                this.saveCart();
-                this.updateCartCount();
-
-                // Обновляем отображение
-                if (this.isCartOpen()) {
-                    this.updateCartDisplay();
-                }
-            }
-        }
-    }
-
-    // ОСТАЛЬНЫЕ ФУНКЦИИ КОРЗИНЫ ОСТАВЛЯЕМ КАК БЫЛИ
-    clearCart() {
-        if (this.cart.length === 0) {
-            this.showNotification('Корзина уже пуста', 'info');
-            return;
-        }
-
-        if (confirm('Вы уверены, что хотите очистить корзину?')) {
-            this.cart = [];
-            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
-            this.updateCartCount();
-            this.updateCartDisplay();
-            this.showNotification('🗑️ Корзина очищена', 'info');
-        }
-    }
-
-    saveCart() {
-        try {
-            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
-        } catch (error) {
-            console.error('❌ Ошибка сохранения корзины:', error);
-        }
-    }
-
-    loadCart() {
-        try {
-            const cartData = localStorage.getItem('telegram_shop_cart');
-            return cartData ? JSON.parse(cartData) : [];
-        } catch (error) {
-            console.error('❌ Ошибка загрузки корзины:', error);
-            return [];
-        }
-    }
-
-    updateCartCount() {
-        const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
-        const cartCount = document.getElementById('cartCount');
-
-        // Рассчитываем сумму с доставкой для всплывающей подсказки
-        const itemsTotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        let deliveryCost = 0;
-
-        if (this.deliveryData.type === 'courier' && itemsTotal < 1000) {
-            deliveryCost = 100;
-        }
-
-        const totalWithDelivery = itemsTotal + deliveryCost;
-
-        if (cartCount) {
-            cartCount.textContent = totalItems;
-            cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
-
-            // Добавляем подсказку с суммой
-            cartCount.title = `Товаров: ${totalItems} шт.\nСумма: ${this.formatPrice(itemsTotal)} ₽\nДоставка: ${deliveryCost > 0 ? deliveryCost + ' ₽' : 'Бесплатно'}\nИтого: ${this.formatPrice(totalWithDelivery)} ₽`;
-        }
-    }
-
-    updateCartDisplay() {
-        console.log('🔄 Обновление корзины...');
-
-        const cartItems = document.getElementById('cartItems');
-        const cartTotal = document.getElementById('cartTotal');
-
-        if (!cartItems || !cartTotal) {
-            console.error('❌ Элементы корзины не найдены!');
-            return;
-        }
-
-        // ЕСЛИ КОРЗИНА ПУСТА
-        if (this.cart.length === 0) {
-            console.log('🛒 Корзина пуста - показываем сообщение');
-
-            // Просто показываем сообщение прямо в cartItems
-            cartItems.innerHTML = `
-                <div class="empty-cart">
-                    <i class="fas fa-shopping-cart"></i>
-                    <p>Корзина пуста</p>
-                    <p>Добавьте товары из каталога</p>
-                </div>
-            `;
-
-            // Обнуляем сумму
-            cartTotal.textContent = '0 ₽';
-
-            return;
-        }
-
-        // ЕСЛИ В КОРЗИНЕ ЕСТЬ ТОВАРЫ
-        console.log(`📦 В корзине ${this.cart.length} товаров`);
-
-        // Генерируем HTML для товаров
-        let itemsHTML = '';
-
-        this.cart.forEach(item => {
-            const priceToShow = item.discounted_price || item.price;
-            const totalPrice = priceToShow * item.quantity;
-
-            itemsHTML += `
-                <div class="cart-item" data-id="${item.id}">
-                    ${item.discount_info ? `
-                        <div class="cart-item-discount">
-                            <span class="discount-tag-cart">-${this.formatDiscountInfo(item.discount_info)}</span>
-                        </div>
-                    ` : ''}
-                    <img src="${item.image || 'https://via.placeholder.com/80'}"
-                         alt="${item.name}"
-                         class="cart-item-image">
-                    <div class="cart-item-info">
-                        <div class="cart-item-header">
-                            <h4 class="cart-item-name">${item.name}</h4>
-                            <button class="remove-item" onclick="shop.removeFromCart(${item.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                        <div class="cart-item-pricing">
-                            ${item.discounted_price && item.discounted_price < item.price ? `
-                                <div class="cart-price-discounted">
-                                    <span class="cart-item-original-price">${this.formatPrice(item.price)} ₽</span>
-                                    <span class="cart-item-price">${this.formatPrice(item.discounted_price)} ₽</span>
-                                </div>
-                            ` : `
-                                <div class="cart-item-price">${this.formatPrice(item.price)} ₽</div>
-                            `}
-                        </div>
-                        <div class="cart-item-controls">
-                            <div class="quantity-selector small">
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity - 1})"
-                                        ${item.quantity <= 1 ? 'disabled' : ''}>
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn" onclick="shop.updateCartItemQuantity(${item.id}, ${item.quantity + 1})">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                            <div class="cart-item-total">
-                                ${this.formatPrice(totalPrice)} ₽
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-
-        // Вставляем HTML
-        cartItems.innerHTML = itemsHTML;
-
-        // Обновляем сумму
-        const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        cartTotal.textContent = `${this.formatPrice(total)} ₽`;
-
-        console.log('✅ Корзина обновлена');
-    }
-
-    // Добавьте эту вспомогательную функцию для очистки уведомлений
-    clearCartNotifications() {
-        const notifications = document.querySelectorAll('.notification');
-        notifications.forEach(notification => {
-            const text = notification.textContent || '';
-            if (text.includes('Корзина уже пуста') || text.includes('Товар удален')) {
-                notification.remove();
-            }
-        });
-    }
-
-    // Добавить в класс TelegramShop
-    resetCartInterface() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        // Сбрасываем к стандартному виду корзины
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
-                    <button class="close-cart" id="closeCart" title="Закрыть">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="cart-items" id="cartItems">
-                    <!-- Товары будут здесь -->
-                </div>
-
-                <div class="cart-footer">
-                    <div class="cart-summary">
-                        <div class="cart-total">
-                            <span>Итого:</span>
-                            <span class="total-price" id="cartTotal">0 ₽</span>
-                        </div>
-                        <div class="cart-actions">
-                            <button class="btn btn-outline" id="clearCart">
-                                <i class="fas fa-trash"></i> Очистить
-                            </button>
-                            <button class="btn btn-primary" id="checkoutBtn">
-                                <i class="fas fa-paper-plane"></i> Купить
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Назначаем обработчики
-        this.bindEvent('closeCart', 'click', () => this.closeCart());
-        this.bindEvent('clearCart', 'click', () => this.clearCart());
-        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-    }
-
-    toggleCart() {
-        // ОЧИЩАЕМ все данные о доставке и предыдущих состояниях
-        this.deliveryData = {
-            type: null,
-            address_id: null,
-            pickup_point: null,
-            address_details: null
-        };
-
-        // ВСЕГДА показываем обычную корзину, а не окно подтверждения
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        // Сбрасываем содержимое корзины к стандартному виду
-        this.updateCartDisplay();
-
-        // Устанавливаем стандартный HTML для корзины
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
-                    <button class="close-cart" id="closeCart" title="Закрыть">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="cart-items" id="cartItems">
-                    <!-- Товары будут загружены через updateCartDisplay() -->
-                </div>
-
-                <div class="cart-footer">
-                    <div class="cart-summary">
-                        <div class="cart-total">
-                            <span>Итого:</span>
-                            <span class="total-price" id="cartTotal">0 ₽</span>
-                        </div>
-                        <div class="cart-actions">
-                            <button class="btn btn-outline" id="clearCart">
-                                <i class="fas fa-trash"></i> Очистить
-                            </button>
-                            <button class="btn btn-primary" id="checkoutBtn">
-                                <i class="fas fa-paper-plane"></i> Купить
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Обновляем отображение товаров
-        this.updateCartDisplay();
-
-        // Назначаем обработчики
-        this.bindEvent('closeCart', 'click', () => this.closeCart());
-        this.bindEvent('clearCart', 'click', () => this.clearCart());
-        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
-
-        // Показываем корзину
-        cartOverlay.style.display = 'flex';
-        this.updateBackButton();
-    }
-
-    closeCart() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (cartOverlay) {
-            cartOverlay.style.display = 'none';
-            this.updateBackButton();
-        }
-    }
-
-    async checkout() {
-        if (this.cart.length === 0) {
-            this.showNotification('❌ Корзина пуста!', 'error');
-            return;
-        }
-
-        // Проверяем наличие товаров (оставляем старую проверку)
-        const unavailableItems = [];
-        for (const item of this.cart) {
-            try {
-                const response = await fetch(`/api/products/${item.id}`);
-                if (response.ok) {
-                    const product = await response.json();
-                    if (product.stock < item.quantity) {
-                        unavailableItems.push({
-                            name: item.name,
-                            available: product.stock,
-                            requested: item.quantity
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error(`Ошибка проверки товара ${item.id}:`, error);
-            }
-        }
-
-        if (unavailableItems.length > 0) {
-            let message = 'Некоторые товары недоступны в запрошенном количестве:\n';
-            unavailableItems.forEach(item => {
-                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
-            });
-            this.showNotification(message, 'error');
-            return;
-        }
-
-        // ЕСЛИ ВСЕ ТОВАРЫ ДОСТУПНЫ - ПОКАЗЫВАЕМ ВЫБОР ДОСТАВКИ
-        await this.showDeliverySelection();
-    }
-
-    async showDeliverySelection() {
-        console.log('🔄 showDeliverySelection() called');
-        console.log('📊 deliveryData.type:', this.deliveryData.type);
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (!cartOverlay) return;
-
-        // Рассчитываем стоимость товаров
-        const itemsTotal = this.cart.reduce((sum, item) => {
-            const priceToShow = item.discounted_price || item.price;
-            return sum + (priceToShow * item.quantity);
-        }, 0);
-
-        // Рассчитываем стоимость доставки
-        let deliveryCost = 0;
-        let deliveryMessage = 'Бесплатно';
-
-        // Если промокод на бесплатную доставку
-        const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
-
-        if (!hasFreeDeliveryPromo && itemsTotal < 1000) {
-            deliveryCost = 100;
-            deliveryMessage = '100 ₽';
-        }
-
-        // Рассчитываем скидку от промокода если есть
-        const promoDiscount = this.appliedPromoCode ?
-            this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
-
-        const finalTotal = itemsTotal + deliveryCost - promoDiscount;
-
-        cartOverlay.innerHTML = `
-            <div class="cart-modal" style="padding: 0;">
-                <div class="cart-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C); color: white; border: none; padding: 12px 15px;">
-                    <h2 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-truck"></i> Доставка
-                    </h2>
-                    <button class="close-cart" id="closeDeliverySelection"
-                            style="color: white; background: rgba(255,255,255,0.2); width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-times" style="font-size: 14px;"></i>
-                    </button>
-                </div>
-                <div class="delivery-content" style="padding: 12px; max-height: calc(100vh - 140px); overflow-y: auto;">
-                    <div class="compact-promo-section" style="margin-bottom: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; max-width: 100%; box-sizing: border-box;">
-                        <div style="padding: 0; max-width: 100%; box-sizing: border-box;">
-                            <!-- ВОТ ПРОМОКОД ВЕРНУЛ -->
-                            <div style="margin-bottom: 16px; background: white; border-radius: 12px; padding: 12px; border: 1px solid #e0e0e0;">
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                    <i class="fas fa-ticket-alt" style="color: #667eea; font-size: 16px;"></i>
-                                    <span style="font-weight: 600; color: #333; font-size: 14px;">Промокод</span>
-                                </div>
-
-                                ${!this.appliedPromoCode ? `
-                                    <div style="display: flex; gap: 8px;">
-                                        <input type="text"
-                                               id="compactPromoCodeInput"
-                                               placeholder="Введите код"
-                                               style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; height: 40px; box-sizing: border-box;">
-                                        <button id="applyPromoBtnCompact"
-                                                style="width: 60px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px; height: 40px;">
-                                            OK
-                                        </button>
-                                    </div>
-                                ` : `
-                                    <div style="display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; padding: 10px 12px; border-radius: 8px;">
-                                        <div style="display: flex; align-items: center; gap: 8px;">
-                                            <i class="fas fa-check-circle" style="color: #4CAF50;"></i>
-                                            <div>
-                                                <div style="font-weight: 600; color: #2e7d32; font-size: 14px;">${this.appliedPromoCode.code}</div>
-                                                <div style="font-size: 12px; color: #388E3C; margin-top: 2px;">
-                                                    ${this.getPromoMessage(this.appliedPromoCode, promoDiscount)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <button id="removePromoBtnCompact"
-                                                style="background: none; border: none; color: #dc3545; cursor: pointer; padding: 4px 8px;">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                `}
-
-                                <div id="compactPromoMessage" style="margin-top: 6px; font-size: 12px; min-height: 16px;"></div>
-                            </div>
-
-                            <!-- СПОСОБ ДОСТАВКИ -->
-                            <div style="margin-bottom: 16px;">
-                                <div style="margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px;">
-                                    Способ получения
-                                </div>
-
-                                <!-- КУРЬЕР -->
-                                <div id="courierOption"
-                                     style="margin-bottom: 8px; padding: 12px; border: ${this.deliveryData.type === 'courier' ? '2px solid #667eea' : '1px solid #e0e0e0'};
-                                            border-radius: 10px; background: ${this.deliveryData.type === 'courier' ? '#f8f9ff' : 'white'}; cursor: pointer;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div style="display: flex; align-items: center; gap: 12px;">
-                                            <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'courier' ? '#667eea' : '#6c757d'};
-                                                 border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                                <i class="fas fa-truck" style="color: white; font-size: 18px;"></i>
-                                            </div>
-                                            <div>
-                                                <div style="font-weight: 600; color: #333; font-size: 16px;">Курьер</div>
-                                                <div style="font-size: 13px; color: #666; margin-top: 2px;">До двери, 30-60 мин</div>
-                                            </div>
-                                        </div>
-                                        <div style="font-weight: 600; color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? '#28a745' : '#dc3545'}; font-size: 16px;">
-                                            ${hasFreeDeliveryPromo || itemsTotal >= 1000 ? 'Бесплатно' : '100 ₽'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- САМОВЫВОЗ -->
-                                <div id="pickupOption"
-                                     style="padding: 12px; border: ${this.deliveryData.type === 'pickup' ? '2px solid #667eea' : '1px solid #e0e0e0'};
-                                            border-radius: 10px; background: ${this.deliveryData.type === 'pickup' ? '#f8f9ff' : 'white'}; cursor: pointer;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div style="display: flex; align-items: center; gap: 12px;">
-                                            <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'pickup' ? '#667eea' : '#6c757d'};
-                                                 border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                                <i class="fas fa-store" style="color: white; font-size: 18px;"></i>
-                                            </div>
-                                            <div>
-                                                <div style="font-weight: 600; color: #333; font-size: 16px;">Самовывоз</div>
-                                                <div style="font-size: 13px; color: #666; margin-top: 2px;">Из точки, 15-30 мин</div>
-                                            </div>
-                                        </div>
-                                        <div style="font-weight: 600; color: #28a745; font-size: 16px;">
-                                            Бесплатно
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- СУММА -->
-                            <div style="background: white; border-radius: 12px; padding: 16px; border: 1px solid #e0e0e0; margin-bottom: 16px;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666; font-size: 14px;">Товары:</span>
-                                    <span style="font-weight: 500; font-size: 14px;">${this.formatPrice(itemsTotal)} ₽</span>
-                                </div>
-
-                                ${promoDiscount > 0 ? `
-                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                        <span style="color: #28a745; font-size: 14px;">Скидка:</span>
-                                        <span style="color: #28a745; font-weight: 500; font-size: 14px;">-${this.formatPrice(promoDiscount)} ₽</span>
-                                    </div>
-                                ` : ''}
-
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                                    <span style="color: #666; font-size: 14px;">Доставка:</span>
-                                    <span style="color: ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? '#28a745' : '#dc3545'};
-                                          font-weight: 500; font-size: 14px;">
-                                        ${hasFreeDeliveryPromo || itemsTotal >= 1000 || this.deliveryData.type === 'pickup' ? 'Бесплатно' : '100 ₽'}
-                                    </span>
-                                </div>
-
-                                <div style="border-top: 1px solid #eee; padding-top: 12px;">
-                                    <div style="display: flex; justify-content: space-between;">
-                                        <span style="font-weight: 600; font-size: 16px;">Итого:</span>
-                                        <span style="font-weight: 700; font-size: 18px; color: #2c3e50;">${this.formatPrice(finalTotal)} ₽</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- КНОПКА НАЗАД -->
-                            <button onclick="shop.returnToCartFromDelivery()"
-                                    style="width: 100%; padding: 14px; background: white; color: #333; border: 1px solid #ddd;
-                                           border-radius: 10px; cursor: pointer; font-weight: 500; font-size: 15px;
-                                           display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <i class="fas fa-arrow-left" style="font-size: 16px;"></i>
-                                <span>Назад в корзину</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        setTimeout(() => {
-            // Курьер
-            const courierBtn = document.getElementById('courierOption');
-            const pickupBtn = document.getElementById('pickupOption');
-
-            if (courierBtn) {
-                courierBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('🚚 Курьер выбран');
-
-                    // Визуальная обратная связь
-                    courierBtn.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        courierBtn.style.transform = '';
-                    }, 100);
-
-                    // Сохраняем выбор
-                    this.deliveryData.type = 'courier';
-                    console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
-
-                    // Переходим к выбору адреса
-                    this.showAddressSelection();
-                });
-            }
-
-            if (pickupBtn) {
-                pickupBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('🏪 Самовывоз выбран');
-
-                    // Визуальная обратная связь
-                    pickupBtn.style.transform = 'scale(0.98)';
-                    setTimeout(() => {
-                        pickupBtn.style.transform = '';
-                    }, 100);
-
-                    // Сохраняем выбор
-                    this.deliveryData.type = 'pickup';
-                    console.log('📝 deliveryData.type теперь:', this.deliveryData.type);
-
-                    // Переходим к выбору точки самовывоза
-                    this.showPickupPoints();
-                });
-            }
-
-            // Промокод (ТЕПЕРЬ ЭТОТ БЛОК БУДЕТ РАБОТАТЬ)
-            if (!this.appliedPromoCode) {
-                const applyBtn = document.getElementById('applyPromoBtnCompact');
-                const promoInput = document.getElementById('compactPromoCodeInput');
-
-                if (applyBtn) {
-                    applyBtn.addEventListener('click', () => this.applyCompactPromoCode());
-                }
-
-                if (promoInput) {
-                    promoInput.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') this.applyCompactPromoCode();
-                    });
-                }
-            } else {
-                const removeBtn = document.getElementById('removePromoBtnCompact');
-                if (removeBtn) {
-                    removeBtn.addEventListener('click', () => this.removeCompactPromoCode());
-                }
-            }
-
-            // Кнопка "Назад"
-            const backBtn = document.querySelector('button[onclick="shop.returnToCartFromDelivery()"]');
-            if (backBtn) {
-                backBtn.addEventListener('click', () => this.returnToCartFromDelivery());
-            }
-
-            // Кнопка закрытия
-            const closeBtn = document.getElementById('closeDeliverySelection');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', () => this.closeCart());
-            }
-
-            console.log('✅ Обработчики назначены');
-        }, 100);
-    }
-
-    // Добавляем новый метод для обновления UI
-    updateDeliverySelectionUI() {
-        const courierBtn = document.getElementById('courierOption');
-        const pickupBtn = document.getElementById('pickupOption');
-        if (!courierBtn || !pickupBtn) return;
-        courierBtn.style.border = '1px solid #e0e0e0';
-        courierBtn.style.background = 'white';
-        pickupBtn.style.border = '1px solid #e0e0e0';
-        pickupBtn.style.background = 'white';
-        if (this.deliveryData.type === 'courier') {
-            courierBtn.style.border = '2px solid #667eea';
-            courierBtn.style.background = '#f8f9ff';
-        } else if (this.deliveryData.type === 'pickup') {
-            pickupBtn.style.border = '2px solid #667eea';
-            pickupBtn.style.background = '#f8f9ff';
-        }
-    }
-
-
-    async applyCompactPromoCode() {
-        const input = document.getElementById('compactPromoCodeInput');
-        const messageDiv = document.getElementById('compactPromoMessage');
-        const code = input?.value.trim().toUpperCase();
-
-        if (!code) {
-            this.showCompactPromoMessage('Введите промокод', 'error');
-            return;
-        }
-
-        try {
-            this.showCompactPromoMessage('<i class="fas fa-spinner fa-spin"></i> Проверка...', 'loading');
-
-            const response = await fetch('/api/check-promo-code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                const itemsTotal = this.cart.reduce((sum, item) => {
-                    return sum + ((item.discounted_price || item.price) * item.quantity);
-                }, 0);
-
-                const promo = result.promo_code;
-
-                // Проверка минимальной суммы
-                if (promo.min_order_amount > 0 && itemsTotal < promo.min_order_amount) {
-                    this.showCompactPromoMessage(`Минимум ${this.formatPrice(promo.min_order_amount)} ₽`, 'error');
-                    return;
-                }
-
-                // Сохраняем промокод
-                this.appliedPromoCode = { ...promo, code: code };
-                this.showCompactPromoMessage('✅ Промокод применен!', 'success');
-
-                // Обновляем отображение
-                setTimeout(() => this.showDeliverySelection(), 800);
-            } else {
-                this.showCompactPromoMessage(`❌ ${result.error}`, 'error');
-            }
-        } catch (error) {
-            console.error('❌ Ошибка:', error);
-            this.showCompactPromoMessage('❌ Ошибка соединения', 'error');
-        }
-    }
-
-    removeCompactPromoCode() {
-        this.appliedPromoCode = null;
-        console.log('🗑️ Удален компактный промокод');
-
-        // Обновляем отображение
-        this.showDeliverySelection();
-    }
-
-    showCompactPromoMessage(message, type = 'info') {
-        const messageDiv = document.getElementById('compactPromoMessage');
-        if (!messageDiv) return;
-
-        messageDiv.innerHTML = message;
-        messageDiv.style.padding = '4px 0';
-
-        // Стили по типу сообщения
-        if (type === 'error') {
-            messageDiv.style.color = '#dc3545';
-        } else if (type === 'success') {
-            messageDiv.style.color = '#28a745';
-        } else if (type === 'loading') {
-            messageDiv.style.color = '#0c5460';
-        } else {
-            messageDiv.style.color = '#6c757d';
-        }
-
-        // Автоматическое скрытие успешных сообщений
-        if (type === 'success') {
-            setTimeout(() => {
-                if (messageDiv.textContent.includes('✅')) {
-                    messageDiv.innerHTML = '';
-                }
-            }, 2000);
-        }
-    }
-
-    async applyUserPromoCode() {
-        const input = document.getElementById('userPromoCodeInput');
-        const messageDiv = document.getElementById('userPromoMessage');
-        const code = input?.value.trim().toUpperCase();
-
-        if (!code) {
-            this.showUserPromoMessage('❌ Введите промокод', 'error');
-            return;
-        }
-
-        try {
-            console.log(`🎟️ Пользователь проверяет промокод: ${code}`);
-
-            // Показываем загрузку
-            this.showUserPromoMessage('<i class="fas fa-spinner fa-spin"></i> Проверка промокода...', 'loading');
-
-            const response = await fetch('/api/check-promo-code', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ code: code })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // Проверяем минимальную сумму заказа
-                const itemsTotal = this.cart.reduce((sum, item) => {
-                    const priceToShow = item.discounted_price || item.price;
-                    return sum + (priceToShow * item.quantity);
-                }, 0);
-
-                const promo = result.promo_code;
-
-                // Проверка минимальной суммы
-                if (promo.min_order_amount > 0 && itemsTotal < promo.min_order_amount) {
-                    this.showUserPromoMessage(
-                        `❌ Минимальная сумма заказа для этого промокода: ${this.formatPrice(promo.min_order_amount)} ₽`,
-                        'error'
-                    );
-                    return;
-                }
-
-                // Проверка срока действия
-                if (promo.end_date) {
-                    const endDate = new Date(promo.end_date);
-                    const now = new Date();
-                    if (endDate < now) {
-                        this.showUserPromoMessage('❌ Срок действия промокода истек', 'error');
-                        return;
-                    }
-                }
-
-                // Проверка лимита использований
-                if (promo.usage_limit && promo.used_count >= promo.usage_limit) {
-                    this.showUserPromoMessage('❌ Промокод уже использован максимальное количество раз', 'error');
-                    return;
-                }
-
-                // Проверка "один на пользователя"
-                if (promo.one_per_customer) {
-                    // TODO: Проверка, использовал ли пользователь уже этот промокод
-                    console.log('⚠️ Проверка one_per_customer не реализована');
-                }
-
-                // Сохраняем промокод
-                this.appliedPromoCode = {
-                    ...promo,
-                    code: code
-                };
-
-                // Рассчитываем скидку
-                const discount = this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode);
-                const discountMessage = this.getPromoMessage(this.appliedPromoCode, discount);
-
-                // Показываем успех
-                this.showUserPromoMessage(
-                    `✅ Промокод "${code}" успешно применен! ${discountMessage}`,
-                    'success'
-                );
-
-                // Обновляем отображение
-                setTimeout(() => {
-                    this.showDeliverySelection();
-                }, 1000);
-
-                console.log('✅ Промокод применен пользователем:', this.appliedPromoCode);
-
-            } else {
-                this.showUserPromoMessage(`❌ ${result.error}`, 'error');
-                console.log('❌ Ошибка промокода:', result.error);
-            }
-
-        } catch (error) {
-            console.error('❌ Ошибка проверки промокода:', error);
-            this.showUserPromoMessage('❌ Ошибка соединения с сервером', 'error');
-        }
-    }
-
-    async selectDeliveryType(type) {
-        this.deliveryData.type = type;
-
-        if (type === 'courier') {
-            await this.showAddressSelection();
-        } else if (type === 'pickup') {
-            await this.showPickupPoints();
-        }
-    }
-
-    showCashPaymentModal(totalAmount) {
-        const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            padding: 10px;
-        `;
-
-        // Округляем до ближайших 100 рублей вверх
-        const defaultCashAmount = Math.ceil(totalAmount / 100) * 100;
-
-        modal.innerHTML = `
-            <div style="background: white; border-radius: 10px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
-                <div style="padding: 15px; border-bottom: 1px solid #eee;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; font-size: 16px; color: #333;">
-                            <i class="fas fa-money-bill-wave"></i> Наличные
-                        </h3>
-                        <button id="closeCashModal"
-                                style="background: none; border: none; color: #666; cursor: pointer; font-size: 16px; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div style="padding: 15px;">
-                    <!-- Сумма к оплате -->
-                    <div style="text-align: center; margin-bottom: 15px;">
-                        <div style="font-size: 13px; color: #666; margin-bottom: 4px;">К оплате:</div>
-                        <div style="font-size: 24px; font-weight: bold; color: #2c3e50;">${this.formatPrice(totalAmount)} ₽</div>
-                    </div>
-
-                    <!-- Ввод суммы -->
-                    <div style="margin-bottom: 15px;">
-                        <div style="font-size: 13px; color: #666; margin-bottom: 6px;">Сумма от клиента:</div>
-                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                            <input type="number"
-                                   id="cashAmountCompact"
-                                   value="${defaultCashAmount}"
-                                   min="${totalAmount}"
-                                   step="1"
-                                   style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; text-align: center;">
-                        </div>
-
-                        <!-- Быстрые кнопки -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px;">
-                            <button class="cash-add-btn" data-amount="100"
-                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                                +100 ₽
-                            </button>
-                            <button class="cash-add-btn" data-amount="500"
-                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                                +500 ₽
-                            </button>
-                            <button class="cash-add-btn" data-amount="1000"
-                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                                +1000 ₽
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Сдача -->
-                    <div id="changeResultCompact" style="display: none; margin-bottom: 15px;">
-                        <div style="background: #f8f9fa; border-radius: 6px; padding: 12px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <div style="font-size: 13px; color: #666;">Сдача:</div>
-                                <div id="changeAmountCompact" style="font-size: 18px; font-weight: bold; color: #28a745;">0 ₽</div>
-                            </div>
-                            <div id="changeBreakdownCompact" style="font-size: 11px; color: #666;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Кнопки действий -->
-                    <div style="display: flex; gap: 8px;">
-                        <button id="cancelCashModal"
-                                style="flex: 1; padding: 12px; background: #f8f9fa; color: #333; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                            Отмена
-                        </button>
-                        <button id="confirmCashCompact"
-                                style="flex: 1; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                            Готово
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        // Назначаем обработчики событий
-        const cashInput = document.getElementById('cashAmountCompact');
-        const closeBtn = document.getElementById('closeCashModal');
-        const cancelBtn = document.getElementById('cancelCashModal');
-        const confirmBtn = document.getElementById('confirmCashCompact');
-        const addBtns = modal.querySelectorAll('.cash-add-btn');
-
-        if (cashInput) {
-            // Устанавливаем минимальное значение
-            cashInput.min = totalAmount;
-
-            // Сразу проверяем сдачу
-            this.calculateChangeCompact(totalAmount);
-
-            // Обработчик изменения суммы
-            cashInput.addEventListener('input', () => this.calculateChangeCompact(totalAmount));
-        }
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => modal.remove());
-        }
-
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => modal.remove());
-        }
-
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', () => {
-                this.confirmCashPaymentCompact(totalAmount);
-                modal.remove();
-            });
-        }
-
-        // Обработчики для кнопок +100/500/1000
-        addBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const amount = parseInt(e.target.dataset.amount) || 100;
-                this.adjustCashAmountCompact(amount);
-            });
-        });
-    }
-
-    confirmCashPaymentCompact(totalAmount) {
-        const cashInput = document.getElementById('cashAmountCompact');
-        const changeElement = document.getElementById('changeAmountCompact');
-
-        if (!cashInput || !changeElement) return;
-
-        const cashAmount = parseFloat(cashInput.value);
-        const change = parseFloat(changeElement.textContent.replace(' ₽', '').replace(/\s/g, '')) || 0;
-
-        // Сохраняем информацию
-        this.cashPaymentInfo = {
-            total: totalAmount,
-            received: cashAmount,
-            change: change,
-            payment_method: 'cash',
-            timestamp: new Date().toISOString()
-        };
-
-        // Закрываем модальное окно
-        const modal = document.querySelector('.modal-overlay');
-        if (modal) {
-            modal.remove();
-        }
-
-        // Продолжаем оформление
-        this.confirmOrderWithCash();
-    }
-
-    adjustCashAmountCompact(amount) {
-        const cashInput = document.getElementById('cashAmountCompact');
-        if (!cashInput) return;
-
-        let currentValue = parseInt(cashInput.value) || 0;
-        let newValue = currentValue + amount;
-
-        // ВАЖНО: Не позволяем уменьшить ниже минимальной суммы
-        const minAmount = parseFloat(cashInput.min) || 0;
-        if (newValue < minAmount) {
-            newValue = minAmount;
-        }
-
-        cashInput.value = newValue;
-        this.calculateChangeCompact(minAmount);
-    }
-
-
-        // Метод для установки точной суммы
-    setExactCashAmount(amount) {
-        const cashInput = document.getElementById('cashAmount');
-        if (cashInput) {
-            cashInput.value = amount;
-            this.calculateChange();
-        }
-    }
-
-
-        // Метод расчета сдачи
-    calculateChangeCompact(totalAmount) {
-        const cashInput = document.getElementById('cashAmountCompact');
-        const changeResult = document.getElementById('changeResultCompact');
-        const changeAmount = document.getElementById('changeAmountCompact');
-        const changeBreakdown = document.getElementById('changeBreakdownCompact');
-        const confirmBtn = document.getElementById('confirmCashCompact');
-
-        if (!cashInput || !changeResult) return;
-
-        const cashAmount = parseFloat(cashInput.value) || 0;
-
-        // ВАЖНО: Проверяем, что сумма не меньше требуемой
-        if (cashAmount >= totalAmount) {
-            const change = cashAmount - totalAmount;
-
-            changeResult.style.display = 'block';
-            changeAmount.textContent = `${this.formatPrice(change)} ₽`;
-
-            if (change > 0) {
-                const breakdown = this.calculateCashBreakdown(change);
-                changeBreakdown.innerHTML = breakdown;
-            } else {
-                changeBreakdown.innerHTML = '<div style="text-align: center; color: #28a745;">Без сдачи</div>';
-            }
-
-            confirmBtn.disabled = false;
-            confirmBtn.innerHTML = `Готово`;
-        } else {
-            changeResult.style.display = 'none';
-            confirmBtn.disabled = true;
-            confirmBtn.innerHTML = `Минимум ${this.formatPrice(totalAmount)} ₽`;
-        }
-    }
-
-        // Метод расчета разменных купюр
-    calculateCashBreakdown(amount) {
-        if (amount <= 0) return '';
-
-        const denominations = [
-            { value: 5000, name: '5000 ₽' },
-            { value: 2000, name: '2000 ₽' },
-            { value: 1000, name: '1000 ₽' },
-            { value: 500, name: '500 ₽' },
-            { value: 200, name: '200 ₽' },
-            { value: 100, name: '100 ₽' },
-            { value: 50, name: '50 ₽' },
-            { value: 10, name: '10 ₽' },
-            { value: 5, name: '5 ₽' },
-            { value: 2, name: '2 ₽' },
-            { value: 1, name: '1 ₽' }
-        ];
-
-        let remaining = Math.round(amount);
-        let result = [];
-        let html = '<div class="breakdown-grid">';
-
-        for (const denom of denominations) {
-            if (remaining >= denom.value) {
-                const count = Math.floor(remaining / denom.value);
-                remaining = remaining % denom.value;
-
-                if (count > 0) {
-                    result.push(`${count} × ${denom.name}`);
-
-                    // Добавляем в HTML с иконками
-                    const icon = denom.value >= 100 ? 'fa-money-bill' : 'fa-coins';
-                    html += `
-                        <div class="breakdown-item">
-                            <div class="denomination-icon">
-                                <i class="fas ${icon}"></i>
-                            </div>
-                            <div class="denomination-info">
-                                <span class="denomination-count">${count}</span>
-                                <span class="denomination-sign">×</span>
-                                <span class="denomination-value">${denom.name}</span>
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-        }
-
-        html += '</div>';
-
-        // Если осталась мелочь (меньше рубля)
-        if (remaining > 0) {
-            html += `<div class="small-change">Мелкая сдача: ${remaining} коп.</div>`;
-        }
-
-        return html;
-    }
-
-    // Метод подтверждения оплаты наличными
-    confirmCashPayment(totalAmount) {
-        const cashInput = document.getElementById('cashAmount');
-        const changeElement = document.getElementById('changeAmount');
-
-        if (!cashInput || !changeElement) return;
-
-        const cashAmount = parseFloat(cashInput.value);
-        const changeText = changeElement.textContent.replace(/\s/g, '').replace('₽', '');
-        const change = parseFloat(changeText) || 0;
-
-        // Сохраняем информацию о наличной оплате
-        this.cashPaymentInfo = {
-            total: totalAmount,
-            received: cashAmount,
-            change: change,
-            payment_method: 'cash',
-            timestamp: new Date().toISOString(),
-            breakdown: this.calculateCashBreakdown(change)
-        };
-
-        // Закрываем модальное окно
-        const modal = document.querySelector('.cash-payment-modal');
-        if (modal) {
-            modal.remove();
-        }
-
-        // Продолжаем оформление заказа с информацией о наличных
-        this.confirmOrderWithCash();
-    }
-
-    async confirmOrderWithCash() {
-        try {
-            console.log('💰 Информация об оплате наличными:', this.cashPaymentInfo);
-
-            // Добавляем информацию о наличной оплате к данным заказа
-            this.deliveryData.cash_payment = this.cashPaymentInfo;
-            this.deliveryData.payment_method = 'cash';
-
-            // Продолжаем оформление заказа
-            await this.confirmOrder();
-
-        } catch (error) {
-            console.error('❌ Ошибка подтверждения оплаты наличными:', error);
-            this.showNotification('❌ Ошибка обработки оплаты', 'error');
-        }
-    }
-
-    returnToCartFromDelivery() {
-        console.log('🔙 Возврат в корзину из выбора доставки');
-
-        // Сбрасываем данные доставки
-        this.deliveryData = {
-            type: null,
-            address_id: null,
-            pickup_point: null,
-            address_details: null
-        };
-
-        // Закрываем текущее окно выбора доставки
-        this.closeCart();
-
-        // Даём время на анимацию закрытия (300ms)
-        setTimeout(() => {
-            // Восстанавливаем обычный интерфейс корзины
-            this.resetCartInterface();
-
-            // Обновляем отображение товаров
-            this.updateCartDisplay();
-
-            // ОТКРЫВАЕМ корзину снова
-            const cartOverlay = document.getElementById('cartOverlay');
-            if (cartOverlay) {
-                cartOverlay.style.display = 'flex';
-                this.updateBackButton();
-            }
-        }, 300);
-    }
+    // ========== МЕТОДЫ АДРЕСА И ДОСТАВКИ ==========
 
     async showAddressSelection() {
         try {
-            // Используем this.userId из конструктора
             const userId = this.userId;
-
-            // ЕСЛИ userId = 0 (гость), все равно проверяем localStorage
             let addresses = [];
 
             if (userId !== 0) {
-                // Загружаем с сервера для зарегистрированных
                 const response = await fetch(`/api/user/addresses?user_id=${userId}`);
-                if (response.ok) {
-                    addresses = await response.json();
-                }
+                if (response.ok) addresses = await response.json();
             } else {
-                // Для гостей пробуем получить из localStorage
                 const guestAddresses = localStorage.getItem('guest_addresses');
-                if (guestAddresses) {
-                    addresses = JSON.parse(guestAddresses);
-                }
+                if (guestAddresses) addresses = JSON.parse(guestAddresses);
             }
 
             const cartOverlay = document.getElementById('cartOverlay');
@@ -3033,7 +1614,7 @@ class TelegramShop {
                     </div>
 
                     <div class="delivery-actions">
-                        <button class="btn btn-primary" onclick="shop.showAddressForm(${this.userId})">
+                        <button class="btn btn-primary" onclick="shop.showAddressForm()">
                             <i class="fas fa-plus"></i> Добавить новый адрес
                         </button>
                         <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
@@ -3045,50 +1626,7 @@ class TelegramShop {
 
         } catch (error) {
             console.error('❌ Ошибка загрузки адресов:', error);
-            // Показываем форму для ввода адреса
-            await this.showAddressForm(this.userId);
-        }
-    }
-
-    // Добавить в класс TelegramShop
-    saveGuestAddress(addressData) {
-        try {
-            // Получаем текущие адреса гостя
-            const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-
-            // Добавляем новый адрес
-            guestAddresses.push({
-                ...addressData,
-                id: guestAddresses.length + 1,
-                is_default: guestAddresses.length === 0 // Первый адрес по умолчанию
-            });
-
-            // Сохраняем в localStorage
-            localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
-
-            return { success: true, id: guestAddresses.length };
-        } catch (error) {
-            console.error('Ошибка сохранения адреса гостя:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    removeGuestAddress(index) {
-        try {
-            const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-
-            if (index >= 0 && index < guestAddresses.length) {
-                guestAddresses.splice(index, 1);
-                localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
-
-                // Обновляем отображение
-                this.showAddressSelection();
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('Ошибка удаления адреса гостя:', error);
-            return false;
+            await this.showAddressForm();
         }
     }
 
@@ -3154,31 +1692,12 @@ class TelegramShop {
                     <button class="btn btn-primary" onclick="shop.saveAddress()">
                         <i class="fas fa-save"></i> Сохранить адрес
                     </button>
-                    <!-- ТОЛЬКО НАЗАД -->
                     <button class="btn btn-outline" onclick="shop.showAddressSelection()">
                         <i class="fas fa-arrow-left"></i> Назад
                     </button>
                 </div>
             </div>
         `;
-    }
-
-    returnToCart() {
-        console.log('↩️ Возврат в корзину');
-
-        // Очищаем данные о доставке
-        this.deliveryData = {
-            type: null,
-            address_id: null,
-            pickup_point: null,
-            address_details: null
-        };
-
-        // Обновляем отображение корзины
-        this.updateCartDisplay();
-
-        // Показываем уведомление (опционально)
-        this.showNotification('Возвращено в корзину', 'info');
     }
 
     async saveAddress() {
@@ -3195,7 +1714,6 @@ class TelegramShop {
                 phone: document.getElementById('recipientPhone').value
             };
 
-            // Проверка обязательных полей
             if (!addressData.city || !addressData.street || !addressData.house || !addressData.recipient_name) {
                 this.showNotification('❌ Заполните обязательные поля', 'error');
                 return;
@@ -3204,15 +1722,11 @@ class TelegramShop {
             let result;
 
             if (this.userId === 0) {
-                // Для гостя сохраняем в localStorage
                 result = this.saveGuestAddress(addressData);
             } else {
-                // Для зарегистрированных пользователей - на сервер
                 const response = await fetch('/api/user/addresses', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(addressData)
                 });
                 result = await response.json();
@@ -3221,12 +1735,9 @@ class TelegramShop {
             if (result.success) {
                 this.deliveryData.address_id = result.id;
                 this.showNotification('✅ Адрес сохранен', 'success');
-
-                // ВМЕСТО confirmOrder() -> возвращаем к выбору адреса
                 setTimeout(() => {
                     this.showAddressSelection();
                 }, 1000);
-
             } else {
                 throw new Error(result.error || 'Ошибка сохранения');
             }
@@ -3234,6 +1745,69 @@ class TelegramShop {
         } catch (error) {
             console.error('Ошибка сохранения адреса:', error);
             this.showNotification(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    saveGuestAddress(addressData) {
+        try {
+            const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
+            guestAddresses.push({
+                ...addressData,
+                id: guestAddresses.length + 1,
+                is_default: guestAddresses.length === 0
+            });
+            localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
+            return { success: true, id: guestAddresses.length };
+        } catch (error) {
+            console.error('Ошибка сохранения адреса гостя:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    removeGuestAddress(index) {
+        try {
+            const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
+            if (index >= 0 && index < guestAddresses.length) {
+                guestAddresses.splice(index, 1);
+                localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
+                this.showAddressSelection();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Ошибка удаления адреса гостя:', error);
+            return false;
+        }
+    }
+
+    async selectAddress(addressId) {
+        try {
+            console.log('📍 Выбран адрес ID:', addressId, 'для пользователя ID:', this.userId);
+
+            if (this.userId === 0) {
+                this.deliveryData.address_id = `guest_${addressId}`;
+                const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
+                const addressIndex = addressId;
+                this.deliveryData.address_details = guestAddresses[addressIndex] || null;
+            } else {
+                this.deliveryData.address_id = addressId;
+                try {
+                    const response = await fetch(`/api/user/addresses?user_id=${this.userId}`);
+                    if (response.ok) {
+                        const addresses = await response.json();
+                        const selectedAddress = addresses.find(addr => addr.id === addressId);
+                        this.deliveryData.address_details = selectedAddress || null;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Не удалось загрузить детали адреса:', error);
+                }
+            }
+
+            await this.showPaymentSelection();
+
+        } catch (error) {
+            console.error('❌ Ошибка выбора адреса:', error);
+            this.showNotification('❌ Ошибка выбора адреса', 'error');
         }
     }
 
@@ -3246,7 +1820,6 @@ class TelegramShop {
             if (!cartOverlay) return;
 
             let pointsHTML = '';
-
             points.forEach(point => {
                 pointsHTML += `
                     <div class="pickup-card" onclick="shop.selectPickupPoint(${point.id})">
@@ -3295,50 +1868,32 @@ class TelegramShop {
         await this.showPaymentSelection();
     }
 
+    // ========== МЕТОДЫ ОПЛАТЫ ==========
+
     async showPaymentSelection() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
-        // Рассчитываем сумму товаров
         const itemsTotal = this.cart.reduce((sum, item) => {
             const priceToShow = item.discounted_price || item.price;
             return sum + (priceToShow * item.quantity);
         }, 0);
 
-        // Рассчитываем скидку от промокода
         const promoDiscount = this.appliedPromoCode ?
             this.calculatePromoDiscount(itemsTotal, this.appliedPromoCode) : 0;
 
-        // ВАЖНО: Рассчитываем стоимость доставки ТАК ЖЕ как в showDeliverySelection()
         let deliveryCost = 0;
         const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
-        console.log('💰 Расчет для оплаты:', {
-            itemsTotal,
-            deliveryType: this.deliveryData.type,
-            hasFreeDeliveryPromo,
-            promoDiscount
-        });
-
-        // ЛОГИКА РАСЧЕТА ДОСТАВКИ (такая же как везде)
         if (this.deliveryData.type === 'courier') {
             if (hasFreeDeliveryPromo) {
                 deliveryCost = 0;
-                console.log('🚚 Доставка бесплатная по промокоду');
             } else if (itemsTotal < 1000) {
                 deliveryCost = 100;
-                console.log('💰 Доставка платная: +100₽');
             }
         }
 
         const totalAmount = itemsTotal + deliveryCost - promoDiscount;
-
-        console.log('✅ Итог для оплаты:', {
-            itemsTotal,
-            deliveryCost,
-            promoDiscount,
-            totalAmount
-        });
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
@@ -3352,8 +1907,7 @@ class TelegramShop {
                 <div class="order-summary">
                     <h3><i class="fas fa-receipt"></i> Сумма к оплате:</h3>
                     <div class="total-amount">${this.formatPrice(totalAmount)} ₽</div>
-                    <!-- ДОБАВЛЯЕМ РАСШИФРОВКУ -->
-                    <div class="price-breakdown" style="font-size: 14px; color: #666; margin-top: 8px;">
+                    <div class="price-breakdown">
                         <div>Товары: ${this.formatPrice(itemsTotal)} ₽</div>
                         ${deliveryCost > 0 ? `<div>Доставка: ${this.formatPrice(deliveryCost)} ₽</div>` : ''}
                         ${promoDiscount > 0 ? `<div>Скидка: -${this.formatPrice(promoDiscount)} ₽</div>` : ''}
@@ -3403,9 +1957,7 @@ class TelegramShop {
             </div>
         `;
 
-        // Назначаем обработчики
         document.getElementById('cashOption').addEventListener('click', () => {
-            // ВАЖНО: Передаем правильную сумму в selectPaymentMethod
             this.selectPaymentMethod('cash', totalAmount);
         });
 
@@ -3430,31 +1982,21 @@ class TelegramShop {
 
     selectPaymentMethod(method, totalAmount = null) {
         if (method === 'cash') {
-            // Если totalAmount передан - используем его, иначе рассчитываем
             const finalAmount = totalAmount !== null ? totalAmount : this.calculateTotalAmount();
-
             console.log('💵 Сумма для наличных:', finalAmount);
-
-            // Показываем модальное окно с ПРАВИЛЬНОЙ суммой
             this.showCashPaymentModal(finalAmount);
         } else {
-            // Для других методов оплаты
             this.deliveryData.payment_method = method;
-
             const methodNames = {
                 'cash': 'Наличные',
                 'transfer': 'Перевод курьеру',
                 'terminal': 'Терминал'
             };
-
             this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
-
-            // Переходим к оформлению заказа
             this.confirmOrder();
         }
     }
 
-    // Добавляем вспомогательный метод
     calculateTotalAmount() {
         const itemsTotal = this.cart.reduce((sum, item) => {
             const priceToShow = item.discounted_price || item.price;
@@ -3474,78 +2016,294 @@ class TelegramShop {
         return itemsTotal + deliveryCost - promoDiscount;
     }
 
+    showCashPaymentModal(totalAmount) {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 10px;
+        `;
 
-    async selectAddress(addressId) {
-        try {
-            console.log('📍 Выбран адрес ID:', addressId, 'для пользователя ID:', this.userId);
+        const defaultCashAmount = Math.ceil(totalAmount / 100) * 100;
 
-            if (this.userId === 0) {
-                // Для гостя
-                this.deliveryData.address_id = `guest_${addressId}`;
+        modal.innerHTML = `
+            <div style="background: white; border-radius: 10px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
+                <div style="padding: 15px; border-bottom: 1px solid #eee;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; font-size: 16px; color: #333;">
+                            <i class="fas fa-money-bill-wave"></i> Наличные
+                        </h3>
+                        <button id="closeCashModal"
+                                style="background: none; border: none; color: #666; cursor: pointer; font-size: 16px; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
 
-                // Получаем полные данные адреса
-                const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-                const addressIndex = addressId; // addressId уже индекс для гостей
-                this.deliveryData.address_details = guestAddresses[addressIndex] || null;
+                <div style="padding: 15px;">
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <div style="font-size: 13px; color: #666; margin-bottom: 4px;">К оплате:</div>
+                        <div style="font-size: 24px; font-weight: bold; color: #2c3e50;">${this.formatPrice(totalAmount)} ₽</div>
+                    </div>
 
-                console.log('🏠 Адресные данные гостя:', this.deliveryData.address_details);
+                    <div style="margin-bottom: 15px;">
+                        <div style="font-size: 13px; color: #666; margin-bottom: 6px;">Сумма от клиента:</div>
+                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                            <input type="number"
+                                   id="cashAmountCompact"
+                                   value="${defaultCashAmount}"
+                                   min="${totalAmount}"
+                                   step="1"
+                                   style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; text-align: center;">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px;">
+                            <button class="cash-add-btn" data-amount="100"
+                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                +100 ₽
+                            </button>
+                            <button class="cash-add-btn" data-amount="500"
+                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                +500 ₽
+                            </button>
+                            <button class="cash-add-btn" data-amount="1000"
+                                    style="padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                +1000 ₽
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="changeResultCompact" style="display: none; margin-bottom: 15px;">
+                        <div style="background: #f8f9fa; border-radius: 6px; padding: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="font-size: 13px; color: #666;">Сдача:</div>
+                                <div id="changeAmountCompact" style="font-size: 18px; font-weight: bold; color: #28a745;">0 ₽</div>
+                            </div>
+                            <div id="changeBreakdownCompact" style="font-size: 11px; color: #666;"></div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                        <button id="cancelCashModal"
+                                style="flex: 1; padding: 12px; background: #f8f9fa; color: #333; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            Отмена
+                        </button>
+                        <button id="confirmCashCompact"
+                                style="flex: 1; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            Готово
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const cashInput = document.getElementById('cashAmountCompact');
+        const closeBtn = document.getElementById('closeCashModal');
+        const cancelBtn = document.getElementById('cancelCashModal');
+        const confirmBtn = document.getElementById('confirmCashCompact');
+        const addBtns = modal.querySelectorAll('.cash-add-btn');
+
+        if (cashInput) {
+            cashInput.min = totalAmount;
+            this.calculateChangeCompact(totalAmount);
+            cashInput.addEventListener('input', () => this.calculateChangeCompact(totalAmount));
+        }
+
+        if (closeBtn) closeBtn.addEventListener('click', () => modal.remove());
+        if (cancelBtn) cancelBtn.addEventListener('click', () => modal.remove());
+        if (confirmBtn) confirmBtn.addEventListener('click', () => {
+            this.confirmCashPaymentCompact(totalAmount);
+            modal.remove();
+        });
+
+        addBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const amount = parseInt(e.target.dataset.amount) || 100;
+                this.adjustCashAmountCompact(amount);
+            });
+        });
+    }
+
+    adjustCashAmountCompact(amount) {
+        const cashInput = document.getElementById('cashAmountCompact');
+        if (!cashInput) return;
+
+        let currentValue = parseInt(cashInput.value) || 0;
+        let newValue = currentValue + amount;
+
+        const minAmount = parseFloat(cashInput.min) || 0;
+        if (newValue < minAmount) newValue = minAmount;
+
+        cashInput.value = newValue;
+        this.calculateChangeCompact(minAmount);
+    }
+
+    calculateChangeCompact(totalAmount) {
+        const cashInput = document.getElementById('cashAmountCompact');
+        const changeResult = document.getElementById('changeResultCompact');
+        const changeAmount = document.getElementById('changeAmountCompact');
+        const changeBreakdown = document.getElementById('changeBreakdownCompact');
+        const confirmBtn = document.getElementById('confirmCashCompact');
+
+        if (!cashInput || !changeResult) return;
+
+        const cashAmount = parseFloat(cashInput.value) || 0;
+
+        if (cashAmount >= totalAmount) {
+            const change = cashAmount - totalAmount;
+
+            changeResult.style.display = 'block';
+            changeAmount.textContent = `${this.formatPrice(change)} ₽`;
+
+            if (change > 0) {
+                const breakdown = this.calculateCashBreakdown(change);
+                changeBreakdown.innerHTML = breakdown;
             } else {
-                // Для зарегистрированного пользователя
-                this.deliveryData.address_id = addressId;
-
-                // Загружаем полные данные адреса с сервера
-                try {
-                    const response = await fetch(`/api/user/addresses?user_id=${this.userId}`);
-                    if (response.ok) {
-                        const addresses = await response.json();
-                        const selectedAddress = addresses.find(addr => addr.id === addressId);
-                        this.deliveryData.address_details = selectedAddress || null;
-                        console.log('👤 Адресные данные с сервера:', this.deliveryData.address_details);
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Не удалось загрузить детали адреса:', error);
-                }
+                changeBreakdown.innerHTML = '<div style="text-align: center; color: #28a745;">Без сдачи</div>';
             }
 
-            // ВМЕСТО confirmOrder() -> показываем выбор оплаты
-            await this.showPaymentSelection();
-
-        } catch (error) {
-            console.error('❌ Ошибка выбора адреса:', error);
-            this.showNotification('❌ Ошибка выбора адреса', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `Готово`;
+        } else {
+            changeResult.style.display = 'none';
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = `Минимум ${this.formatPrice(totalAmount)} ₽`;
         }
     }
 
-    // ========== НОВЫЕ ФУНКЦИИ ДЛЯ БОТА И УВЕДОМЛЕНИЙ ==========
+    calculateCashBreakdown(amount) {
+        if (amount <= 0) return '';
 
-    async notifyBotAboutOrder(orderId, status) {
-        // Отправить уведомление боту о статусе заказа
+        const denominations = [
+            { value: 5000, name: '5000 ₽' },
+            { value: 2000, name: '2000 ₽' },
+            { value: 1000, name: '1000 ₽' },
+            { value: 500, name: '500 ₽' },
+            { value: 200, name: '200 ₽' },
+            { value: 100, name: '100 ₽' },
+            { value: 50, name: '50 ₽' },
+            { value: 10, name: '10 ₽' },
+            { value: 5, name: '5 ₽' },
+            { value: 2, name: '2 ₽' },
+            { value: 1, name: '1 ₽' }
+        ];
+
+        let remaining = Math.round(amount);
+        let html = '<div class="breakdown-grid">';
+
+        for (const denom of denominations) {
+            if (remaining >= denom.value) {
+                const count = Math.floor(remaining / denom.value);
+                remaining = remaining % denom.value;
+
+                if (count > 0) {
+                    const icon = denom.value >= 100 ? 'fa-money-bill' : 'fa-coins';
+                    html += `
+                        <div class="breakdown-item">
+                            <div class="denomination-icon">
+                                <i class="fas ${icon}"></i>
+                            </div>
+                            <div class="denomination-info">
+                                <span class="denomination-count">${count}</span>
+                                <span class="denomination-sign">×</span>
+                                <span class="denomination-value">${denom.name}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        html += '</div>';
+
+        if (remaining > 0) {
+            html += `<div class="small-change">Мелкая сдача: ${remaining} коп.</div>`;
+        }
+
+        return html;
+    }
+
+    confirmCashPaymentCompact(totalAmount) {
+        const cashInput = document.getElementById('cashAmountCompact');
+        const changeElement = document.getElementById('changeAmountCompact');
+
+        if (!cashInput || !changeElement) return;
+
+        const cashAmount = parseFloat(cashInput.value);
+        const change = parseFloat(changeElement.textContent.replace(' ₽', '').replace(/\s/g, '')) || 0;
+
+        this.cashPaymentInfo = {
+            total: totalAmount,
+            received: cashAmount,
+            change: change,
+            payment_method: 'cash',
+            timestamp: new Date().toISOString()
+        };
+
+        this.deliveryData.cash_payment = this.cashPaymentInfo;
+        this.deliveryData.payment_method = 'cash';
+
+        const modal = document.querySelector('.modal-overlay');
+        if (modal) modal.remove();
+
+        this.confirmOrder();
+    }
+
+    // ========== СОЗДАНИЕ ЗАКАЗА ==========
+
+    async createOrder(orderData) {
+        if (this.userId && this.userId !== 0) {
+            localStorage.setItem('telegram_user_id', this.userId);
+            localStorage.setItem('telegram_username', this.username || 'Пользователь');
+        } else {
+            const savedId = localStorage.getItem('telegram_user_id');
+            const savedUsername = localStorage.getItem('telegram_username');
+            if (savedId && savedId !== '0') {
+                this.userId = parseInt(savedId);
+                this.username = savedUsername || 'Пользователь';
+            }
+        }
+
+        if (orderData.total && typeof orderData.total === 'string') {
+            orderData.total = parseFloat(orderData.total);
+        }
+
+        orderData.user_id = parseInt(this.userId) || 0;
+        orderData.username = this.username || 'Гость';
+
+        if (orderData.items && Array.isArray(orderData.items)) {
+            orderData.items = orderData.items.map(item => ({
+                ...item,
+                id: parseInt(item.id) || 0,
+                quantity: parseInt(item.quantity) || 1,
+                price: parseFloat(item.price) || 0
+            }));
+        }
+
+        console.log('📦 Создание заказа с данными:', orderData);
+
         try {
-            const response = await fetch('/api/notify-bot', {
+            const response = await fetch('/api/create-order', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_id: orderId,
-                    status: status,
-                    user_id: this.userId
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
             });
 
-            const result = await response.json();
-
-            if (result.success) {
-                console.log(`📢 Уведомление для заказа #${orderId} отправлено в бот (статус: ${status})`);
-            } else {
-                console.warn(`⚠️ Ошибка отправки уведомления: ${result.error}`);
-            }
-
-            return result.success;
-
+            return await response.json();
         } catch (error) {
-            console.error('❌ Ошибка связи с ботом:', error);
-            return false;
+            console.error('❌ Ошибка создания заказа:', error);
+            throw error;
         }
     }
 
@@ -3553,13 +2311,11 @@ class TelegramShop {
         try {
             console.log('🔍 Начинаем оформление заказа...');
 
-            // Рассчитываем сумму товаров
             const itemsTotal = this.cart.reduce((sum, item) => {
                 const priceToShow = item.discounted_price || item.price;
                 return sum + (priceToShow * item.quantity);
             }, 0);
 
-            // Скидка от промокода
             let promoDiscount = 0;
             let promoCodeApplied = false;
 
@@ -3569,7 +2325,6 @@ class TelegramShop {
                 console.log(`🎟️ Промокод "${this.appliedPromoCode.code}": ${promoDiscount} руб, тип: ${this.appliedPromoCode.discount_type}`);
             }
 
-            // Стоимость доставки
             let deliveryCost = 0;
             const hasFreeDeliveryPromo = this.appliedPromoCode?.discount_type === 'free_delivery';
 
@@ -3579,15 +2334,6 @@ class TelegramShop {
 
             const totalWithDelivery = itemsTotal + deliveryCost - promoDiscount;
 
-            console.log('🧮 Итоговый расчет:', {
-                itemsTotal,
-                deliveryCost,
-                promoDiscount,
-                promoType: this.appliedPromoCode?.discount_type,
-                totalWithDelivery
-            });
-
-            // Формируем данные заказа
             const orderItems = this.cart.map(item => ({
                 id: item.original_product_id || item.id,
                 name: item.name,
@@ -3597,7 +2343,6 @@ class TelegramShop {
                 is_weight: item.is_weight || false
             }));
 
-            // Данные доставки
             let deliveryDetails = {};
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_details) {
                 deliveryDetails = {
@@ -3613,7 +2358,7 @@ class TelegramShop {
             const recipient_name = this.deliveryData.address_details?.recipient_name || this.username || 'Получатель';
             const phone_number = this.deliveryData.address_details?.phone || '';
 
-             const orderData = {
+            const orderData = {
                 user_id: parseInt(this.userId) || 0,
                 username: this.username || 'Гость',
                 items: orderItems,
@@ -3628,37 +2373,27 @@ class TelegramShop {
                 promo_code: this.appliedPromoCode?.code || null,
                 promo_code_id: this.appliedPromoCode?.id || null,
                 discount_amount: promoDiscount,
-                delivery_cost: deliveryCost, // ВАЖНО: отдельно передаем стоимость доставки
+                delivery_cost: deliveryCost,
                 total_with_delivery: totalWithDelivery
             };
 
             console.log('📤 Отправка заказа на сервер:', orderData);
-            console.log(`💰 Итоговая сумма: ${totalWithDelivery} руб (товары: ${itemsTotal} руб + доставка: ${deliveryCost} руб)`);
 
-            // Используем метод createOrder класса
             const result = await this.createOrder(orderData);
             console.log('📥 Ответ сервера:', result);
 
             if (result.success) {
-                // Отправляем уведомление боту
                 await this.notifyBotAboutOrder(result.order_id, 'created');
-
-                // Показываем подтверждение заказа
                 this.showOrderConfirmation(result.order_id, itemsTotal, deliveryCost, totalWithDelivery);
-
-                // Очищаем корзину ПОСЛЕ показа подтверждения
                 this.cart = [];
                 this.saveCart();
                 this.updateCartCount();
-
-                // Очищаем данные доставки
                 this.deliveryData = {
                     type: null,
                     address_id: null,
                     pickup_point: null,
                     address_details: null
                 };
-
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка сервера');
             }
@@ -3670,23 +2405,43 @@ class TelegramShop {
         }
     }
 
+    async notifyBotAboutOrder(orderId, status) {
+        try {
+            const response = await fetch('/api/notify-bot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    status: status,
+                    user_id: this.userId
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                console.log(`📢 Уведомление для заказа #${orderId} отправлено в бот`);
+            } else {
+                console.warn(`⚠️ Ошибка отправки уведомления: ${result.error}`);
+            }
+            return result.success;
+        } catch (error) {
+            console.error('❌ Ошибка связи с ботом:', error);
+            return false;
+        }
+    }
+
     showOrderConfirmation(orderId, itemsTotal = 0, deliveryCost = 0, totalWithDelivery = 0) {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
-        const deliveryText = this.deliveryData.type === 'courier'
-            ? 'Доставка курьером'
-            : 'Самовывоз';
-
+        const deliveryText = this.deliveryData.type === 'courier' ? 'Доставка курьером' : 'Самовывоз';
         const paymentMethods = {
             'cash': 'Наличные',
             'transfer': 'Перевод курьеру',
             'terminal': 'Терминал'
         };
-
         const paymentText = paymentMethods[this.deliveryData.payment_method] || 'Наличные';
 
-        // ========== ИЗМЕНЕННОЕ ОТОБРАЖЕНИЕ С УЧЕТОМ ДОСТАВКИ ==========
         let deliveryInfo = '';
         if (this.deliveryData.type === 'courier') {
             if (deliveryCost > 0) {
@@ -3746,92 +2501,10 @@ class TelegramShop {
             }, 300);
         });
     }
-    // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-    formatPrice(price) {
-        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
-    }
 
-    showLoading(show) {
-        const loading = document.getElementById('loading');
-        if (loading) {
-            loading.style.display = show ? 'block' : 'none';
-        }
-    }
+    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
-
-
-
-
-    showNotification(message, type = 'info') {
-        console.log(`💬 [${type.toUpperCase()}] ${message}`);
-
-        // Создаем контейнер для уведомлений если его нет
-        let container = document.getElementById('notifications');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'notifications';
-            document.body.appendChild(container);
-        }
-
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.innerHTML = `
-            <div class="notification-icon">
-                <i class="fas fa-${type === 'success' ? 'check-circle' :
-                                 type === 'error' ? 'exclamation-circle' :
-                                 type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
-            </div>
-            <div class="notification-content">${message}</div>
-        `;
-
-        container.appendChild(notification);
-
-        // Анимация появления
-        setTimeout(() => notification.classList.add('show'), 10);
-
-        // Автоматическое скрытие
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, type === 'error' ? 5000 : 3000);
-    }
-
-    // ========== СТИЛИ ==========
-    addStyles() {
-        // Стили уже в style.css, ничего не добавляем
-        console.log('🎨 Стили уже подключены через style.css');
-    }
-}
-
-// Автоматическая инициализация при загрузке страницы
-let shopInstance = null;
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('📋 DOM загружен, запускаем магазин...');
-
-    try {
-        shopInstance = new TelegramShop();
-        window.shop = shopInstance;
-
-        await shopInstance.init();
-
-        console.log('🚀 Telegram Shop готов к работе!');
-
-        // Проверяем, есть ли пользователь Telegram
-        if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-            const user = Telegram.WebApp.initDataUnsafe.user;
-            console.log(`👤 Пользователь Telegram: ${user.first_name} (ID: ${user.id})`);
-            console.log('📱 Пользователь будет получать уведомления о статусе заказа в боте');
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка инициализации магазина:', error);
-
-        // Показываем сообщение об ошибке пользователю
+    showErrorOverlay(message) {
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
             position: fixed;
@@ -3850,7 +2523,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
         errorDiv.innerHTML = `
             <i class="fas fa-exclamation-triangle" style="font-size: 60px; color: #e74c3c; margin-bottom: 20px;"></i>
-            <h2 style="color: #2c3e50; margin-bottom: 10px;">Ошибка загрузки магазина</h2>
+            <h2 style="color: #2c3e50; margin-bottom: 10px;">${message}</h2>
             <p style="color: #7f8c8d; margin-bottom: 20px;">Пожалуйста, обновите страницу или попробуйте позже</p>
             <button onclick="location.reload()" style="
                 background: #667eea;
@@ -3866,8 +2539,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
         document.body.appendChild(errorDiv);
     }
+}
+
+// Автоматическая инициализация при загрузке страницы
+let shopInstance = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('📋 DOM загружен, запускаем магазин...');
+
+    try {
+        shopInstance = new TelegramShop();
+        window.shop = shopInstance;
+
+        await shopInstance.init();
+
+        console.log('🚀 Telegram Shop готов к работе!');
+
+        if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+            const user = Telegram.WebApp.initDataUnsafe.user;
+            console.log(`👤 Пользователь Telegram: ${user.first_name} (ID: ${user.id})`);
+            console.log('📱 Пользователь будет получать уведомления о статусе заказа в боте');
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка инициализации магазина:', error);
+        shopInstance?.showErrorOverlay('Ошибка загрузки магазина');
+    }
 });
 
-console.log('✅ app.js полностью загружен, класс TelegramShop определен');
-
 window.TelegramShop = TelegramShop;
+console.log('✅ app.js полностью загружен и готов к работе');
