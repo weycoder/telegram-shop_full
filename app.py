@@ -24,7 +24,7 @@ app.config['UPLOAD_FOLDER'] = 'webapp/static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # ========== КОНФИГУРАЦИЯ ДЛЯ TELEGRAM БОТА ==========
-TELEGRAM_BOT_TOKEN = '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50'
+TELEGRAM_BOT_TOKEN = os.getenv('BOT_TOKEN')
 TELEGRAM_BOT = telebot.TeleBot(TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
