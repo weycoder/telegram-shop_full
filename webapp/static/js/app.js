@@ -61,7 +61,7 @@ class TelegramShop {
     }
 
     async init() {
-            if (thisInitialized) return;
+            if (this.isInitialized) return;
             console.log('🚀 Инициализация магазина...');
 
             this.bindEvents();
@@ -2608,7 +2608,6 @@ class TelegramShop {
     }
 }
 
-// Автоматическая инициализация при загрузке страницы
 let shopInstance = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
