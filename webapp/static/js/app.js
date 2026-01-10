@@ -374,14 +374,15 @@ class TelegramShop {
                 ` : ''}
 
                 <div class="product-image-container">
-                    <img src="${product.image_url || 'https://via.placeholder.com/300x200'}"
+                    <img src="${product.image_url || 'https://via.placeholder.com/300x200?text=No+Image'}"
                          alt="${product.name}"
                          class="product-image"
-                         onerror="this.src='https://via.placeholder.com/300x200'">
+                         onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'">
                     ${!inStock ? '<div class="out-of-stock">Нет в наличии</div>' : ''}
                 </div>
                 <div class="product-info">
                     <h3 class="product-title">${product.name}</h3>
+
                     ${isWeightProduct ? `
                         <div class="weight-product-badge">
                             <i class="fas fa-weight-hanging"></i> Весовой товар
@@ -411,6 +412,7 @@ class TelegramShop {
                             `В наличии: ${product.stock} шт.`
                         }
                     </div>
+
                     <button class="btn-block" onclick="shop.viewProduct(${product.id})"
                             ${!inStock ? 'disabled' : ''}>
                         <i class="fas ${isWeightProduct ? 'fa-weight' : 'fa-eye'}"></i>
@@ -810,7 +812,7 @@ class TelegramShop {
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
-                <div class="cart-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C); color: white;">
+                <div class="cart-header" style="background: linear-gradient(135deg, #667eea, #667eea); color: white;">
                     <h2><i class="fas fa-truck"></i> Доставка</h2>
                     <button class="close-cart" id="closeDeliverySelection">
                         <i class="fas fa-times"></i>
@@ -2116,7 +2118,7 @@ class TelegramShop {
                             Отмена
                         </button>
                         <button id="confirmCashCompact"
-                                style="flex: 1; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                style="flex: 1; padding: 12px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
                             Готово
                         </button>
                     </div>
