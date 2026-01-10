@@ -122,6 +122,58 @@ def save_user_for_notifications(telegram_id, username, first_name, last_name):
         conn.close()
 
 
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Статистика для админов"""
+    user = update.effective_user
+
+    if user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Эта команда только для администраторов!")
+        return
+
+    db = get_db_connection()
+
+    try:
+        stats = db.execute('''
+                           SELECT COUNT(*)                as total_orders,
+                                  SUM(total_price)        as total_revenue,
+                                  AVG(total_price)        as avg_order,
+                                  COUNT(DISTINCT user_id) as unique_customers,
+                                  (SELECT COUNT(*) FROM orders WHERE DATE (created_at) = DATE ('now')) as today_orders, (
+                           SELECT SUM (total_price)
+                           FROM orders
+                           WHERE DATE (created_at) = DATE ('now')) as today_revenue
+                           FROM orders
+                           ''').fetchone()
+
+        recent_orders = db.execute('''
+                                   SELECT id, user_id, total_price, status, created_at
+                                   FROM orders
+                                   ORDER BY created_at DESC LIMIT 5
+                                   ''').fetchall()
+
+        message = f"""📊 *Статистика магазина*
+
+📦 Всего заказов: *{stats['total_orders']}*
+💰 Общая выручка: *{stats['total_revenue'] or 0} ₽*
+📈 Средний чек: *{stats['avg_order'] or 0:.2f} ₽*
+👥 Уникальных клиентов: *{stats['unique_customers']}*
+
+📅 *Сегодня:*
+🛒 Заказов: *{stats['today_orders'] or 0}*
+💵 Выручка: *{stats['today_revenue'] or 0} ₽*
+
+🔄 *Последние заказы:*
+"""
+
+        for order in recent_orders:
+            message += f"\n📦 #{order['id']} - {order['total_price']} ₽ - {order['status']}"
+
+        await update.message.reply_text(message, parse_mode='Markdown')
+
+    finally:
+        db.close()
+
+
 # ========== СИСТЕМА УВЕДОМЛЕНИЙ О СТАТУСАХ ==========
 
 def escape_markdown_v2(text: str) -> str:
@@ -268,7 +320,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton(
             text="🛒 ОТКРЫТЬ МАГАЗИН",
-            web_app=WebAppInfo(url=web_app_url)  # Используем URL с параметрами
+            web_app=WebAppInfo(url=web_app_url)
         )],
         [InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders")],
         [InlineKeyboardButton("❓ ПОМОЩЬ", callback_data="help")]
@@ -288,7 +340,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_user_courier(user.id):
         courier_url = f"{WEBAPP_URL}/courier?user_id={user.id}"
         keyboard.append([
-            InlineKeyboardButton("🚚 ПАНЕЛЬ КУРЬЕРА", web_app=WebAppInfo(url=courier_url))
+            InlineKeyboardButton(
+                "🚚 ПАНЕЛЬ КУРЬЕРА",
+                web_app=WebAppInfo(url=courier_url)
+            )
         ])
 
     welcome_text = f"""
@@ -314,6 +369,65 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на кнопки - ИСПРАВЛЕННЫЙ"""
+    query = update.callback_query
+    await query.answer()  # Убираем "часики" на кнопке
+
+    data = query.data
+    user = query.from_user
+
+    if data == "my_orders":
+        await myorders_command(update, context)
+
+    elif data == "refresh_orders":
+        await myorders_command(update, context)
+
+    elif data.startswith("track_"):
+        order_id = data.replace("track_", "")
+        await show_order_status(query, user.id, order_id)
+
+    elif data.startswith("refresh_"):
+        order_id = data.replace("refresh_", "")
+        await show_order_status(query, user.id, order_id)
+
+    elif data.startswith("call_"):
+        phone = data.replace("call_", "")
+        await query.edit_message_text(
+            f"📞 *Номер курьера:* `{phone}`\n\n"
+            "Вы можете позвонить по этому номеру для уточнения деталей доставки.",
+            parse_mode='Markdown'
+        )
+
+    elif data == "help":
+        await query.edit_message_text(
+            "❓ *Помощь*\n\n"
+            "*Основные команды:*\n"
+            "/start - Запустить бота\n"
+            "/track <номер> - Отследить заказ\n"
+            "/myorders - Мои заказы\n\n"
+            "*Уведомления:*\n"
+            "Бот автоматически присылает уведомления:\n"
+            "✅ Когда заказ принят\n"
+            "👤 Когда назначен курьер\n"
+            "🏪 Когда курьер едет в магазин\n"
+            "📦 Когда курьер забрал товар\n"
+            "🚗 Когда курьер едет к вам\n"
+            "📍 Когда курьер прибыл\n"
+            "🎉 Когда заказ доставлен",
+            parse_mode='Markdown'
+        )
+
+    elif data == "support":
+        await query.edit_message_text(
+            "📞 *Поддержка*\n\n"
+            "🕒 Работаем круглосуточно\n\n"
+            "*Телефон:* +7 (999) 123-45-67\n"
+            "*Email:* support@example.com\n\n"
+            "Напишите ваш вопрос, и мы ответим в ближайшее время!",
+            parse_mode='Markdown'
+        )
 
 def is_user_courier(telegram_id):
     """Проверить, является ли пользователь курьером"""
@@ -347,22 +461,29 @@ async def track_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать все заказы пользователя"""
+    """Показать все заказы пользователя - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
         # Определяем тип обновления и получаем пользователя
+        user = None
+        chat_id = None
+        message_id = None
+        is_callback = False
+        query = None
+
         if update.message:
+            # Команда из текстового сообщения
             user = update.effective_user
             chat_id = update.effective_chat.id
             message_id = update.message.message_id
             is_callback = False
-            query = None
         elif update.callback_query:
+            # Команда из кнопки
             query = update.callback_query
             user = query.from_user
             chat_id = query.message.chat_id if query.message else user.id
             message_id = query.message.message_id if query.message else None
             is_callback = True
-            await query.answer()
+            await query.answer()  # Убираем "часики" на кнопке
         else:
             logger.error("❌ Неизвестный тип обновления")
             return
@@ -371,7 +492,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error("❌ Не удалось определить пользователя")
             return
 
-        logger.info(f"📋 Получение заказов для пользователя {user.id} ({user.username})")
+        logger.info(f"📋 Получение заказов для пользователя {user.id} ({user.username or 'без username'})")
 
         # Подключаемся к базе данных
         conn = sqlite3.connect("shop.db")
@@ -405,9 +526,13 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if not orders:
                 response = "📭 *У вас пока нет заказов.*\n\nНажмите кнопку '🛒 ОТКРЫТЬ МАГАЗИН' чтобы сделать первый заказ!"
-                keyboard = [
-                    [InlineKeyboardButton("🛒 Открыть магазин",
-                                          web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))]]
+                keyboard = [[
+                    InlineKeyboardButton(
+                        "🛒 Открыть магазин",
+                        web_app=WebAppInfo(
+                            url=f"{WEBAPP_URL}/webapp?user_id={user.id}&username={user.username or user.first_name}")
+                    )
+                ]]
 
                 if is_callback:
                     try:
@@ -417,6 +542,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             reply_markup=InlineKeyboardMarkup(keyboard)
                         )
                     except Exception as e:
+                        # Если не можем отредактировать (например, старое сообщение), отправляем новое
                         await context.bot.send_message(
                             chat_id=chat_id,
                             text=response,
@@ -484,9 +610,14 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Клавиатура
             keyboard = [
-                [InlineKeyboardButton("🛒 Открыть магазин",
-                                      web_app=WebAppInfo(url=f"{WEBAPP_URL}/webapp?user_id={user.id}"))],
-                [InlineKeyboardButton("🔄 Обновить", callback_data="refresh_orders")]
+                [
+                    InlineKeyboardButton(
+                        "🛒 Открыть магазин",
+                        web_app=WebAppInfo(
+                            url=f"{WEBAPP_URL}/webapp?user_id={user.id}&username={user.username or user.first_name}")
+                    )
+                ],
+                [InlineKeyboardButton("🔄 Обновить", callback_data="my_orders")]
             ]
 
             if is_callback:
@@ -497,6 +628,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode='Markdown'
                     )
                 except Exception as e:
+                    logger.error(f"❌ Ошибка редактирования сообщения: {e}")
                     # Если не можем отредактировать, отправляем новое сообщение
                     await context.bot.send_message(
                         chat_id=chat_id,
@@ -514,7 +646,7 @@ async def myorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             logger.error(f"❌ Ошибка получения заказов: {e}")
-            error_msg = "❌ Произошла ошибка при загрузке заказов."
+            error_msg = "❌ Произошла ошибка при загрузке заказов. Пожалуйста, попробуйте позже."
 
             if is_callback:
                 try:
@@ -673,74 +805,6 @@ def format_order_status_message(order):
         message += f"Доставлено: {order['delivered_at'][:16]}\n"
 
     return message
-
-
-# ========== ОБРАБОТЧИКИ КНОПОК ==========
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий на кнопки"""
-    query = update.callback_query
-    await query.answer()
-
-    data = query.data
-
-    if data == "my_orders":
-        await myorders_command(query, context)
-
-    elif data == "track_order":
-        await query.edit_message_text(
-            "📝 *Введите номер заказа для отслеживания:*\n\n"
-            "Используйте команду: /track <номер_заказа>\n\n"
-            "Пример: /track 123",
-            parse_mode='Markdown'
-        )
-
-    elif data.startswith("track_"):
-        order_id = data.replace("track_", "")
-        await show_order_status(query, query.from_user.id, order_id)
-
-    elif data.startswith("refresh_"):
-        order_id = data.replace("refresh_", "")
-        await show_order_status(query, query.from_user.id, order_id)
-
-    elif data.startswith("call_"):
-        phone = data.replace("call_", "")
-        await query.edit_message_text(
-            f"📞 *Номер курьера:* `{phone}`\n\n"
-            "Вы можете позвонить по этому номеру для уточнения деталей доставки.",
-            parse_mode='Markdown'
-        )
-
-    elif data == "help":
-        await query.edit_message_text(
-            "❓ *Помощь*\n\n"
-            "*Основные команды:*\n"
-            "/start - Запустить бота\n"
-            "/track <номер> - Отследить заказ\n"
-            "/myorders - Мои заказы\n\n"
-            "*Уведомления:*\n"
-            "Бот автоматически присылает уведомления:\n"
-            "✅ Когда заказ принят\n"
-            "👤 Когда назначен курьер\n"
-            "🏪 Когда курьер едет в магазин\n"
-            "📦 Когда курьер забрал товар\n"
-            "🚗 Когда курьер едет к вам\n"
-            "📍 Когда курьер прибыл\n"
-            "🎉 Когда заказ доставлен",
-            parse_mode='Markdown'
-        )
-
-    elif data == "support":
-        await query.edit_message_text(
-            "📞 *Поддержка*\n\n"
-            "🕒 Работаем круглосуточно\n\n"
-            "*Телефон:* +7 (999) 123-45-67\n"
-            "*Email:* support@example.com\n\n"
-            "Напишите ваш вопрос, и мы ответим в ближайшее время!",
-            parse_mode='Markdown'
-        )
-
-
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
 def get_status_icon(status):
@@ -811,10 +875,12 @@ def main():
     # Добавляем обработчики команд
     bot_app.add_handler(CommandHandler("start", start_command))
     bot_app.add_handler(CommandHandler("track", track_order_command))
+    bot_app.add_handler(CommandHandler("stats", stats_command))
     bot_app.add_handler(CommandHandler("myorders", myorders_command))
 
     # Обработчик кнопок
     bot_app.add_handler(CallbackQueryHandler(button_handler))
+    bot_app.add_handler(CallbackQueryHandler(callback_handler))
 
     # Запускаем обработчик уведомлений в отдельной задаче
     loop = asyncio.new_event_loop()

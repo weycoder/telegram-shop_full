@@ -846,133 +846,77 @@ init_db()
 # ========== НОВЫЕ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ ==========
 
 
-def send_telegram_notification_sync(telegram_id, order_id, status, courier_name=None, courier_phone=None):
-    """Отправка уведомления через HTTP запрос к Telegram API"""
+def send_order_details_notification(telegram_id, order_id, items, status, total_amount, delivery_type):
+    """Отправить детализированное уведомление о заказе"""
     try:
-        BOT_TOKEN = '8201597495:AAHLsTZJHatNU4z8gdjTIom_s_mSHKTnJ50'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
 
         if not telegram_id or telegram_id == 0:
             print(f"⚠️ Неверный telegram_id: {telegram_id}")
             return False
 
-        # Функция для экранирования спецсимволов MarkdownV2
-        def escape_markdown(text):
-            if not text:
-                return ""
-            # Список специальных символов для MarkdownV2
-            escape_chars = r'_*[]()~`>#+-=|{}.!'
-            for char in escape_chars:
-                text = text.replace(char, f'\\{char}')
-            return text
-
-        # Форматируем сообщение
-        status_messages = {
-            'created': {
-                'title': '✅ Заказ принят!',
-                'message': f'Заказ #{order_id} успешно создан и передан на обработку.'
-            },
-            'assigned': {
-                'title': '👤 Курьер назначен!',
-                'message': f'Заказ #{order_id} принят курьером и скоро будет доставлен.'
-            },
-            'picked_up': {
-                'title': '📦 Товар у курьера!',
-                'message': f'Курьер забрал заказ #{order_id} и уже мчится к вам!'
-            },
-            'on_the_way': {
-                'title': '🚗 Курьер едет к вам!',
-                'message': f'Заказ #{order_id} уже в пути\\. Прибудет в ближайшее время!'
-            },
-            'delivered': {
-                'title': '🎉 Заказ доставлен!',
-                'message': f'Заказ #{order_id} успешно передан\\. Спасибо за покупку!'
-            }
+        # Определяем текст статуса
+        status_texts = {
+            'created': '🔄 СОЗДАН И ОЖИДАЕТ ОБРАБОТКИ',
+            'assigned': '👤 НАЗНАЧЕН КУРЬЕР',
+            'processing': '⚙️ В ОБРАБОТКЕ',
+            'delivering': '🚚 ДОСТАВЛЯЕТСЯ',
+            'delivered': '✅ ДОСТАВЛЕН',
+            'completed': '🎉 ЗАВЕРШЕН'
         }
 
-        status_info = status_messages.get(status, {
-            'title': f'📦 Статус заказа #{order_id} изменен',
-            'message': f'Новый статус: {status}'
-        })
+        status_text = status_texts.get(status, status.upper())
 
-        # Экранируем текст
-        title_escaped = escape_markdown(status_info['title'])
-        message_escaped = escape_markdown(status_info['message'])
-        courier_name_escaped = escape_markdown(courier_name) if courier_name else ""
-        courier_phone_escaped = escape_markdown(courier_phone) if courier_phone else ""
+        # Собираем список товаров
+        items_text = "📦 *СОСТАВ ЗАКАЗА:*\n"
+        for item in items:
+            name = item.get('name', 'Товар')
+            quantity = item.get('quantity', 1)
+            price = item.get('price', 0)
 
-        # Собираем сообщение с MarkdownV2 форматированием
-        message = f"*{title_escaped}*\n\n{message_escaped}\n\n"
+            # Проверяем весовой ли товар
+            if item.get('is_weight') and item.get('weight'):
+                items_text += f"• {name} ({quantity} шт, {item['weight']} кг) - {price} ₽\n"
+            else:
+                items_text += f"• {name} × {quantity} шт - {price} ₽\n"
 
-        if courier_name_escaped:
-            message += f"👤 *Курьер:* {courier_name_escaped}\n"
+        # Формируем полное сообщение
+        message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
 
-        if courier_phone_escaped:
-            message += f"📱 *Телефон:* `{courier_phone_escaped}`\n"
+{status_text}
 
-        # Отправляем HTTP запрос
+{items_text}
+━━━━━━━━━━━━━━━━━━━━
+💰 *ИТОГО: {total_amount} ₽*
+📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}
+
+⏳ *Следующее обновление статуса будет через 5-20 минут*"""
+
+        # Отправляем
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
-            'chat_id': telegram_id,
+            'chat_id': int(telegram_id),
             'text': message,
-            'parse_mode': 'MarkdownV2',
+            'parse_mode': 'Markdown',
             'disable_web_page_preview': True
         }
 
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"✅ Telegram уведомление отправлено пользователю {telegram_id}")
+            print(f"✅ Детализированное уведомление отправлено пользователю {telegram_id}")
             return True
         else:
-            print(f"❌ Ошибка Telegram API: {response.status_code}")
-            print(f"❌ Ответ: {response.text}")
-
-            # Пробуем отправить без форматирования
-            try:
-                # Простое сообщение без Markdown
-                simple_message = f"Заказ #{order_id}\n\n"
-                if status == 'created':
-                    simple_message += "✅ Мы успешно приняли ваш заказ!\n"
-                elif status == 'assigned':
-                    simple_message += "👤 Курьер был назначен!\n"
-                elif status == 'picked_up':
-                    simple_message += "📦 Товар у курьера!\n"
-                elif status == 'on_the_way':
-                    simple_message += "🚗 Курьер едет к вам!\n"
-                elif status == 'delivered':
-                    simple_message += "🎉 Ваш заказ был успешно доставлен!\n"
-
-                if courier_name:
-                    simple_message += f"\n👤 Курьер: {courier_name}\n"
-
-                if courier_phone:
-                    simple_message += f"📱 Телефон: {courier_phone}\n"
-
-                data_simple = {
-                    'chat_id': telegram_id,
-                    'text': simple_message,
-                    'disable_web_page_preview': True
-                }
-
-                response_simple = requests.post(url, json=data_simple, timeout=10)
-                if response_simple.status_code == 200:
-                    print(f"✅ Простое уведомление отправлено пользователю {telegram_id}")
-                    return True
-                else:
-                    print(f"❌ Ошибка простого сообщения: {response_simple.status_code}")
-                    return False
-
-            except Exception as e2:
-                print(f"❌ Ошибка отправки простого сообщения: {e2}")
-                return False
+            print(f"⚠️ Не удалось отправить детализированное уведомление: {response.text}")
+            return False
 
     except Exception as e:
-        print(f"❌ Ошибка отправки Telegram уведомления: {e}")
+        print(f"❌ Ошибка отправки детализированного уведомления: {e}")
         return False
 
 
 def send_order_notification(order_id, status, courier_id=None):
-    """Отправка уведомлений покупателю через Telegram бота напрямую"""
+    """Отправка уведомлений покупателю через Telegram бота - ОБНОВЛЕННАЯ"""
     db = None
     try:
         db = get_db()
@@ -1005,8 +949,8 @@ def send_order_notification(order_id, status, courier_id=None):
                 courier_name = courier.get('full_name')
                 courier_phone = courier.get('phone')
 
-        # Отправляем уведомление через Telegram API
-        success = send_telegram_notification_sync(
+        # 1. Отправляем ОСНОВНОЕ уведомление о статусе
+        status_sent = send_telegram_notification_sync(
             telegram_id=telegram_id,
             order_id=order_id,
             status=status,
@@ -1014,12 +958,37 @@ def send_order_notification(order_id, status, courier_id=None):
             courier_phone=courier_phone
         )
 
-        if success:
+        # 2. Если это СОЗДАНИЕ заказа - отправляем ДЕТАЛИЗИРОВАННОЕ уведомление
+        if status == 'created':
+            # Парсим items
+            try:
+                items_list = json.loads(order_dict['items'])
+            except:
+                items_list = []
+
+            # Рассчитываем общую сумму
+            total_amount = order_dict.get('total_price', 0)
+            delivery_type = order_dict.get('delivery_type', 'courier')
+
+            # Отправляем детали
+            details_sent = send_order_details_notification(
+                telegram_id=telegram_id,
+                order_id=order_id,
+                items=items_list,
+                status=status,
+                total_amount=total_amount,
+                delivery_type=delivery_type
+            )
+
+            if details_sent:
+                print(f"✅ Детали заказа #{order_id} отправлены пользователю {telegram_id}")
+
+        if status_sent:
             print(f"✅ Уведомление для заказа #{order_id} отправлено (статус: {status})")
         else:
             print(f"⚠️ Уведомление для заказа #{order_id} не отправлено")
 
-        return success
+        return status_sent
 
     except Exception as e:
         print(f"❌ Критическая ошибка отправки уведомления: {e}")
@@ -1029,7 +998,6 @@ def send_order_notification(order_id, status, courier_id=None):
     finally:
         if db:
             db.close()
-
 
 def assign_order_to_courier(order_id, delivery_type):
     """Автоматически назначить заказ курьеру"""
