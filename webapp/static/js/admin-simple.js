@@ -290,7 +290,7 @@ class AdminPanel {
         if (this.orders.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="no-data">
+                    <td colspan="7" class="no-data">
                         <i class="fas fa-inbox"></i>
                         <h3>Нет заказов</h3>
                     </td>
@@ -325,17 +325,32 @@ class AdminPanel {
                 minute: '2-digit'
             });
 
+            // Форматирование списка товаров
+            let productsHtml = 'Нет товаров';
+            if (order.items && order.items.length > 0) {
+                productsHtml = order.items.map(item =>
+                    `${item.name || 'Товар'}: ${item.quantity || 1} × ${this.formatPrice(item.price || 0)} ₽`
+                ).join('<br>');
+            } else if (order.products && order.products.length > 0) {
+                productsHtml = order.products.map(product =>
+                    `${product.name}: ${product.quantity || 1} шт`
+                ).join('<br>');
+            }
+
             html += `
                 <tr>
-                    <td>#${order.id || 'N/A'}</td>
+                    <td><strong>#${order.id || 'N/A'}</strong></td>
                     <td>${order.username || order.user_id || 'Гость'}</td>
-                    <td>${this.formatPrice(order.total_with_delivery || order.total_price || 0)} ₽</td>
+                    <td><small>${productsHtml}</small></td>
+                    <td><strong>${this.formatPrice(order.total_with_delivery || order.total_price || 0)} ₽</strong></td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td>${date}</td>
                     <td>
-                        <button class="btn-icon btn-edit" onclick="admin.editOrderStatus(${order.id})">
-                            <i class="fas fa-edit"></i>
-                        </button>
+                        <div class="action-buttons">
+                            <button class="btn-icon btn-edit" onclick="admin.editOrderStatus(${order.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
