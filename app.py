@@ -2647,6 +2647,45 @@ def admin_create_product():
         db.close()
 
 
+@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
+def update_order(order_id):
+    try:
+        data = request.json
+
+        # Валидация данных
+        required_fields = ['status', 'total', 'recipient_name']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'error': f'Поле {field} обязательно'}), 400
+
+        # Обновляем заказ в базе данных
+        db.update_order(order_id, data)
+
+        # Отправляем уведомление в Telegram если статус изменился
+        if 'status' in data:
+            order = db.get_order(order_id)
+            if order and order.user_id:
+                send_telegram_notification(
+                    order.user_id,
+                    f'📦 Статус вашего заказа #{order_id} изменен на: {get_status_name(data["status"])}'
+                )
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def get_status_name(status):
+    status_names = {
+        'pending': 'Ожидает обработки',
+        'processing': 'В обработке',
+        'delivering': 'Доставляется',
+        'completed': 'Завершен',
+        'cancelled': 'Отменен'
+    }
+    return status_names.get(status, status)
+
 @app.route('/api/admin/promo-codes', methods=['GET'])
 def get_promo_codes_admin():
     """Получить все промокоды для админки"""

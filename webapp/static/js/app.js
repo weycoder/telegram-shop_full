@@ -1519,9 +1519,15 @@ class TelegramShop {
             }
         }, 100);
     }
-
     returnToCartFromDelivery() {
-        this.deliveryData = { type: null, address_id: null, pickup_point: null, address_details: null };
+        // Сбрасываем выбранные данные доставки
+        this.deliveryData = {
+            type: null,
+            address_id: null,
+            pickup_point: null,
+            address_details: null
+        };
+
         this.closeCart();
         setTimeout(() => {
             this.resetCartInterface();
@@ -1592,6 +1598,202 @@ class TelegramShop {
             default: return 'Скидка';
         }
     }
+
+
+    // Добавь метод editOrder в класс AdminPanel:
+
+async editOrder(orderId) {
+    try {
+        console.log('✏️ Редактирование заказа #', orderId);
+
+        // Загружаем данные заказа
+        const response = await fetch(`/api/admin/orders/${orderId}`);
+        const order = await response.json();
+
+        // Создаем модальное окно редактирования
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-edit"></i> Редактирование заказа #${order.id}</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+                    <form id="editOrderForm">
+                        <div class="form-section">
+                            <h4>Основная информация</h4>
+
+                            <div class="form-group">
+                                <label for="editOrderStatus">Статус заказа *</label>
+                                <select id="editOrderStatus" required>
+                                    <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>Ожидает</option>
+                                    <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>В обработке</option>
+                                    <option value="delivering" ${order.status === 'delivering' ? 'selected' : ''}>Доставляется</option>
+                                    <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>Завершен</option>
+                                    <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>Отменен</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editOrderTotal">Сумма заказа (₽) *</label>
+                                <input type="number" id="editOrderTotal"
+                                       value="${order.total || 0}"
+                                       step="0.01"
+                                       min="0"
+                                       required>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="editDeliveryType">Тип доставки</label>
+                                    <select id="editDeliveryType">
+                                        <option value="courier" ${order.delivery_type === 'courier' ? 'selected' : ''}>Курьер</option>
+                                        <option value="pickup" ${order.delivery_type === 'pickup' ? 'selected' : ''}>Самовывоз</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="editPaymentMethod">Способ оплаты</label>
+                                    <select id="editPaymentMethod">
+                                        <option value="cash" ${order.payment_method === 'cash' ? 'selected' : ''}>Наличные</option>
+                                        <option value="transfer" ${order.payment_method === 'transfer' ? 'selected' : ''}>Перевод</option>
+                                        <option value="terminal" ${order.payment_method === 'terminal' ? 'selected' : ''}>Терминал</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h4>Информация о клиенте</h4>
+
+                            <div class="form-group">
+                                <label for="editRecipientName">Имя получателя *</label>
+                                <input type="text" id="editRecipientName"
+                                       value="${order.recipient_name || order.username || ''}"
+                                       required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editPhoneNumber">Телефон</label>
+                                <input type="tel" id="editPhoneNumber"
+                                       value="${order.phone_number || ''}"
+                                       placeholder="+7 (999) 123-45-67">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editDeliveryAddress">Адрес доставки</label>
+                                <textarea id="editDeliveryAddress" rows="2">${order.delivery_address || ''}</textarea>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h4>Промокод и скидки</h4>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="editPromoCode">Промокод</label>
+                                    <input type="text" id="editPromoCode"
+                                           value="${order.promo_code || ''}"
+                                           placeholder="Введите промокод">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="editPromoDiscount">Скидка по промокоду (₽)</label>
+                                    <input type="number" id="editPromoDiscount"
+                                           value="${order.promo_discount || 0}"
+                                           step="0.01"
+                                           min="0">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editDeliveryCost">Стоимость доставки (₽)</label>
+                                <input type="number" id="editDeliveryCost"
+                                       value="${order.delivery_cost || 0}"
+                                       step="0.01"
+                                       min="0">
+                            </div>
+                        </div>
+
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary cancel-edit">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Обработчики событий
+        modal.querySelector('.close-modal').onclick = () => modal.remove();
+        modal.querySelector('.cancel-edit').onclick = () => modal.remove();
+
+        modal.querySelector('#editOrderForm').onsubmit = async (e) => {
+            e.preventDefault();
+
+            try {
+                const formData = {
+                    status: document.getElementById('editOrderStatus').value,
+                    total: parseFloat(document.getElementById('editOrderTotal').value),
+                    delivery_type: document.getElementById('editDeliveryType').value,
+                    payment_method: document.getElementById('editPaymentMethod').value,
+                    recipient_name: document.getElementById('editRecipientName').value,
+                    phone_number: document.getElementById('editPhoneNumber').value,
+                    delivery_address: document.getElementById('editDeliveryAddress').value,
+                    promo_code: document.getElementById('editPromoCode').value || null,
+                    promo_discount: parseFloat(document.getElementById('editPromoDiscount').value) || 0,
+                    delivery_cost: parseFloat(document.getElementById('editDeliveryCost').value) || 0
+                };
+
+                // Валидация
+                if (!formData.recipient_name.trim()) {
+                    this.showNotification('❌ Введите имя получателя', 'error');
+                    return;
+                }
+
+                if (formData.total <= 0) {
+                    this.showNotification('❌ Сумма заказа должна быть больше 0', 'error');
+                    return;
+                }
+
+                console.log('📤 Отправка изменений заказа:', formData);
+
+                const updateResponse = await fetch(`/api/admin/orders/${orderId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await updateResponse.json();
+
+                if (result.success) {
+                    this.showNotification('✅ Заказ успешно обновлен', 'success');
+                    modal.remove();
+
+                    // Обновляем таблицу заказов
+                    await this.loadOrders();
+                } else {
+                    throw new Error(result.error || 'Ошибка обновления заказа');
+                }
+
+            } catch (error) {
+                console.error('❌ Ошибка обновления заказа:', error);
+                this.showNotification(`❌ ${error.message}`, 'error');
+            }
+        };
+
+    } catch (error) {
+        console.error('❌ Ошибка редактирования заказа:', error);
+        this.showNotification('❌ Не удалось загрузить данные заказа', 'error');
+    }
+}
+
 
     async applyCompactPromoCode() {
         const input = document.getElementById('compactPromoCodeInput');
@@ -3026,6 +3228,7 @@ class TelegramShop {
             console.log('📥 Ответ сервера:', result);
 
             if (result.success) {
+                this.appliedPromoCode = null;
                 await this.notifyBotAboutOrder(result.order_id, 'created');
 
                 // Показываем правильную сумму в подтверждении
@@ -3050,6 +3253,7 @@ class TelegramShop {
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка сервера');
             }
+                localStorage.removeItem('applied_promo_code');
 
         } catch (error) {
             console.error('❌ Ошибка оформления заказа:', error);
