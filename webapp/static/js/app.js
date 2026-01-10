@@ -3107,14 +3107,10 @@ async editOrder(orderId) {
     }
 
     async confirmOrder() {
-        if (!this.deliveryData.type) {
-            this.showNotification('❌ Выберите способ доставки', 'error');
-            this.showDeliverySelection();
-            return;
-        }
         try {
             console.log('🔍 Начинаем оформление заказа...');
-            // Рассчитываем суммы
+
+            // Рассчитываем суммы ПРАВИЛЬНО
             const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             const discountedSubtotal = this.cart.reduce((sum, item) => {
                 const priceToShow = item.discounted_price || item.price;
@@ -3140,7 +3136,7 @@ async editOrder(orderId) {
 
             const totalWithDelivery = discountedSubtotal + deliveryCost - promoDiscount;
 
-            // Подготавливаем данные заказа
+            // ПРАВИЛЬНО подготавливаем items для сохранения
             const orderItems = this.cart.map(item => ({
                 id: item.original_product_id || item.id,
                 name: item.name,
@@ -3152,53 +3148,17 @@ async editOrder(orderId) {
                 discount_info: item.discount_info || null
             }));
 
-            // === ИСПРАВЛЯЕМ ЗДЕСЬ ===
-            // Получаем данные получателя из адреса доставки или промокода
-            let recipient_name = '';
-            let phone_number = '';
+            // Подготавливаем delivery_details для сохранения
             let deliveryDetails = null;
-
-            if (this.deliveryData.type === 'courier') {
-                if (this.deliveryData.address_details) {
-                    // Есть сохраненные детали адреса
-                    const address = this.deliveryData.address_details;
-                    recipient_name = address.recipient_name || this.username || 'Получатель';
-                    phone_number = address.phone || '';
-                    deliveryDetails = {
-                        city: address.city,
-                        street: address.street,
-                        house: address.house,
-                        apartment: address.apartment || '',
-                        floor: address.floor || '',
-                        doorcode: address.doorcode || ''
-                    };
-                } else if (this.deliveryData.address_id && this.deliveryData.address_id.toString().startsWith('guest_')) {
-                    // Гостевой адрес
-                    const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-                    const addressId = parseInt(this.deliveryData.address_id.replace('guest_', ''));
-                    const address = guestAddresses[addressId - 1];
-
-                    if (address) {
-                        recipient_name = address.recipient_name || this.username || 'Получатель';
-                        phone_number = address.phone || '';
-                        deliveryDetails = {
-                            city: address.city,
-                            street: address.street,
-                            house: address.house,
-                            apartment: address.apartment || '',
-                            floor: address.floor || '',
-                            doorcode: address.doorcode || ''
-                        };
-                    }
-                }
-            } else if (this.deliveryData.type === 'pickup') {
-                // Для самовывоза используем имя пользователя
-                recipient_name = this.username || 'Покупатель';
-            }
-
-            // Если не нашли имя, используем имя пользователя
-            if (!recipient_name) {
-                recipient_name = this.username || 'Покупатель';
+            if (this.deliveryData.type === 'courier' && this.deliveryData.address_details) {
+                deliveryDetails = {
+                    city: this.deliveryData.address_details.city || '',
+                    street: this.deliveryData.address_details.street || '',
+                    house: this.deliveryData.address_details.house || '',
+                    apartment: this.deliveryData.address_details.apartment || '',
+                    floor: this.deliveryData.address_details.floor || '',
+                    doorcode: this.deliveryData.address_details.doorcode || ''
+                };
             }
 
             const orderData = {
@@ -3210,27 +3170,26 @@ async editOrder(orderId) {
                 discounted_subtotal: discountedSubtotal,
                 delivery_type: this.deliveryData.type,
                 delivery_address: deliveryDetails ? JSON.stringify(deliveryDetails) : null,
+                delivery_cost: deliveryCost,
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
-                recipient_name: recipient_name,
-                phone_number: phone_number,
+                recipient_name: this.deliveryData.address_details?.recipient_name || this.username || 'Покупатель',
+                phone_number: this.deliveryData.address_details?.phone || '',
                 cash_payment: this.deliveryData.cash_payment || null,
                 promo_code: this.appliedPromoCode?.code || null,
                 promo_code_id: this.appliedPromoCode?.id || null,
                 promo_discount: promoDiscount,
-                delivery_cost: deliveryCost,
                 total: totalWithDelivery
             };
 
             console.log('📤 Отправка заказа на сервер:', orderData);
 
             const result = await this.createOrder(orderData);
-            console.log('📥 Ответ сервера:', result);
 
             if (result.success) {
+                // СБРАСЫВАЕМ ПРОМОКОД ПОСЛЕ ОФОРМЛЕНИЯ
                 this.appliedPromoCode = null;
-                await this.notifyBotAboutOrder(result.order_id, 'created');
-
+                localStorage.removeItem('applied_promo_code');
                 // Показываем правильную сумму в подтверждении
                 this.showOrderConfirmation(
                     result.order_id,

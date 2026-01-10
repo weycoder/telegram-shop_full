@@ -474,85 +474,68 @@ class AdminPanel {
         try {
             console.log('🔍 Просмотр заказа #', orderId);
 
-            // Загружаем данные заказа
             const response = await fetch(`/api/admin/orders/${orderId}`);
-
-            // Сначала получаем как текст
             const responseText = await response.text();
             console.log('📥 Ответ сервера (текст):', responseText);
 
             let order;
             try {
-                // Пробуем распарсить JSON
                 order = JSON.parse(responseText);
             } catch (parseError) {
                 console.error('❌ Ошибка парсинга JSON:', parseError);
-
-                // Попробуем очистить от лишних символов
+                // Попробуем очистить
                 const cleanedText = responseText.trim();
-                console.log('🧹 Очищенный текст:', cleanedText);
-
-                // Если это строка в кавычках (двойной JSON)
                 if (cleanedText.startsWith('"') && cleanedText.endsWith('"')) {
-                    try {
-                        // Убираем внешние кавычки и парсим снова
-                        const innerJson = cleanedText.slice(1, -1);
-                        order = JSON.parse(innerJson);
-                    } catch (innerError) {
-                        throw new Error(`Двойной JSON тоже не парсится: ${innerError.message}`);
-                    }
+                    order = JSON.parse(JSON.parse(cleanedText));
                 } else {
-                    // Пробуем как есть, может это уже готовый объект
-                    try {
-                        order = JSON.parse(cleanedText);
-                    } catch (finalError) {
-                        // Если ничего не помогло, показываем ошибку
-                        throw new Error(`Не удалось распарсить данные заказа. Ответ сервера: ${cleanedText.substring(0, 100)}...`);
-                    }
+                    throw new Error('Не удалось распарсить данные заказа');
                 }
             }
 
             console.log('📦 Полученный заказ:', order);
 
+            // Проверяем данные заказа
+            console.log('🔍 Проверка данных заказа:');
+            console.log('Total:', order.total);
+            console.log('Items:', order.items);
+
             const modal = document.getElementById('orderDetailsModal');
             const modalContent = document.getElementById('orderDetailsContent');
 
-            if (!modal || !modalContent) {
-                console.error('❌ Модальное окно не найдено');
-                return;
-            }
+            if (!modal || !modalContent) return;
 
-            // ПАРСИМ ITEMS (с проверкой на null/undefined)
+            // ПАРСИМ ITEMS
             let items = [];
-            let itemsText = 'Товары не указаны';
+            let itemsTotal = 0;
 
             try {
                 if (order.items) {
                     if (typeof order.items === 'string') {
-                        // Пробуем распарсить строку
                         items = JSON.parse(order.items);
                     } else if (Array.isArray(order.items)) {
                         items = order.items;
                     }
 
-                    // Формируем текст для отображения
-                    if (items.length > 0) {
-                        const displayItems = items.slice(0, 3);
-                        itemsText = displayItems.map(item => {
-                            const name = item.name || 'Товар';
-                            const quantity = item.quantity || 1;
-                            return `${name} × ${quantity}`;
-                        }).join(', ');
+                    // ПРАВИЛЬНО считаем сумму товаров
+                    items.forEach(item => {
+                        const price = parseFloat(item.discounted_price || item.price || 0);
+                        const quantity = parseInt(item.quantity || 1);
+                        const itemTotal = price * quantity;
+                        itemsTotal += itemTotal;
 
-                        if (items.length > 3) {
-                            itemsText += ` и ещё ${items.length - 3}...`;
-                        }
-                    }
+                        console.log(`📊 Товар: ${item.name}, Цена: ${price}, Кол-во: ${quantity}, Итого: ${itemTotal}`);
+                    });
                 }
             } catch (error) {
                 console.error('❌ Ошибка парсинга items:', error);
-                itemsText = 'Ошибка загрузки товаров';
+                items = [];
             }
+
+            console.log('💰 Итоговая сумма товаров:', itemsTotal);
+            console.log('💰 Сумма из заказа:', order.total);
+
+            // Используем правильную сумму
+            const displayTotal = order.total && order.total > 0 ? order.total : itemsTotal;
 
             // Форматируем дату
             let formattedDate = 'Дата не указана';
@@ -584,26 +567,51 @@ class AdminPanel {
             const clientName = order.username || order.recipient_name || 'Гость';
             const phoneNumber = order.phone_number || 'Не указан';
 
-            // Форматируем сумму
-            const totalAmount = this.formatPrice(order.total || 0);
+            // ПРАВИЛЬНО парсим адрес
+            let deliveryAddress = 'Не указан';
+            try {
+                if (order.delivery_address) {
+                    if (typeof order.delivery_address === 'string') {
+                        const parsedAddress = JSON.parse(order.delivery_address);
+                        if (parsedAddress && typeof parsedAddress === 'object') {
+                            // Форматируем адрес в читаемый вид
+                            const addressParts = [];
+                            if (parsedAddress.street) addressParts.push(`ул. ${parsedAddress.street}`);
+                            if (parsedAddress.house) addressParts.push(`д. ${parsedAddress.house}`);
+                            if (parsedAddress.apartment) addressParts.push(`кв. ${parsedAddress.apartment}`);
+                            if (parsedAddress.city) addressParts.unshift(parsedAddress.city);
+
+                            deliveryAddress = addressParts.join(', ');
+                        } else {
+                            deliveryAddress = order.delivery_address;
+                        }
+                    } else {
+                        deliveryAddress = order.delivery_address;
+                    }
+                }
+            } catch (addressError) {
+                console.error('❌ Ошибка парсинга адреса:', addressError);
+                deliveryAddress = order.delivery_address || 'Не указан';
+            }
 
             // Создаем HTML для модального окна
             let itemsHTML = '';
-            let itemsTotal = 0;
+            let calculatedItemsTotal = 0;
 
             if (items.length > 0) {
                 items.forEach(item => {
-                    const price = item.discounted_price || item.price || 0;
-                    const quantity = item.quantity || 1;
-                    const total = price * quantity;
-                    itemsTotal += total;
+                    const price = parseFloat(item.discounted_price || item.price || 0);
+                    const quantity = parseInt(item.quantity || 1);
+                    const itemTotal = price * quantity;
+                    calculatedItemsTotal += itemTotal;
 
+                    // ПРАВИЛЬНОЕ отображение цены товара
                     itemsHTML += `
                         <div class="order-detail-item">
                             <div class="item-name">${item.name || 'Товар'}</div>
                             <div class="item-details">
                                 <span>${this.formatPrice(price)} ₽ × ${quantity}</span>
-                                <span class="item-total">${this.formatPrice(total)} ₽</span>
+                                <span class="item-total">${this.formatPrice(itemTotal)} ₽</span>
                             </div>
                             ${item.is_weight ? `<div class="item-weight"><i class="fas fa-weight-hanging"></i> ${item.weight || 0} кг</div>` : ''}
                         </div>
@@ -613,7 +621,14 @@ class AdminPanel {
                 itemsHTML = '<p class="no-items">Товары не указаны</p>';
             }
 
-            // Создаем контент модального окна
+            // Используем правильную сумму из заказа или пересчитанную
+            const finalTotal = order.total && order.total > 0 ? order.total : calculatedItemsTotal;
+            const deliveryCost = order.delivery_cost || 0;
+            const promoDiscount = order.promo_discount || 0;
+
+            // ПРАВИЛЬНЫЙ расчет итоговой суммы
+            const totalToPay = finalTotal;
+
             modalContent.innerHTML = `
                 <div class="modal-header">
                     <h3><i class="fas fa-shopping-cart"></i> Детали заказа #${order.id}</h3>
@@ -649,7 +664,7 @@ class AdminPanel {
                             </div>
                             <div class="info-row">
                                 <span>Итого:</span>
-                                <span style="font-weight: bold; color: #2c3e50;">${totalAmount} ₽</span>
+                                <span style="font-weight: bold; color: #2c3e50;">${this.formatPrice(totalToPay)} ₽</span>
                             </div>
                         </div>
 
@@ -663,12 +678,10 @@ class AdminPanel {
                                 <span>Телефон:</span>
                                 <span>${phoneNumber}</span>
                             </div>
-                            ${order.delivery_address ? `
                             <div class="info-row">
                                 <span>Адрес:</span>
-                                <span>${order.delivery_address}</span>
+                                <span>${deliveryAddress}</span>
                             </div>
-                            ` : ''}
                         </div>
                     </div>
 
@@ -682,23 +695,23 @@ class AdminPanel {
                         <div class="order-total-section">
                             <div class="total-row">
                                 <span>Сумма товаров:</span>
-                                <span>${this.formatPrice(itemsTotal)} ₽</span>
+                                <span>${this.formatPrice(calculatedItemsTotal)} ₽</span>
                             </div>
-                            ${order.delivery_cost > 0 ? `
+                            ${deliveryCost > 0 ? `
                             <div class="total-row">
                                 <span>Доставка:</span>
-                                <span>${this.formatPrice(order.delivery_cost || 0)} ₽</span>
+                                <span>${this.formatPrice(deliveryCost)} ₽</span>
                             </div>
                             ` : ''}
-                            ${order.promo_discount > 0 ? `
+                            ${promoDiscount > 0 ? `
                             <div class="total-row discount">
                                 <span>Скидка по промокоду:</span>
-                                <span>-${this.formatPrice(order.promo_discount || 0)} ₽</span>
+                                <span>-${this.formatPrice(promoDiscount)} ₽</span>
                             </div>
                             ` : ''}
                             <div class="total-row grand-total">
                                 <span>Итого к оплате:</span>
-                                <span style="font-weight: bold; color: #2c3e50;">${totalAmount} ₽</span>
+                                <span style="font-weight: bold; color: #2c3e50;">${this.formatPrice(totalToPay)} ₽</span>
                             </div>
                         </div>
                         ` : ''}
@@ -728,7 +741,6 @@ class AdminPanel {
             `;
 
             modal.style.display = 'flex';
-            console.log('✅ Модальное окно открыто');
 
         } catch (error) {
             console.error('❌ Ошибка загрузки деталей заказа:', error);
