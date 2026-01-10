@@ -505,14 +505,14 @@ class TelegramShop {
             this.cart[existingIndex].quantity += quantity;
             this.cart[existingIndex].discounted_price = discountedPrice;
             this.cart[existingIndex].discount_info = discount;
-            this.cart[existingIndex].price = price; // Сохраняем оригинальную цену
+            this.cart[existingIndex].price = price;
         } else {
             // Для новых товаров добавляем запись
             this.cart.push({
                 id: cartItemId,
                 name: name,
-                price: price, // Оригинальная цена
-                discounted_price: discountedPrice, // Цена со скидкой
+                price: price,
+                discounted_price: discountedPrice,
                 discount_info: discount,
                 quantity: isWeightProduct ? 1 : quantity,
                 image: image || 'https://via.placeholder.com/100',
@@ -526,12 +526,14 @@ class TelegramShop {
         this.saveCart();
         this.updateCartCount();
 
+        // ВАЖНО: обновляем отображение если корзина открыта
         if (this.isCartOpen()) {
             this.updateCartDisplay();
         }
 
         this.showCartNotification(name, isWeightProduct ? 1 : quantity);
     }
+
 
     showCartNotification(name, quantity) {
         const notification = document.createElement('div');
@@ -556,8 +558,12 @@ class TelegramShop {
         }, 5000);
     }
 
+        // Исправленный метод удаления товара
     removeFromCart(productId) {
-        this.cart = this.cart.filter(item => item.id != productId);
+        // Находим товар для показа уведомления
+        const itemToRemove = this.cart.find(item => item.id.toString() === productId.toString());
+
+        this.cart = this.cart.filter(item => item.id.toString() !== productId.toString());
         this.saveCart();
         this.updateCartCount();
 
@@ -566,8 +572,11 @@ class TelegramShop {
             this.updateCartDisplay();
         }
 
-        this.showNotification('🗑️ Товар удален из корзины', 'info');
+        if (itemToRemove) {
+            this.showNotification(`🗑️ ${itemToRemove.name} удален из корзины`, 'info');
+        }
     }
+
 
     updateCartItemQuantity(productId, quantity) {
         const itemIndex = this.cart.findIndex(item => item.id.toString() === productId.toString());
@@ -597,10 +606,14 @@ class TelegramShop {
         }
     }
 
+        // Упрощенный метод отображения корзины
     updateCartDisplay() {
         const cartItems = document.getElementById('cartItems');
         const cartTotal = document.getElementById('cartTotal');
         if (!cartItems || !cartTotal) return;
+
+        // Очищаем контейнер перед рендерингом
+        cartItems.innerHTML = '';
 
         if (this.cart.length === 0) {
             cartItems.innerHTML = `
@@ -611,11 +624,12 @@ class TelegramShop {
                 </div>
             `;
             cartTotal.textContent = '0 ₽';
+
+            // Скрываем кнопки если есть
             this.hideCartButtons();
             return;
         }
 
-        let itemsHTML = '';
         let subtotal = 0;
         let discountedSubtotal = 0;
 
@@ -629,69 +643,89 @@ class TelegramShop {
             subtotal += originalPrice * item.quantity;
             discountedSubtotal += priceToShow * item.quantity;
 
-            // ГЕНЕРИРУЕМ ОБРАБОТЧИКИ НЕПОСРЕДСТВЕННО В HTML
-            itemsHTML += `
-                <div class="cart-item" data-id="${item.id}">
-                    ${hasDiscount ? `
-                        <div class="cart-item-discount">
-                            ${this.formatDiscountInfo(item.discount_info)}
-                        </div>
-                    ` : ''}
+            // Создаем элемент товара
+            const cartItem = document.createElement('div');
+            cartItem.className = 'cart-item';
+            cartItem.dataset.id = item.id;
+            cartItem.innerHTML = `
+                ${hasDiscount ? `
+                    <div class="cart-item-discount">
+                        ${this.formatDiscountInfo(item.discount_info)}
+                    </div>
+                ` : ''}
 
-                    <img src="${item.image || 'https://via.placeholder.com/80'}"
-                         alt="${item.name}"
-                         class="cart-item-image">
-                    <div class="cart-item-info">
-                        <div class="cart-item-header">
-                            <h4 class="cart-item-name">${item.name}</h4>
-                            <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
-                                <i class="fas fa-trash"></i>
+                <img src="${item.image || 'https://via.placeholder.com/80'}"
+                     alt="${item.name}"
+                     class="cart-item-image">
+                <div class="cart-item-info">
+                    <div class="cart-item-header">
+                        <h4 class="cart-item-name">${item.name}</h4>
+                        <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="cart-item-pricing">
+                        ${hasDiscount ? `
+                            <div class="cart-price-discounted">
+                                <span class="cart-item-original-price">${this.formatPrice(originalPrice)} ₽</span>
+                                <span class="cart-item-price discounted">${this.formatPrice(discountedPrice)} ₽</span>
+                            </div>
+                        ` : `
+                            <div class="cart-item-price">${this.formatPrice(originalPrice)} ₽</div>
+                        `}
+                    </div>
+                    <div class="cart-item-controls">
+                        <div class="quantity-selector small">
+                            <button class="qty-btn minus-btn">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <span class="quantity">${item.quantity} шт.</span>
+                            <button class="qty-btn plus-btn">
+                                <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        <div class="cart-item-pricing">
-                            ${hasDiscount ? `
-                                <div class="cart-price-discounted">
-                                    <span class="cart-item-original-price">${this.formatPrice(originalPrice)} ₽</span>
-                                    <span class="cart-item-price discounted">${this.formatPrice(discountedPrice)} ₽</span>
-                                </div>
-                            ` : `
-                                <div class="cart-item-price">${this.formatPrice(originalPrice)} ₽</div>
-                            `}
-                        </div>
-                        <div class="cart-item-controls">
-                            <div class="quantity-selector small">
-                                <button class="qty-btn minus-btn" data-id="${item.id}" data-action="minus">
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn plus-btn" data-id="${item.id}" data-action="plus">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                            <div class="cart-item-total ${hasDiscount ? 'discounted' : ''}">
-                                ${this.formatPrice(totalPrice)} ₽
-                            </div>
+                        <div class="cart-item-total ${hasDiscount ? 'discounted' : ''}">
+                            ${this.formatPrice(totalPrice)} ₽
                         </div>
                     </div>
                 </div>
             `;
+
+            // Добавляем обработчики для кнопок +/-
+            const minusBtn = cartItem.querySelector('.minus-btn');
+            const plusBtn = cartItem.querySelector('.plus-btn');
+
+            minusBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const newQuantity = item.quantity - 1;
+                if (newQuantity >= 0) {
+                    this.updateCartItemQuantity(item.id, newQuantity);
+                }
+            });
+
+            plusBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.updateCartItemQuantity(item.id, item.quantity + 1);
+            });
+
+            // Обработчик для кнопки удаления
+            const removeBtn = cartItem.querySelector('.remove-item');
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.removeFromCart(item.id);
+            });
+
+            cartItems.appendChild(cartItem);
         });
 
-        // Рассчитываем общую скидку на товары
+        // Обновляем итоговую сумму
         const itemsDiscount = subtotal - discountedSubtotal;
-
-        // Обновляем итоговую сумму в шапке
         cartTotal.textContent = `${this.formatPrice(discountedSubtotal)} ₽`;
-
-        // Обновляем содержимое корзины
-        cartItems.innerHTML = itemsHTML;
-
-        // НАЗНАЧАЕМ ОБРАБОТЧИКИ ДЛЯ КНОПОК КОЛИЧЕСТВА
-        this.bindCartItemQuantityButtons();
 
         // Обновляем детализацию суммы
         this.updateCartSummary(discountedSubtotal, subtotal, itemsDiscount);
     }
+
 
         // Новый метод для назначения обработчиков кнопок количества
     bindCartItemQuantityButtons() {
@@ -737,6 +771,7 @@ class TelegramShop {
         const cartFooter = document.querySelector('.cart-footer .cart-summary');
         if (!cartFooter) return;
 
+        // Обновляем основную сумму
         const cartTotalElement = cartFooter.querySelector('.cart-total');
         if (cartTotalElement) {
             cartTotalElement.innerHTML = `
@@ -744,27 +779,37 @@ class TelegramShop {
                 <span class="total-price">${this.formatPrice(discountedSubtotal)} ₽</span>
             `;
         }
-        
-        // Обновляем детализацию если есть скидки
-        const existingDetails = cartFooter.querySelector('.summary-details');
-        if (existingDetails) {
-            existingDetails.innerHTML = `
+
+        // Обновляем или создаем детализацию
+        let detailsElement = cartFooter.querySelector('.summary-details');
+        if (itemsDiscount > 0) {
+            if (!detailsElement) {
+                detailsElement = document.createElement('div');
+                detailsElement.className = 'summary-details';
+                cartFooter.insertBefore(detailsElement, cartFooter.querySelector('.cart-actions'));
+            }
+
+            detailsElement.innerHTML = `
                 <div class="summary-row">
                     <span>Товары:</span>
                     <span>${this.formatPrice(subtotal)} ₽</span>
                 </div>
-                ${itemsDiscount > 0 ? `
-                    <div class="summary-row promo-discount-row">
-                        <span>Скидка на товары:</span>
-                        <span>-${this.formatPrice(itemsDiscount)} ₽</span>
-                    </div>
-                ` : ''}
+                <div class="summary-row promo-discount-row">
+                    <span>Скидка на товары:</span>
+                    <span>-${this.formatPrice(itemsDiscount)} ₽</span>
+                </div>
                 <div class="summary-row total-row">
                     <span>Итого к оплате:</span>
                     <span class="total-amount">${this.formatPrice(discountedSubtotal)} ₽</span>
                 </div>
             `;
+        } else if (detailsElement) {
+            // Удаляем детализацию если нет скидок
+            detailsElement.remove();
         }
+
+        // Показываем кнопки действий
+        this.showCartButtons();
     }
 
     // Метод для скрытия кнопок когда корзина пуста
@@ -865,14 +910,21 @@ class TelegramShop {
             this.showNotification('Корзина уже пуста', 'info');
             return;
         }
+
         if (confirm('Вы уверены, что хотите очистить корзину?')) {
             this.cart = [];
-            localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+            this.saveCart();
             this.updateCartCount();
-            this.updateCartDisplay();
+
+            // ВАЖНО: обновляем отображение если корзина открыта
+            if (this.isCartOpen()) {
+                this.updateCartDisplay();
+            }
+
             this.showNotification('🗑️ Корзина очищена', 'info');
         }
     }
+
 
     async checkout() {
         if (this.cart.length === 0) {
