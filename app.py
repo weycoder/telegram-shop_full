@@ -1083,43 +1083,32 @@ def send_order_notification(order_id, status, courier_id=None):
             courier_phone=courier_phone
         )
 
-        # 2. Если это СОЗДАНИЕ заказа - отправляем ДЕТАЛИЗИРОВАННОЕ уведомление
-        if status == 'created':
-            # Парсим items
-            try:
-                items_list = json.loads(order_dict['items'])
-            except:
-                items_list = []
+        # И замените ее на:
+        try:
+            # Получаем детали заказа
+            items_list = []
+            if order_dict.get('items'):
+                try:
+                    items_list = json.loads(order_dict['items'])
+                except:
+                    items_list = []
 
-            # Рассчитываем общую сумму
             total_amount = order_dict.get('total_price', 0)
             delivery_type = order_dict.get('delivery_type', 'courier')
 
-            # Отправляем детали
-            details_sent = send_order_details_notification(
+            status_sent = send_order_details_notification(
                 telegram_id=telegram_id,
                 order_id=order_id,
                 items=items_list,
                 status=status,
                 total_amount=total_amount,
-                delivery_type=delivery_type
+                delivery_type=delivery_type,
+                courier_name=courier_name,
+                courier_phone=courier_phone
             )
-
-            if details_sent:
-                print(f"✅ Детали заказа #{order_id} отправлены пользователю {telegram_id}")
-
-        if status_sent:
-            print(f"✅ Уведомление для заказа #{order_id} отправлено (статус: {status})")
-        else:
-            print(f"⚠️ Уведомление для заказа #{order_id} не отправлено")
-
-        return status_sent
-
-    except Exception as e:
-        print(f"❌ Критическая ошибка отправки уведомления: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        except Exception as e:
+            print(f"❌ Ошибка подготовки данных для уведомления: {e}")
+            status_sent = False
     finally:
         if db:
             db.close()

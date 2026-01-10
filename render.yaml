@@ -16,3 +16,4 @@ services:
         value: production
     healthCheckPath: /api/status
     autoDeploy: true
+    runtime:
