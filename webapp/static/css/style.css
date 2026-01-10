@@ -365,7 +365,7 @@ body {
     flex-direction: column;
     border: 1px solid #e2e8f0;
     height: 100%;
-    min-height: 280px; /* Уменьшена минимальная высота */
+    min-height: 260px; /* Еще более компактная высота */
 }
 
 .product-card:hover {
@@ -377,7 +377,7 @@ body {
 .product-image-container {
     position: relative;
     width: 100%;
-    height: 140px; /* Уменьшена высота изображения */
+    height: 130px; /* Еще меньше высота изображения */
     overflow: hidden;
     background: #f8fafc;
     flex-shrink: 0;
@@ -386,53 +386,54 @@ body {
 .product-image {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain; /* Изменено на contain для лучшего отображения товаров */
     transition: transform 0.3s;
+    padding: 8px; /* Добавлен padding для изображений */
 }
 
 .product-card:hover .product-image {
     transform: scale(1.05);
 }
 
-.product-card.has-discount .product-image-container::before {
-    content: '';
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    width: 0;
-    height: 0;
-    border-left: 40px solid transparent;
-    border-right: 40px solid transparent;
-    border-bottom: 40px solid #10b981;
-    transform: rotate(-45deg);
-    z-index: 1;
-}
-
+/* Бейдж скидки - ПЕРЕДЕЛАН ПОД НОРМАЛЬНОЕ ОТОБРАЖЕНИЕ */
 .discount-badge {
     position: absolute;
     top: 8px;
     left: 8px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); /* Красный цвет для скидки */
     color: white;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     padding: 4px 8px;
     border-radius: 6px;
     z-index: 2;
-    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 60px; /* Минимальная ширина для нормального отображения */
+}
+
+.discount-badge i {
+    font-size: 10px;
+}
+
+/* Убрали старый треугольник скидки */
+.product-card.has-discount .product-image-container::before {
+    display: none;
 }
 
 /* Информация о товаре - компактная */
 .product-info {
-    padding: 10px; /* Уменьшен padding */
+    padding: 10px;
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px; /* Уменьшен gap */
+    gap: 6px;
 }
 
 .product-title {
-    font-size: 13px; /* Уменьшен шрифт */
+    font-size: 13px;
     font-weight: 600;
     color: #1e293b;
     margin: 0;
@@ -441,7 +442,7 @@ body {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    min-height: 36px; /* Уменьшена минимальная высота */
+    min-height: 36px;
 }
 
 .weight-product-badge {
@@ -452,40 +453,43 @@ body {
     color: #0369a1;
     font-size: 11px;
     font-weight: 500;
-    padding: 3px 6px; /* Уменьшен padding */
+    padding: 3px 6px;
     border-radius: 6px;
-    margin-bottom: 8px; /* Уменьшен margin */
+    margin-bottom: 8px;
 }
 
 .weight-product-badge i {
     font-size: 10px;
 }
 
-/* Цены */
+/* Цены - УЛУЧШЕННОЕ ОТОБРАЖЕНИЕ */
 .price-container {
     display: flex;
-    align-items: baseline;
-    gap: 6px; /* Уменьшен gap */
+    align-items: flex-end; /* Выравнивание по нижнему краю */
+    gap: 6px;
     flex-wrap: wrap;
-    margin-bottom: 6px; /* Уменьшен margin */
+    margin-bottom: 6px;
 }
 
 .original-price {
     text-decoration: line-through;
     color: #94a3b8;
-    font-size: 11px; /* Уменьшен шрифт */
+    font-size: 11px;
+    order: 1; /* Старая цена сверху */
 }
 
 .discounted-price {
     color: #10b981;
-    font-size: 14px; /* Уменьшен шрифт */
+    font-size: 14px;
     font-weight: 700;
+    order: 2; /* Цена со скидкой по центру */
 }
 
 .product-price {
     color: #2c3e50;
-    font-size: 14px; /* Уменьшен шрифт */
+    font-size: 14px;
     font-weight: 700;
+    order: 2;
 }
 
 /* Наличие */
@@ -493,10 +497,10 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px; /* Уменьшен шрифт */
+    font-size: 11px;
     color: #64748b;
     margin-top: auto;
-    margin-bottom: 4px; /* Добавлен margin */
+    margin-bottom: 4px;
 }
 
 .stock-unavailable {
@@ -510,12 +514,12 @@ body {
 /* Кнопка */
 .btn-block {
     width: 100%;
-    padding: 8px 10px; /* Уменьшен padding */
+    padding: 8px 10px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border: none;
     border-radius: 8px;
-    font-size: 12px; /* Уменьшен шрифт */
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     display: flex;
@@ -523,7 +527,7 @@ body {
     justify-content: center;
     gap: 6px;
     transition: all 0.2s;
-    margin-top: 6px; /* Уменьшен margin */
+    margin-top: 6px;
 }
 
 .btn-block:hover:not(:disabled) {
@@ -549,7 +553,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px; /* Уменьшен шрифт */
+    font-size: 13px;
     font-weight: 600;
     z-index: 3;
     border-radius: 12px;
@@ -562,22 +566,26 @@ body {
 /* Очень маленькие телефоны (до 360px) */
 @media (max-width: 360px) {
     .products-grid {
-        grid-template-columns: repeat(2, 1fr); /* Остается 2 в ряд */
-        gap: 8px; /* Минимальный gap */
-        padding: 8px; /* Минимальный padding */
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        padding: 8px;
     }
 
     .product-card {
-        min-height: 260px; /* Еще меньше для очень маленьких экранов */
+        min-height: 250px;
     }
 
     .product-image-container {
-        height: 120px; /* Минимальная высота изображения */
+        height: 120px;
+    }
+
+    .product-image {
+        padding: 6px;
     }
 
     .product-title {
-        font-size: 12px; /* Минимальный размер шрифта */
-        min-height: 32px; /* Минимальная высота */
+        font-size: 12px;
+        min-height: 32px;
         line-height: 1.3;
     }
 
@@ -603,18 +611,24 @@ body {
     .product-stock {
         font-size: 10px;
     }
+
+    .discount-badge {
+        font-size: 11px;
+        padding: 3px 6px;
+        min-width: 55px;
+    }
 }
 
 /* Телефоны (361px - 639px) - базовый вариант */
 @media (min-width: 361px) and (max-width: 639px) {
     .products-grid {
-        grid-template-columns: repeat(2, 1fr); /* 2 карточки в ряд */
+        grid-template-columns: repeat(2, 1fr);
         gap: 10px;
         padding: 10px;
     }
 
     .product-card {
-        min-height: 270px;
+        min-height: 260px;
     }
 
     .product-image-container {
@@ -630,21 +644,25 @@ body {
 /* Планшеты (640px - 1023px) */
 @media (min-width: 640px) and (max-width: 1023px) {
     .products-grid {
-        grid-template-columns: repeat(3, 1fr); /* 3 карточки в ряд */
+        grid-template-columns: repeat(3, 1fr);
         gap: 15px;
         padding: 15px;
     }
 
     .product-card {
-        min-height: 300px; /* Немного больше высота */
+        min-height: 280px;
     }
 
     .product-image-container {
-        height: 150px; /* Выше изображение */
+        height: 140px;
+    }
+
+    .product-image {
+        padding: 10px;
     }
 
     .product-title {
-        font-size: 14px; /* Нормальный размер шрифта */
+        font-size: 14px;
         min-height: 40px;
     }
 
@@ -662,32 +680,42 @@ body {
         padding: 10px 12px;
         font-size: 13px;
     }
+
+    .discount-badge {
+        font-size: 13px;
+        padding: 5px 10px;
+        min-width: 70px;
+    }
 }
 
 /* Десктопы (1024px и больше) */
 @media (min-width: 1024px) {
     .products-grid {
-        grid-template-columns: repeat(4, 1fr); /* 4 карточки в ряд */
-        gap: 20px; /* Больше отступов */
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
         padding: 20px;
     }
 
     .product-card {
-        min-height: 320px; /* Максимальная высота */
+        min-height: 300px;
     }
 
     .product-image-container {
-        height: 160px; /* Высокое изображение */
+        height: 150px;
+    }
+
+    .product-image {
+        padding: 12px;
     }
 
     .product-title {
-        font-size: 15px; /* Чуть больше шрифт */
-        min-height: 44px;
+        font-size: 14px;
+        min-height: 40px;
     }
 
     .product-info {
         padding: 15px;
-        gap: 10px;
+        gap: 8px;
     }
 
     .discounted-price,
@@ -696,8 +724,14 @@ body {
     }
 
     .btn-block {
-        padding: 12px 15px;
+        padding: 10px 12px;
         font-size: 14px;
+    }
+
+    .discount-badge {
+        font-size: 14px;
+        padding: 6px 12px;
+        min-width: 80px;
     }
 }
 
@@ -709,6 +743,14 @@ body {
         padding: 24px;
         max-width: 1280px;
         margin: 0 auto;
+    }
+
+    .product-card {
+        min-height: 320px;
+    }
+
+    .product-image-container {
+        height: 160px;
     }
 }
 
@@ -786,7 +828,8 @@ body {
 .product-modal-image {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    padding: 20px;
 }
 
 .product-modal-info {
@@ -919,7 +962,6 @@ body {
 
 .quantity-selector {
     display: flex;
-    flex-direction: column;
     gap: 10px;
 }
 
@@ -1283,22 +1325,23 @@ body {
     position: absolute;
     top: -8px;
     left: -8px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     color: white;
     font-size: 11px;
     font-weight: 600;
     padding: 4px 8px;
     border-radius: 6px;
     z-index: 2;
-    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
 }
 
 .cart-item-image {
     width: 80px;
     height: 80px;
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 8px;
     border: 2px solid #f1f5f9;
+    padding: 5px;
 }
 
 .cart-item-info {
