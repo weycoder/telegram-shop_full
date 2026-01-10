@@ -283,80 +283,185 @@ class AdminPanel {
         }
     }
 
-    renderOrders() {
-        const tbody = document.querySelector('#ordersTableBody');
-        if (!tbody) return;
+    async renderOrders() {
+        try {
+            console.log('📋 Рендеринг заказов...');
 
-        if (this.orders.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="no-data">
-                        <i class="fas fa-inbox"></i>
-                        <h3>Нет заказов</h3>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
+            const response = await fetch('/api/admin/orders');
+            const orders = await response.json();
 
-        let html = '';
-        this.orders.forEach(order => {
-            const statusClass = {
-                'pending': 'status-pending',
-                'processing': 'status-processing',
-                'delivering': 'status-delivering',
-                'completed': 'status-completed',
-                'cancelled': 'status-cancelled'
-            }[order.status] || 'status-pending';
+            console.log('📦 Получены заказы:', orders);
 
-            const statusText = {
-                'pending': 'Ожидает',
-                'processing': 'В обработке',
-                'delivering': 'Доставляется',
-                'completed': 'Выполнен',
-                'cancelled': 'Отменен'
-            }[order.status] || order.status;
+            const ordersGrid = document.getElementById('ordersGrid');
+            if (!ordersGrid) return;
 
-            const date = new Date(order.created_at || order.timestamp).toLocaleDateString('ru-RU', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-
-            // Форматирование списка товаров
-            let productsHtml = 'Нет товаров';
-            if (order.items && order.items.length > 0) {
-                productsHtml = order.items.map(item =>
-                    `${item.name || 'Товар'}: ${item.quantity || 1} × ${this.formatPrice(item.price || 0)} ₽`
-                ).join('<br>');
-            } else if (order.products && order.products.length > 0) {
-                productsHtml = order.products.map(product =>
-                    `${product.name}: ${product.quantity || 1} шт`
-                ).join('<br>');
+            if (!orders || orders.length === 0) {
+                ordersGrid.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-box-open"></i>
+                        <h3>Заказов нет</h3>
+                        <p>Ожидайте поступления новых заказов</p>
+                    </div>
+                `;
+                return;
             }
 
-            html += `
-                <tr>
-                    <td><strong>#${order.id || 'N/A'}</strong></td>
-                    <td>${order.username || order.user_id || 'Гость'}</td>
-                    <td><small>${productsHtml}</small></td>
-                    <td><strong>${this.formatPrice(order.total_with_delivery || order.total_price || 0)} ₽</strong></td>
-                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                    <td>${date}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn-icon btn-edit" onclick="admin.editOrderStatus(${order.id})">
-                                <i class="fas fa-edit"></i>
+            let html = '';
+
+            orders.forEach(order => {
+                console.log('📊 Заказ:', order);
+
+                // ПРЕОБРАЗУЕМ items В МАССИВ
+                let items = [];
+                try {
+                    if (typeof order.items === 'string') {
+                        items = JSON.parse(order.items);
+                    } else if (Array.isArray(order.items)) {
+                        items = order.items;
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка парсинга items:', error, order.items);
+                    items = [];
+                }
+
+                // Форматируем дату
+                const orderDate = new Date(order.created_at || order.order_date || Date.now());
+                const formattedDate = orderDate.toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                // Определяем статус
+                const statusConfig = {
+                    'pending': { text: 'Ожидает', color: '#f59e0b', bg: '#fffbeb', icon: 'fa-clock' },
+                    'processing': { text: 'В обработке', color: '#3b82f6', bg: '#eff6ff', icon: 'fa-cog' },
+                    'delivering': { text: 'Доставляется', color: '#8b5cf6', bg: '#f5f3ff', icon: 'fa-truck' },
+                    'completed': { text: 'Завершен', color: '#10b981', bg: '#ecfdf5', icon: 'fa-check-circle' },
+                    'cancelled': { text: 'Отменен', color: '#ef4444', bg: '#fef2f2', icon: 'fa-times-circle' }
+                };
+
+                const status = statusConfig[order.status] || statusConfig.pending;
+
+                // Определяем способ доставки
+                const deliveryType = order.delivery_type === 'courier' ? 'Курьер' :
+                                    order.delivery_type === 'pickup' ? 'Самовывоз' : 'Не указан';
+
+                // Определяем способ оплаты
+                const paymentMethod = order.payment_method === 'cash' ? 'Наличные' :
+                                     order.payment_method === 'transfer' ? 'Перевод' :
+                                     order.payment_method === 'terminal' ? 'Терминал' : 'Не указан';
+
+                html += `
+                    <div class="order-card" data-order-id="${order.id}">
+                        <div class="order-header">
+                            <div class="order-id">
+                                <i class="fas fa-hashtag"></i>
+                                Заказ #${order.id}
+                            </div>
+                            <div class="order-status" style="color: ${status.color}; background: ${status.bg};">
+                                <i class="fas ${status.icon}"></i> ${status.text}
+                            </div>
+                        </div>
+
+                        <div class="order-info">
+                            <div class="info-row">
+                                <span><i class="fas fa-user"></i> Клиент:</span>
+                                <span>${order.username || order.recipient_name || 'Не указан'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span><i class="fas fa-calendar"></i> Дата:</span>
+                                <span>${formattedDate}</span>
+                            </div>
+                            <div class="info-row">
+                                <span><i class="fas fa-truck"></i> Доставка:</span>
+                                <span>${deliveryType}</span>
+                            </div>
+                            <div class="info-row">
+                                <span><i class="fas fa-credit-card"></i> Оплата:</span>
+                                <span>${paymentMethod}</span>
+                            </div>
+                            <div class="info-row">
+                                <span><i class="fas fa-wallet"></i> Сумма:</span>
+                                <span class="order-total">${this.formatPrice(order.total || 0)} ₽</span>
+                            </div>
+                        </div>
+
+                        <div class="order-items">
+                            <div class="items-header">
+                                <i class="fas fa-box"></i> Товары (${items.length}):
+                            </div>
+                            <div class="items-list">
+                `;
+
+                // Добавляем товары
+                if (items && items.length > 0) {
+                    items.forEach(item => {
+                        const itemName = item.name || 'Товар';
+                        const itemPrice = this.formatPrice(item.price || 0);
+                        const itemQuantity = item.quantity || 1;
+                        const itemTotal = this.formatPrice((item.price || 0) * (item.quantity || 1));
+
+                        html += `
+                            <div class="order-item">
+                                <div class="item-name">${itemName}</div>
+                                <div class="item-details">
+                                    <span class="item-price">${itemPrice} ₽</span>
+                                    <span class="item-quantity">× ${itemQuantity}</span>
+                                    <span class="item-total">${itemTotal} ₽</span>
+                                </div>
+                                ${item.is_weight ? `<div class="item-weight"><i class="fas fa-weight-hanging"></i> ${item.weight || 0} кг</div>` : ''}
+                            </div>
+                        `;
+                    });
+                } else {
+                    html += `<div class="no-items">Товары не указаны</div>`;
+                }
+
+                html += `
+                            </div>
+                        </div>
+
+                        <div class="order-actions">
+                            <button class="btn btn-sm btn-outline" onclick="admin.changeOrderStatus(${order.id}, 'processing')"
+                                    ${order.status === 'completed' || order.status === 'cancelled' ? 'disabled' : ''}>
+                                <i class="fas fa-cog"></i> В обработку
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="admin.changeOrderStatus(${order.id}, 'delivering')"
+                                    ${order.status === 'completed' || order.status === 'cancelled' || order.delivery_type !== 'courier' ? 'disabled' : ''}>
+                                <i class="fas fa-truck"></i> В доставку
+                            </button>
+                            <button class="btn btn-sm btn-success" onclick="admin.changeOrderStatus(${order.id}, 'completed')"
+                                    ${order.status === 'completed' || order.status === 'cancelled' ? 'disabled' : ''}>
+                                <i class="fas fa-check"></i> Завершить
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="admin.changeOrderStatus(${order.id}, 'cancelled')"
+                                    ${order.status === 'completed' || order.status === 'cancelled' ? 'disabled' : ''}>
+                                <i class="fas fa-times"></i> Отменить
                             </button>
                         </div>
-                    </td>
-                </tr>
-            `;
-        });
+                    </div>
+                `;
+            });
 
-        tbody.innerHTML = html;
+            ordersGrid.innerHTML = html;
+            console.log('✅ Заказы отрендерены');
+
+        } catch (error) {
+            console.error('❌ Ошибка загрузки заказов:', error);
+            document.getElementById('ordersGrid').innerHTML = `
+                <div class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Ошибка загрузки заказов</h3>
+                    <p>${error.message}</p>
+                    <button class="btn btn-primary" onclick="admin.renderOrders()">
+                        <i class="fas fa-redo"></i> Попробовать снова
+                    </button>
+                </div>
+            `;
+        }
     }
 
     async loadCategories() {
