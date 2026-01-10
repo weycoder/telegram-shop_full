@@ -669,43 +669,61 @@ class TelegramShop {
         if (!cartOverlay) return;
 
         this.updateCartDisplay();
-        cartOverlay.innerHTML = `
-            <div class="cart-modal">
-                <div class="cart-header">
-                    <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
-                    <button class="close-cart" id="closeCart">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="cart-items" id="cartItems"></div>
-                <div class="cart-footer">
-                    <div class="cart-summary">
-                        <div class="cart-total">
-                            <span>Итого:</span>
-                            <span class="total-price" id="cartTotal">0 ₽</span>
-                        </div>
-                        <div class="cart-actions">
-                            <button class="btn btn-outline" id="clearCart">
-                                <i class="fas fa-trash"></i> Очистить
-                            </button>
-                            <button class="btn btn-primary" id="checkoutBtn">
-                                <i class="fas fa-paper-plane"></i> Купить
-                            </button>
-                        </div>
+
+        // Убедитесь, что убираем старый контент
+        const existingCart = document.querySelector('.cart-modal');
+        if (existingCart) {
+            existingCart.remove();
+        }
+
+        // Создаем новое модальное окно
+        const cartModal = document.createElement('div');
+        cartModal.className = 'cart-modal';
+        cartModal.innerHTML = `
+            <div class="cart-header">
+                <h2><i class="fas fa-shopping-cart"></i> Корзина</h2>
+                <button class="close-cart" id="closeCart">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="cart-items" id="cartItems"></div>
+            <div class="cart-footer">
+                <div class="cart-summary">
+                    <div class="cart-total">
+                        <span>Итого:</span>
+                        <span class="total-price" id="cartTotal">0 ₽</span>
+                    </div>
+                    <div class="cart-actions">
+                        <button class="btn btn-outline" id="clearCart">
+                            <i class="fas fa-trash"></i> Очистить
+                        </button>
+                        <button class="btn btn-primary" id="checkoutBtn">
+                            <i class="fas fa-paper-plane"></i> Купить
+                        </button>
                     </div>
                 </div>
             </div>
         `;
 
+        cartOverlay.innerHTML = '';
+        cartOverlay.appendChild(cartModal);
+
         this.updateCartDisplay();
-        this.bindEvent('closeCart', 'click', () => this.closeCart());
-        this.bindEvent('clearCart', 'click', () => this.clearCart());
-        this.bindEvent('checkoutBtn', 'click', () => this.checkout());
+
+        // Назначаем обработчики
+        setTimeout(() => {
+            const closeBtn = document.getElementById('closeCart');
+            const clearBtn = document.getElementById('clearCart');
+            const checkoutBtn = document.getElementById('checkoutBtn');
+
+            if (closeBtn) closeBtn.addEventListener('click', () => this.closeCart());
+            if (clearBtn) clearBtn.addEventListener('click', () => this.clearCart());
+            if (checkoutBtn) checkoutBtn.addEventListener('click', () => this.checkout());
+        }, 100);
 
         cartOverlay.style.display = 'flex';
         this.updateBackButton();
     }
-
     closeCart() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (cartOverlay) {

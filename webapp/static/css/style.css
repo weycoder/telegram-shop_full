@@ -1,3 +1,38 @@
+/* Добавьте в самое начало CSS: */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Принудительно применяем стили ко всем элементам */
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed,
+figure, figcaption, footer, header, hgroup,
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 100%;
+    font: inherit;
+    vertical-align: baseline;
+}
+
+
+
 /* ============================================
    СБРОС И БАЗОВЫЕ СТИЛИ
 ============================================ */
@@ -345,22 +380,24 @@ body {
 ============================================ */
 .products-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-    padding: 15px;
+    grid-template-columns: repeat(2, 1fr); /* Всегда 2 в ряд на мобильных */
+    gap: 12px;
+    padding: 12px;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
     .products-grid {
         grid-template-columns: repeat(3, 1fr);
-        padding: 20px;
-        gap: 20px;
+        gap: 15px;
+        padding: 15px;
     }
 }
 
 @media (min-width: 1024px) {
     .products-grid {
         grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        padding: 20px;
     }
 }
 
@@ -374,6 +411,34 @@ body {
     display: flex;
     flex-direction: column;
     border: 1px solid #e2e8f0;
+    height: 100%; /* Важно для одинаковой высоты */
+}
+
+/* Улучшите изображения для 2 в ряд */
+.product-image-container {
+    position: relative;
+    width: 100%;
+    height: 160px; /* Фиксированная высота */
+    overflow: hidden;
+    background: #f8fafc;
+}
+
+/* Улучшите отображение на очень маленьких экранах */
+@media (max-width: 360px) {
+    .products-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .product-image-container {
+        height: 140px;
+    }
+
+    .product-title {
+        font-size: 12px;
+        min-height: 32px;
+    }
 }
 
 .product-card:hover {
