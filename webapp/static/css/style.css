@@ -2518,3 +2518,49 @@ const cartStyles = `
 const styleSheet = document.createElement('style');
 styleSheet.textContent = cartStyles;
 document.head.appendChild(styleSheet);
+
+
+
+/* Добавить в style.css */
+
+/* Стили для весовых товаров в корзине */
+.quantity-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    background: #f8fafc;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #475569;
+}
+
+.edit-weight-btn {
+    background: none;
+    border: none;
+    color: #667eea;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.edit-weight-btn:hover {
+    background: #f1f5f9;
+}
+
+/* Увеличиваем максимальное значение в селекторе количества */
+.quantity-selector input[type="number"] {
+    max-width: 60px;
+}
+
+/* Стили для сообщений об ошибке */
+.quantity-selector.small .qty-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.quantity-selector.small .qty-btn:disabled:hover {
+    background: #f8fafc;
+}

@@ -1192,62 +1192,114 @@ def get_products():
 
 @app.route('/api/products/<int:product_id>')
 def api_product_detail(product_id):
-    """Получить детали товара по ID"""
+    """Получить детали товара по ID для фронтенда"""
     db = get_db()
     try:
         product = db.execute('''
                              SELECT id,
                                     name,
                                     description,
-                                    CASE
-                                        WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg
-                                        ELSE price
-                                        END as price,
-                                    CASE
-                                        WHEN image_url IS NOT NULL AND image_url != '' THEN image_url
-                                        ELSE 'https://via.placeholder.com/300x200?text=No+Image'
-                                        END as image_url,
+                                    price,
+                                    price_per_kg,
+                                    image_url,
                                     category,
-                                    CASE
-                                        WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight
-                                        ELSE stock
-                                        END as stock,
+                                    stock,
+                                    stock_weight,
                                     product_type,
                                     unit,
-                                    weight_unit,
-                                    price_per_kg,
                                     min_weight,
                                     max_weight,
-                                    step_weight,
-                                    stock_weight
+                                    step_weight
                              FROM products
                              WHERE id = ?
                              ''', (product_id,)).fetchone()
 
-        if product:
-            product_dict = dict(product)
-
-            # Для весовых товаров
-            if product_dict.get('product_type') == 'weight':
-                product_dict['is_weight'] = True
-                product_dict['display_price'] = product_dict.get('price_per_kg', product_dict['price'])
-                product_dict['display_stock'] = product_dict.get('stock_weight', 0)
-            else:
-                product_dict['is_weight'] = False
-                product_dict['display_price'] = product_dict['price']
-                product_dict['display_stock'] = product_dict['stock']
-
+        if not product:
             db.close()
-            return jsonify(product_dict)
+            return jsonify({'error': 'Товар не найден'}), 404
+
+        product_dict = dict(product)
+
+        # Добавляем недостающие поля
+        product_dict['display_price'] = product_dict['price']
+        product_dict['display_stock'] = product_dict['stock']
+
+        # Для весовых товаров
+        if product_dict['product_type'] == 'weight':
+            product_dict['is_weight'] = True
+            if product_dict['price_per_kg']:
+                product_dict['display_price'] = product_dict['price_per_kg']
+            product_dict['display_stock'] = product_dict.get('stock_weight', 0)
+            product_dict['weight_unit'] = product_dict.get('unit', 'кг')
+        else:
+            product_dict['is_weight'] = False
+            product_dict['weight_unit'] = None
+
+        # Если нет изображения - ставим заглушку
+        if not product_dict.get('image_url'):
+            product_dict['image_url'] = 'https://via.placeholder.com/300x200?text=No+Image'
+
+        # Гарантируем, что все нужные поля есть
+        required_fields = ['stock', 'stock_weight', 'min_weight', 'max_weight', 'step_weight']
+        for field in required_fields:
+            if field not in product_dict:
+                product_dict[field] = 0 if field in ['min_weight', 'max_weight', 'step_weight'] else None
 
         db.close()
-        return jsonify({'error': 'Товар не найден'}), 404
+        return jsonify(product_dict)
 
     except Exception as e:
         print(f"❌ Ошибка получения товара {product_id}: {e}")
         if db:
             db.close()
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/products/<int:product_id>/availability')
+def check_product_availability(product_id):
+    """Проверить наличие товара"""
+    db = get_db()
+    try:
+        product = db.execute('''
+                             SELECT id,
+                                    name,
+                                    product_type,
+                                    stock,
+                                    stock_weight
+                             FROM products
+                             WHERE id = ?
+                             ''', (product_id,)).fetchone()
+
+        if not product:
+            db.close()
+            return jsonify({'available': False, 'error': 'Товар не найден'})
+
+        product_data = dict(product)
+
+        if product_data['product_type'] == 'weight':
+            available = product_data['stock_weight'] > 0 if product_data['stock_weight'] is not None else False
+            quantity = product_data['stock_weight'] or 0
+            unit = 'кг'
+        else:
+            available = product_data['stock'] > 0 if product_data['stock'] is not None else False
+            quantity = product_data['stock'] or 0
+            unit = 'шт'
+
+        db.close()
+        return jsonify({
+            'available': available,
+            'quantity': quantity,
+            'unit': unit,
+            'product_type': product_data['product_type']
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка проверки наличия товара {product_id}: {e}")
+        if db:
+            db.close()
+        return jsonify({'available': False, 'error': str(e)})
+    
+
 
 @app.route('/api/categories')
 def api_categories():

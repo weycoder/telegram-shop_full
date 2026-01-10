@@ -704,50 +704,54 @@ class TelegramShop {
     }
 
     async updateCartItemQuantity(cartItemId, newQuantity) {
-        console.log('🔄 Изменение количества:', { cartItemId, newQuantity });
-
         const itemIndex = this.cart.findIndex(item => item.id.toString() === cartItemId.toString());
-        if (itemIndex === -1) {
-            console.error('❌ Товар не найден');
-            return;
-        }
+        if (itemIndex === -1) return;
 
         const item = this.cart[itemIndex];
 
-        // Проверяем минимальное количество
-        if (newQuantity < 1) {
-            this.removeFromCart(cartItemId);
+        // Для весовых товаров - всегда 1
+        if (item.is_weight) {
+            this.showNotification('ℹ️ Для весового товара нельзя изменить количество', 'info');
             return;
         }
 
-        // Проверяем наличие на складе для обычных товаров
-        if (!item.is_weight && item.original_product_id) {
-            try {
-                const response = await fetch(`/api/products/${item.original_product_id}`);
-                if (response.ok) {
-                    const product = await response.json();
-                    if (newQuantity > product.stock) {
-                        this.showNotification(`❌ Доступно только ${product.stock} шт.`, 'error');
-                        newQuantity = product.stock;
-                    }
+        // Для обычных товаров проверяем наличие
+        try {
+            const response = await fetch(`/api/products/${item.original_product_id}`);
+            if (response.ok) {
+                const product = await response.json();
+
+                // Проверяем наличие
+                const stock = product.stock || 0;
+                if (newQuantity > stock) {
+                    this.showNotification(`❌ Доступно только ${stock} шт.`, 'error');
+                    newQuantity = stock;
                 }
-            } catch (error) {
-                console.error('❌ Ошибка проверки наличия:', error);
+
+                if (stock === 0) {
+                    this.removeFromCart(cartItemId);
+                    this.showNotification('❌ Товар закончился', 'error');
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('❌ Ошибка проверки наличия:', error);
+        }
+
+        // Обновляем
+        if (newQuantity < 1) {
+            this.removeFromCart(cartItemId);
+        } else {
+            this.cart[itemIndex].quantity = newQuantity;
+            this.saveCart();
+            this.updateCartCount();
+
+            if (this.isCartOpen()) {
+                this.updateCartDisplay();
             }
         }
-
-        // Обновляем количество
-        item.quantity = newQuantity;
-        this.saveCart();
-        this.updateCartCount();
-
-        // Обновляем отображение
-        if (this.isCartOpen()) {
-            this.updateCartDisplay();
-        }
-
-        console.log('✅ Количество обновлено');
     }
+
     updateCartCount() {
         const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
         const cartCount = document.getElementById('cartCount');
@@ -949,17 +953,24 @@ class TelegramShop {
                         </div>
 
                         <div class="cart-item-controls">
-                            <div class="quantity-selector small">
-                                <button class="qty-btn minus-btn"
-                                        onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})">
-                                    <i class="fas fa-minus"></i>
-                                </button>
-                                <span class="quantity">${item.quantity} шт.</span>
-                                <button class="qty-btn plus-btn"
-                                        onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
+                            ${!item.is_weight ? `
+                                <div class="quantity-selector small">
+                                    <button class="qty-btn minus-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <span class="quantity">${item.quantity} шт.</span>
+                                    <button class="qty-btn plus-btn" onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="quantity-display">
+                                    <span class="quantity">${item.quantity} шт. (${item.weight} кг)</span>
+                                    <button class="edit-weight-btn" onclick="shop.editWeight('${item.id}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </div>
+                            `}
                             <div class="cart-item-total ${hasDiscount ? 'discounted' : ''}">
                                 ${this.formatPrice(totalPrice)} ₽
                             </div>
@@ -1314,39 +1325,45 @@ class TelegramShop {
     }
 
 
+        // В методе checkout():
     async checkout() {
         if (this.cart.length === 0) {
             this.showNotification('❌ Корзина пуста!', 'error');
             return;
         }
 
-        // Проверка доступности товаров
-        const unavailableItems = [];
+        // Проверка доступности
         for (const item of this.cart) {
             try {
-                const response = await fetch(`/api/products/${item.id}`);
+                const response = await fetch(`/api/products/${item.original_product_id || item.id}`);
                 if (response.ok) {
                     const product = await response.json();
-                    if (product.stock < item.quantity) {
-                        unavailableItems.push({
-                            name: item.name,
-                            available: product.stock,
-                            requested: item.quantity
-                        });
+
+                    // Для обычных товаров
+                    if (!item.is_weight) {
+                        if (item.quantity > (product.stock || 0)) {
+                            this.showNotification(
+                                `❌ Товар "${item.name}" доступен только в количестве ${product.stock || 0} шт.`,
+                                'error'
+                            );
+                            return;
+                        }
+                    }
+
+                    // Для весовых товаров
+                    if (item.is_weight && item.weight) {
+                        if (item.weight > (product.stock_weight || 0)) {
+                            this.showNotification(
+                                `❌ Товар "${item.name}" доступен только ${product.stock_weight || 0} кг`,
+                                'error'
+                            );
+                            return;
+                        }
                     }
                 }
             } catch (error) {
-                console.error(`Ошибка проверки товара ${item.id}:`, error);
+                console.error(`Ошибка проверки товара:`, error);
             }
-        }
-
-        if (unavailableItems.length > 0) {
-            let message = 'Некоторые товары недоступны:\n';
-            unavailableItems.forEach(item => {
-                message += `• ${item.name}: доступно ${item.available}, запрошено ${item.requested}\n`;
-            });
-            this.showNotification(message, 'error');
-            return;
         }
 
         await this.showDeliverySelection();
@@ -2138,6 +2155,7 @@ async editOrder(orderId) {
         }
     }
 
+        // В методе addWeightProductToCart:
     addWeightProductToCart(productId) {
         if (!this.currentProduct) return;
 
@@ -2145,11 +2163,17 @@ async editOrder(orderId) {
         const pricePerKg = this.currentProduct.price_per_kg || this.currentProduct.price;
         const price = Math.floor(weight * pricePerKg);
 
+        // Проверяем наличие веса
+        if (this.currentProduct.stock_weight && weight > this.currentProduct.stock_weight) {
+            this.showNotification(`❌ Доступно только ${this.currentProduct.stock_weight} кг`, 'error');
+            return;
+        }
+
         this.addToCart(
             productId,
-            this.currentProduct.name,
+            `${this.currentProduct.name} (${weight.toFixed(2)} ${this.currentProduct.unit || 'кг'})`,
             price,
-            1,
+            1, // Весовой товар всегда 1 штука
             this.currentProduct.image_url
         );
 
@@ -2158,6 +2182,102 @@ async editOrder(orderId) {
         this.selectedWeightPrice = 0;
 
         this.closeProductModal();
+    }
+
+    // Добавляем метод editWeight:
+    async editWeight(cartItemId) {
+        const item = this.cart.find(item => item.id.toString() === cartItemId.toString());
+        if (!item || !item.is_weight) return;
+
+        try {
+            // Получаем информацию о товаре
+            const response = await fetch(`/api/products/${item.original_product_id}`);
+            if (!response.ok) throw new Error('Товар не найден');
+
+            const product = await response.json();
+
+            // Создаем модальное окно для редактирования веса
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+                padding: 20px;
+            `;
+
+            const maxWeight = Math.min(
+                product.stock_weight || 5.0,
+                product.max_weight || 5.0
+            );
+
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 12px; width: 100%; max-width: 320px; max-height: 90vh; overflow-y: auto;">
+                    <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; color: #2c3e50;">
+                            <i class="fas fa-weight-hanging"></i> Изменить вес
+                        </h3>
+                        <button class="close-modal"
+                                style="background: none; border: none; font-size: 20px; color: #64748b; cursor: pointer;">
+                            &times;
+                        </button>
+                    </div>
+
+                    <div style="padding: 20px;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #475569;">
+                                Товар: ${product.name}
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 10px; margin: 15px 0;">
+                                <input type="number"
+                                       id="editWeightInput"
+                                       value="${item.weight}"
+                                       min="${product.min_weight || 0.1}"
+                                       max="${maxWeight}"
+                                       step="${product.step_weight || 0.1}"
+                                       style="flex: 1; padding: 10px; border: 2px solid #e2e8f0; border-radius: 6px; text-align: center;">
+                                <span style="color: #64748b;">${product.unit || 'кг'}</span>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 8px;">
+                            <button class="cancel-edit"
+                                    style="flex: 1; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; color: #475569; cursor: pointer;">
+                                Отмена
+                            </button>
+                            <button class="save-weight"
+                                    style="flex: 1; padding: 12px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                Сохранить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Обработчики событий
+            modal.querySelector('.close-modal').onclick = () => modal.remove();
+            modal.querySelector('.cancel-edit').onclick = () => modal.remove();
+            modal.querySelector('.save-weight').onclick = async () => {
+                const input = document.getElementById('editWeightInput');
+                const newWeight = parseFloat(input.value);
+
+                await this.updateWeightProductWeight(cartItemId, newWeight);
+                modal.remove();
+            };
+
+        } catch (error) {
+            console.error('❌ Ошибка редактирования веса:', error);
+            this.showNotification('❌ Не удалось изменить вес', 'error');
+        }
     }
 
         // ========== МЕТОДЫ ДЛЯ ШТУЧНЫХ ТОВАРОВ ==========
