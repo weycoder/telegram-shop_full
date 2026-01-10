@@ -855,8 +855,116 @@ init_db()
 # ========== НОВЫЕ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ ==========
 
 
-def send_order_details_notification(telegram_id, order_id, items, status, total_amount, delivery_type):
-    """Отправить детализированное уведомление о заказе"""
+@app.route('/api/bot/get-orders/<int:telegram_id>', methods=['GET'])
+def api_bot_get_orders(telegram_id):
+    """API для получения заказов пользователя (для бота)"""
+    db = get_db()
+    try:
+        orders = db.execute('''
+                            SELECT o.id,
+                                   o.total_price,
+                                   o.status,
+                                   o.created_at,
+                                   o.delivery_type,
+                                   o.recipient_name,
+                                   o.phone_number,
+                                   o.delivery_address,
+                                   a.status    as delivery_status,
+                                   c.full_name as courier_name,
+                                   c.phone     as courier_phone
+                            FROM orders o
+                                     LEFT JOIN order_assignments a ON o.id = a.order_id
+                                     LEFT JOIN couriers c ON a.courier_id = c.id
+                            WHERE o.user_id = ?
+                            ORDER BY o.created_at DESC LIMIT 10
+                            ''', (telegram_id,)).fetchall()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+
+            # Парсим адрес для красивого отображения
+            if order_dict.get('delivery_address'):
+                try:
+                    addr_data = json.loads(order_dict['delivery_address'])
+                    if isinstance(addr_data, dict):
+                        address_parts = []
+                        if addr_data.get('city'):
+                            address_parts.append(addr_data['city'])
+                        if addr_data.get('street'):
+                            address_parts.append(f"ул. {addr_data['street']}")
+                        if addr_data.get('house'):
+                            address_parts.append(f"д. {addr_data['house']}")
+                        if addr_data.get('apartment'):
+                            address_parts.append(f"кв. {addr_data['apartment']}")
+                        order_dict['address_formatted'] = ', '.join(address_parts)
+                        order_dict['address_object'] = addr_data
+                except:
+                    order_dict['address_formatted'] = order_dict.get('delivery_address', 'Адрес не указан')
+                    order_dict['address_object'] = {}
+            else:
+                order_dict['address_formatted'] = 'Адрес не указан'
+                order_dict['address_object'] = {}
+
+            orders_list.append(order_dict)
+
+        return jsonify({'success': True, 'orders': orders_list})
+
+    except Exception as e:
+        print(f"❌ Ошибка получения заказов для бота: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/bot/get-order/<int:order_id>/<int:telegram_id>', methods=['GET'])
+def api_bot_get_order_detail(order_id, telegram_id):
+    """API для получения деталей конкретного заказа (для бота)"""
+    db = get_db()
+    try:
+        order = db.execute('''
+                           SELECT o.*,
+                                  a.status    as delivery_status,
+                                  a.delivered_at,
+                                  c.full_name as courier_name,
+                                  c.phone     as courier_phone
+                           FROM orders o
+                                    LEFT JOIN order_assignments a ON o.id = a.order_id
+                                    LEFT JOIN couriers c ON a.courier_id = c.id
+                           WHERE o.id = ?
+                             AND o.user_id = ?
+                           ''', (order_id, telegram_id)).fetchone()
+
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
+
+        order_dict = dict(order)
+
+        # Парсим items
+        try:
+            order_dict['items_list'] = json.loads(order_dict['items'])
+        except:
+            order_dict['items_list'] = []
+
+        # Парсим адрес
+        if order_dict.get('delivery_address'):
+            try:
+                order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
+            except:
+                order_dict['delivery_address_obj'] = {}
+
+        return jsonify({'success': True, 'order': order_dict})
+
+    except Exception as e:
+        print(f"❌ Ошибка получения деталей заказа: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+def send_order_details_notification(telegram_id, order_id, items, status, total_amount, delivery_type,
+                                    courier_name=None, courier_phone=None):
+    """Отправить детализированное уведомление о заказе - ОБНОВЛЕННАЯ"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
 
@@ -889,6 +997,13 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
             else:
                 items_text += f"• {name} × {quantity} шт - {price} ₽\n"
 
+        # Добавляем информацию о курьере если есть
+        courier_info = ""
+        if courier_name:
+            courier_info = f"\n👤 *КУРЬЕР:* {courier_name}"
+            if courier_phone:
+                courier_info += f"\n📱 *ТЕЛЕФОН:* {courier_phone}"
+
         # Формируем полное сообщение
         message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
 
@@ -897,9 +1012,10 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
 {items_text}
 ━━━━━━━━━━━━━━━━━━━━
 💰 *ИТОГО: {total_amount} ₽*
-📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}
+📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
 
-⏳ *Следующее обновление статуса будет через 5-20 минут*"""
+⏳ *Следующее обновление статуса будет через 15-30 минут*
+📱 *Используйте команду:* /track_{order_id}"""
 
         # Отправляем
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
@@ -3158,7 +3274,7 @@ def admin_products():
                     (data.get('name', ''),
                      data.get('description', ''),
                      data.get('price', 0),
-                     data.get('image_url', ''),  # URL может быть пустым
+                     data.get('image_url', ''),  
                      data.get('category', ''),
                      data.get('stock', 0),
                      'piece',
@@ -3180,10 +3296,10 @@ def admin_products():
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (data.get('name', ''),
                      data.get('description', ''),
-                     price_per_kg,  # Используем price_per_kg как price для отображения!
-                     data.get('image_url', ''),  # URL может быть пустым
+                     price_per_kg,
+                     data.get('image_url', ''),
                      data.get('category', ''),
-                     stock_weight,  # Используем stock_weight как stock для отображения!
+                     stock_weight,
                      'weight',
                      data.get('unit', 'кг'),
                      data.get('weight_unit', 'кг'),
@@ -3222,7 +3338,7 @@ def admin_products():
                     (data.get('name', ''),
                      data.get('description', ''),
                      data.get('price', 0),
-                     data.get('image_url', ''),  # URL может быть пустым
+                     data.get('image_url', ''),
                      data.get('category', ''),
                      data.get('stock', 0),
                      'piece',
@@ -3254,10 +3370,10 @@ def admin_products():
                        WHERE id = ?''',
                     (data.get('name', ''),
                      data.get('description', ''),
-                     price_per_kg,  # Используем реальную цену за кг
-                     data.get('image_url', ''),  # URL может быть пустым
+                     price_per_kg,
+                     data.get('image_url', ''),
                      data.get('category', ''),
-                     stock_weight,  # Используем реальный вес в наличии
+                     stock_weight,
                      'weight',
                      data.get('unit', 'кг'),
                      data.get('weight_unit', 'кг'),
@@ -3401,8 +3517,8 @@ def user_addresses():
 # ========== НОВЫЕ ENDPOINTS ДЛЯ БОТА ==========
 
 @app.route('/api/bot/register-user', methods=['POST'])
-def bot_register_user():
-    """Регистрация пользователя Telegram для уведомлений"""
+def api_bot_register_user():
+    """Регистрация пользователя от бота"""
     try:
         data = request.json
         telegram_id = data.get('telegram_id')
@@ -3438,7 +3554,6 @@ def bot_register_user():
         db.commit()
         db.close()
 
-        print(f"✅ Зарегистрирован пользователь Telegram: {first_name} (ID: {telegram_id})")
         return jsonify({'success': True, 'message': 'Пользователь зарегистрирован'})
 
     except Exception as e:
