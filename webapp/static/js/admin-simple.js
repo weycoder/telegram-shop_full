@@ -35,6 +35,12 @@ class AdminPanel {
         this.loadDashboardData();
     }
 
+
+    formatPrice(price) {
+        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+    }
+
+
     bindEvents() {
         console.log('🔗 Назначаем обработчики...');
 
@@ -226,76 +232,153 @@ class AdminPanel {
 
     async loadProducts() {
         try {
+            console.log('📥 Загрузка товаров...');
+
             const response = await fetch('/api/admin/products');
             const products = await response.json();
-            this.products = Array.isArray(products) ? products : [];
-            this.renderProducts();
+
+            console.log('📦 Получены товары:', products);
+
+            await this.renderProducts(products);
+
         } catch (error) {
             console.error('❌ Ошибка загрузки товаров:', error);
-            this.showAlert('❌ Ошибка загрузки товаров', 'error');
-            this.products = [];
-            this.renderProducts();
+            this.showNotification('❌ Не удалось загрузить товары', 'error');
         }
     }
 
-    renderProducts() {
-        const container = document.getElementById('productsTableBody');
-        if (!container) return;
+    async renderProducts(products) {
+        try {
+            console.log('📦 Рендеринг товаров...');
 
-        if (this.products.length === 0) {
-            container.innerHTML = `
-                <tr>
-                    <td colspan="7" class="no-data">
-                        <i class="fas fa-box"></i>
-                        <h3>Товары не найдены</h3>
-                        <button class="btn btn-primary" onclick="admin.showAddProduct()">
-                            <i class="fas fa-plus"></i> Добавить товар
-                        </button>
-                    </td>
-                </tr>
-            `;
-            return;
+            const productsTableBody = document.getElementById('productsTableBody');
+            if (!productsTableBody) {
+                console.error('❌ productsTableBody не найден!');
+                return;
+            }
+
+            // Проверяем, есть ли товары
+            if (!products || products.length === 0) {
+                console.log('⚠️ Нет товаров для отображения');
+                productsTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <i class="fas fa-box-open"></i>
+                            <p>Товаров нет</p>
+                            <small>Добавьте товары через форму</small>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            console.log('🔄 Начинаем рендеринг таблицы товаров...');
+            let html = '';
+
+            // Проходим по каждому товару
+            products.forEach((product, index) => {
+                console.log(`--- Товар #${index + 1} ---`, product);
+
+                // Определяем тип товара
+                const isWeightProduct = product.product_type === 'weight';
+                const hasDiscount = product.has_discount === true;
+                const discountedPrice = product.discounted_price || product.price;
+
+                // Формируем цену для отображения
+                let priceDisplay = '';
+                if (isWeightProduct) {
+                    const pricePerKg = product.price_per_kg || product.price;
+                    priceDisplay = `${this.formatPrice(pricePerKg)} ₽/кг`;
+                } else {
+                    priceDisplay = hasDiscount ?
+                        `<span style="color: #10b981; font-weight: 500;">${this.formatPrice(discountedPrice)} ₽</span>` :
+                        `${this.formatPrice(product.price)} ₽`;
+                }
+
+                // Формируем остаток для отображения
+                let stockDisplay = '';
+                if (isWeightProduct) {
+                    stockDisplay = `${product.stock_weight || 0} кг`;
+                } else {
+                    stockDisplay = `${product.stock || 0} шт`;
+                }
+
+                // Создаем строку таблицы
+                html += `
+                    <tr data-product-id="${product.id}">
+                        <td><strong>${product.id}</strong></td>
+                        <td>
+                            <div class="product-image-cell">
+                                ${product.image_url ? `
+                                    <img src="${product.image_url}"
+                                         alt="${product.name}"
+                                         class="product-thumbnail"
+                                         onerror="this.src='https://via.placeholder.com/50?text=No+Image'">
+                                ` : `
+                                    <div class="no-image-placeholder">
+                                        <i class="fas fa-image"></i>
+                                    </div>
+                                `}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="product-name-cell">
+                                <strong>${product.name}</strong>
+                                ${isWeightProduct ? `
+                                    <span class="weight-badge">
+                                        <i class="fas fa-weight-hanging"></i> Весовой
+                                    </span>
+                                ` : ''}
+                                ${hasDiscount ? `
+                                    <span class="discount-badge">
+                                        <i class="fas fa-tag"></i> Скидка
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </td>
+                        <td>${priceDisplay}</td>
+                        <td>
+                            <span class="stock-info ${(product.stock > 0 || product.stock_weight > 0) ? 'in-stock' : 'out-of-stock'}">
+                                <i class="fas ${(product.stock > 0 || product.stock_weight > 0) ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                                ${stockDisplay}
+                            </span>
+                        </td>
+                        <td>${product.category || 'Без категории'}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-edit-product" onclick="admin.editProduct(${product.id})" title="Редактировать">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-delete-product" onclick="admin.deleteProduct(${product.id})" title="Удалить">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            productsTableBody.innerHTML = html;
+            console.log('✅ Таблица товаров отрендерена, строк:', products.length);
+
+        } catch (error) {
+            console.error('❌ Ошибка рендеринга товаров:', error);
+            const productsTableBody = document.getElementById('productsTableBody');
+            if (productsTableBody) {
+                productsTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="error-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Ошибка загрузки товаров</p>
+                            <small>${error.message}</small>
+                            <button class="btn btn-sm btn-outline" onclick="admin.loadProducts()">
+                                <i class="fas fa-redo"></i> Попробовать снова
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
         }
-
-        let html = '';
-        this.products.forEach(product => {
-            const imageUrl = product.image_url && product.image_url.trim() !== ''
-                ? product.image_url
-                : 'https://via.placeholder.com/50x50?text=No+Image';
-            const category = product.category || 'Без категории';
-
-            html += `
-                <tr>
-                    <td><strong>#${product.id}</strong></td>
-                    <td>
-                        <img src="${imageUrl}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;" onerror="this.src='https://via.placeholder.com/50x50?text=Error'">
-                    </td>
-                    <td>
-                        <div>
-                            <strong>${product.name}</strong>
-                            <small style="display: block; color: #666; margin-top: 5px;">
-                                ${product.description ? product.description.substring(0, 50) + '...' : 'Нет описания'}
-                            </small>
-                        </div>
-                    </td>
-                    <td><strong>${this.formatPrice(order.total_price || order.total || 0)} ₽</strong></td>
-                    <td>${product.stock || 0} шт.</td>
-                    <td><span class="category-badge">${category}</span></td>
-                    <td>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn-icon btn-edit" onclick="admin.editProduct(${product.id})">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn-icon btn-delete" onclick="admin.deleteProduct(${product.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-
-        container.innerHTML = html;
     }
 
     async loadOrders() {
@@ -351,24 +434,22 @@ class AdminPanel {
                 let items = [];
                 let itemsText = '';
                 try {
-                    if (typeof order.items === 'string') {
-                        items = JSON.parse(order.items);
-                    } else if (Array.isArray(order.items)) {
+                    if (order.items && Array.isArray(order.items)) {
                         items = order.items;
-                    }
 
-                    // Формируем текст для отображения в таблице
-                    if (items.length > 0) {
-                        // Берем только первые 2-3 товара для компактного отображения
-                        const displayItems = items.slice(0, 2);
-                        itemsText = displayItems.map(item => {
-                            const name = item.name || 'Товар';
-                            const quantity = item.quantity || 1;
-                            return `${name} × ${quantity}`;
-                        }).join(', ');
+                        // Формируем текст для отображения в таблице
+                        if (items.length > 0) {
+                            // Берем только первые 2-3 товара для компактного отображения
+                            const displayItems = items.slice(0, 2);
+                            itemsText = displayItems.map(item => {
+                                const name = item.name || 'Товар';
+                                const quantity = item.quantity || 1;
+                                return `${name} × ${quantity}`;
+                            }).join(', ');
 
-                        if (items.length > 2) {
-                            itemsText += ` и ещё ${items.length - 2}...`;
+                            if (items.length > 2) {
+                                itemsText += ` и ещё ${items.length - 2}...`;
+                            }
                         }
                     }
                 } catch (error) {
@@ -397,8 +478,9 @@ class AdminPanel {
 
                 const status = statusConfig[order.status] || statusConfig.pending;
 
-                // Форматируем сумму
-                const totalAmount = this.formatPrice(order.total || 0);
+                // ВАЖНО: Используем правильное поле для суммы
+                const totalAmount = order.total_price || order.total || 0;
+                const formattedTotal = this.formatPrice(totalAmount);
 
                 // Получаем имя клиента
                 const clientName = order.username || order.recipient_name || 'Гость';
@@ -419,7 +501,7 @@ class AdminPanel {
                                 <span>${itemsText || 'Товары не указаны'}</span>
                             </div>
                         </td>
-                        <td><strong>${totalAmount} ₽</strong></td>
+                        <td><strong>${formattedTotal} ₽</strong></td>
                         <td>
                             <span class="order-status ${status.class}" style="color: ${status.color};">
                                 <i class="fas fa-circle"></i>
@@ -469,7 +551,6 @@ class AdminPanel {
             }
         }
     }
-
     async viewOrderDetails(orderId) {
         try {
             console.log('🔍 Просмотр заказа #', orderId);
