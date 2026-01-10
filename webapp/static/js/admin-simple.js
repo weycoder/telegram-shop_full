@@ -47,7 +47,7 @@ class AdminPanel {
                 notification.classList.remove('show');
                 setTimeout(() => notification.remove(), 300);
             }, 3000);
-    }
+        }
 
     init() {
         this.bindEvents();
