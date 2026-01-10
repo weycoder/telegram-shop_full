@@ -1041,7 +1041,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
 
 
 def send_order_notification(order_id, status, courier_id=None):
-    """Отправка уведомлений покупателю через Telegram бота - ОБНОВЛЕННАЯ"""
+    """Отправка уведомлений покупателю через Telegram бота - ИСПРАВЛЕННАЯ"""
     db = None
     try:
         db = get_db()
@@ -1074,41 +1074,41 @@ def send_order_notification(order_id, status, courier_id=None):
                 courier_name = courier.get('full_name')
                 courier_phone = courier.get('phone')
 
-        # 1. Отправляем ОСНОВНОЕ уведомление о статусе
+        # Парсим items для детализированного уведомления
+        items_list = []
+        if order_dict.get('items'):
+            try:
+                items_list = json.loads(order_dict['items'])
+            except:
+                items_list = []
+
+        total_amount = order_dict.get('total_price', 0)
+        delivery_type = order_dict.get('delivery_type', 'courier')
+
+        # Отправляем уведомление
         status_sent = send_order_details_notification(
             telegram_id=telegram_id,
             order_id=order_id,
+            items=items_list,
             status=status,
+            total_amount=total_amount,
+            delivery_type=delivery_type,
             courier_name=courier_name,
             courier_phone=courier_phone
         )
 
-        # И замените ее на:
-        try:
-            # Получаем детали заказа
-            items_list = []
-            if order_dict.get('items'):
-                try:
-                    items_list = json.loads(order_dict['items'])
-                except:
-                    items_list = []
+        if status_sent:
+            print(f"✅ Уведомление для заказа #{order_id} отправлено (статус: {status})")
+        else:
+            print(f"⚠️ Уведомление для заказа #{order_id} не отправлено")
 
-            total_amount = order_dict.get('total_price', 0)
-            delivery_type = order_dict.get('delivery_type', 'courier')
+        return status_sent
 
-            status_sent = send_order_details_notification(
-                telegram_id=telegram_id,
-                order_id=order_id,
-                items=items_list,
-                status=status,
-                total_amount=total_amount,
-                delivery_type=delivery_type,
-                courier_name=courier_name,
-                courier_phone=courier_phone
-            )
-        except Exception as e:
-            print(f"❌ Ошибка подготовки данных для уведомления: {e}")
-            status_sent = False
+    except Exception as e:
+        print(f"❌ Критическая ошибка отправки уведомления: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
     finally:
         if db:
             db.close()
