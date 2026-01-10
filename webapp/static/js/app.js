@@ -51,6 +51,7 @@ class TelegramShop {
         this.selectedWeight = 0.1;
         this.selectedWeightPrice = 0;
         this.isInitialized = false;
+        this.cartModified = false; // Добавляем флаг изменений корзины
 
         const params = getTelegramParams();
         this.userId = params.userId;
@@ -509,7 +510,7 @@ class TelegramShop {
         console.log('🔍 Поиск существующего товара с ID:', cartItemId);
 
         // Проверяем существующий товар
-        const existingIndex = this.cart.findIndex(item => item.id === cartItemId);
+        const existingIndex = this.cart.findIndex(item => item.id.toString() === cartItemId.toString());
 
         if (existingIndex !== -1 && !isWeightProduct) {
             // Для обычных товаров увеличиваем количество
@@ -540,10 +541,9 @@ class TelegramShop {
         this.saveCart();
         this.updateCartCount();
 
-        // Обновляем отображение если корзина открыта
-        if (this.isCartOpen()) {
-            this.updateCartDisplay();
-        }
+        // ВАЖНО: Даже если корзина закрыта, мы должны убедиться что она обновится при открытии
+        // Сохраняем флаг что корзина была изменена
+        this.cartModified = true;
 
         this.showCartNotification(name, isWeightProduct ? 1 : quantity);
         console.log('✅ === КОНЕЦ addToCart ===');
@@ -560,7 +560,7 @@ class TelegramShop {
                     <span>${name} × ${quantity} добавлен в корзину!</span>
                 </div>
                 <button class="notification-action" onclick="shop.toggleCart()">
-                    <i class="fas fa-shopping-cart"></i> Перейти в корзину
+                    <i class="fas fa-shopping-cart"></i> Открыть корзину (${this.cart.reduce((sum, item) => sum + item.quantity, 0)})
                 </button>
             </div>
         `;
@@ -721,24 +721,45 @@ class TelegramShop {
     }
 
     updateCartDisplay() {
-        // Пытаемся найти элементы корзины
-        const cartItems = document.getElementById('cartItems');
-        const cartTotal = document.getElementById('cartTotal');
-
-        // Если корзина не открыта или элементы не существуют, выходим
+        // Проверяем, открыта ли корзина
         if (!this.isCartOpen()) {
             console.log('📌 Корзина закрыта, обновление отложено');
             return;
         }
 
+        // Пытаемся найти элементы корзины
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
+
+        // Если элементы не найдены, пытаемся их найти или выходим
         if (!cartItems || !cartTotal) {
-            console.error('❌ Элементы корзины не найдены, возможно корзина не инициализирована');
-            // Попробуем пересоздать структуру корзины
-            this.recreateCartInterface();
+            console.error('❌ Элементы корзины не найдены');
+
+            // Попробуем найти элементы через поиск в DOM
+            const cartOverlay = document.getElementById('cartOverlay');
+            if (cartOverlay) {
+                const modal = cartOverlay.querySelector('.cart-modal');
+                if (modal) {
+                    const foundItems = modal.querySelector('#cartItems');
+                    const foundTotal = modal.querySelector('#cartTotal');
+
+                    if (foundItems && foundTotal) {
+                        // Используем найденные элементы
+                        return this.renderCartItems(foundItems, foundTotal);
+                    }
+                }
+            }
+
+            console.log('⚠️ Не удалось найти элементы корзины, возможно требуется пересоздание');
             return;
         }
 
-        console.log('🛒 Обновление корзины, товаров:', this.cart.length);
+        this.renderCartItems(cartItems, cartTotal);
+    }
+
+        // Выносим рендеринг в отдельный метод
+    renderCartItems(cartItems, cartTotal) {
+        console.log('🛒 Рендеринг корзины, товаров:', this.cart.length);
 
         // Очищаем контейнер
         cartItems.innerHTML = '';
@@ -835,7 +856,11 @@ class TelegramShop {
 
         // Показываем кнопки действий
         this.showCartButtons();
+
+        // Сбрасываем флаг изменений
+        this.cartModified = false;
     }
+
 
     recreateCartInterface() {
         const cartOverlay = document.getElementById('cartOverlay');
@@ -1037,7 +1062,7 @@ class TelegramShop {
             </div>
         `;
 
-        // Обновляем содержимое корзины
+        // ОБНОВЛЯЕМ СОДЕРЖИМОЕ КОРЗИНЫ СРАЗУ
         this.updateCartDisplay();
 
         // Назначаем обработчики
