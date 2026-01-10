@@ -2513,3 +2513,8 @@ const cartStyles = `
     }
 }
 `;
+
+// Добавляем стили в документ
+const styleSheet = document.createElement('style');
+styleSheet.textContent = cartStyles;
+document.head.appendChild(styleSheet);
