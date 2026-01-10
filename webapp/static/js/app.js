@@ -51,7 +51,6 @@ class TelegramShop {
         this.selectedWeight = 0.1;
         this.selectedWeightPrice = 0;
         this.isInitialized = false;
-        this.cartModified = false; // Добавляем флаг изменений корзины
 
         const params = getTelegramParams();
         this.userId = params.userId;
@@ -160,9 +159,11 @@ class TelegramShop {
         }
     }
 
+
+    // Проверка открыта ли корзина
     isCartOpen() {
-        const cart = document.getElementById('cartOverlay');
-        return cart && cart.style.display === 'flex';
+        const cartOverlay = document.getElementById('cartOverlay');
+        return cartOverlay && cartOverlay.style.display === 'flex';
     }
 
     isProductModalOpen() {
@@ -175,7 +176,6 @@ class TelegramShop {
     }
 
     showNotification(message, type = 'info') {
-        const container = document.getElementById('notifications') || this.createNotificationsContainer();
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.innerHTML = `
@@ -187,7 +187,8 @@ class TelegramShop {
             <div class="notification-content">${message}</div>
         `;
 
-        container.appendChild(notification);
+        document.body.appendChild(notification);
+
         setTimeout(() => notification.classList.add('show'), 10);
         setTimeout(() => {
             notification.classList.remove('show');
@@ -474,9 +475,11 @@ class TelegramShop {
     loadCart() {
         try {
             const cartData = localStorage.getItem('telegram_shop_cart');
-            const parsedData = cartData ? JSON.parse(cartData) : [];
-            console.log('📥 Загружена корзина из localStorage:', parsedData);
-            return parsedData;
+            if (!cartData) return [];
+
+            const parsedData = JSON.parse(cartData);
+            console.log('📥 Загружена корзина:', parsedData.length, 'товаров');
+            return Array.isArray(parsedData) ? parsedData : [];
         } catch (error) {
             console.error('❌ Ошибка загрузки корзины:', error);
             return [];
@@ -486,71 +489,108 @@ class TelegramShop {
     saveCart() {
         try {
             localStorage.setItem('telegram_shop_cart', JSON.stringify(this.cart));
+            console.log('💾 Корзина сохранена:', this.cart.length, 'товаров');
         } catch (error) {
             console.error('❌ Ошибка сохранения корзины:', error);
         }
     }
 
     addToCart(productId, name, price, quantity = 1, image = null) {
-        console.log('🛒 === НАЧАЛО addToCart ===');
+        console.log('🛒 === ДОБАВЛЕНИЕ В КОРЗИНУ ===');
         console.log('📥 Параметры:', { productId, name, price, quantity });
 
+        if (!productId || quantity < 1) {
+            console.error('❌ Неверные параметры');
+            return;
+        }
+
+        // Ищем товар в базе для проверки типа
         const product = this.products.find(p => p.id === productId);
         const isWeightProduct = product?.product_type === 'weight';
 
-        // Применяем скидку к товару
+        // Применяем скидку если есть
         const discount = product ? this.calculateProductDiscount(product) : null;
         const discountedPrice = discount ? this.calculateDiscountedPrice(price, discount) : price;
 
-        // Уникальный ID для весового товара
-        const cartItemId = isWeightProduct ?
-            `${productId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` :
-            productId;
+        let cartItemId;
 
-        console.log('🔍 Поиск существующего товара с ID:', cartItemId);
+        if (isWeightProduct) {
+            // Для весового товара - уникальный ID (productId + timestamp)
+            cartItemId = `${productId}_weight_${Date.now()}`;
 
-        // Проверяем существующий товар
-        const existingIndex = this.cart.findIndex(item => item.id.toString() === cartItemId.toString());
+            // Проверяем вес
+            const weight = this.selectedWeight || 0.1;
+            if (weight <= 0) {
+                this.showNotification('❌ Выберите вес товара', 'error');
+                return;
+            }
 
-        if (existingIndex !== -1 && !isWeightProduct) {
-            // Для обычных товаров увеличиваем количество
-            this.cart[existingIndex].quantity += quantity;
-            this.cart[existingIndex].discounted_price = discountedPrice;
-            this.cart[existingIndex].discount_info = discount;
-            console.log(`📈 Увеличено количество товара ${name} до ${this.cart[existingIndex].quantity}`);
-        } else {
-            // Для новых товаров (включая весовые) добавляем запись
+            // Добавляем как новый товар (весовые всегда новые позиции)
             const cartItem = {
                 id: cartItemId,
-                name: name,
-                price: price,
+                name: `${name} (${weight.toFixed(2)} ${product.unit || 'кг'})`,
+                price: price, // Цена за весь вес
                 discounted_price: discountedPrice,
                 discount_info: discount,
-                quantity: isWeightProduct ? 1 : quantity,
+                quantity: 1, // Весовой товар всегда количество = 1
                 image: image || 'https://via.placeholder.com/100',
-                weight: isWeightProduct ? this.selectedWeight : null,
-                is_weight: isWeightProduct,
+                weight: weight,
+                is_weight: true,
                 original_product_id: productId,
                 addedAt: new Date().toISOString()
             };
 
             this.cart.push(cartItem);
-            console.log('➕ Добавлен новый товар:', cartItem);
+            console.log('➕ Добавлен весовой товар:', cartItem);
+
+        } else {
+            // Для обычного товара
+            cartItemId = productId.toString();
+
+            // Ищем существующий товар в корзине
+            const existingIndex = this.cart.findIndex(item =>
+                item.id.toString() === cartItemId && !item.is_weight
+            );
+
+            if (existingIndex !== -1) {
+                // Увеличиваем количество существующего товара
+                this.cart[existingIndex].quantity += quantity;
+                this.cart[existingIndex].discounted_price = discountedPrice;
+                this.cart[existingIndex].discount_info = discount;
+                console.log(`📈 Увеличено количество до ${this.cart[existingIndex].quantity}`);
+            } else {
+                // Добавляем новый товар
+                const cartItem = {
+                    id: cartItemId,
+                    name: name,
+                    price: price,
+                    discounted_price: discountedPrice,
+                    discount_info: discount,
+                    quantity: quantity,
+                    image: image || 'https://via.placeholder.com/100',
+                    is_weight: false,
+                    original_product_id: productId,
+                    addedAt: new Date().toISOString()
+                };
+
+                this.cart.push(cartItem);
+                console.log('➕ Добавлен новый товар:', cartItem);
+            }
         }
 
         this.saveCart();
         this.updateCartCount();
 
-        // ВАЖНО: Даже если корзина закрыта, мы должны убедиться что она обновится при открытии
-        // Сохраняем флаг что корзина была изменена
-        this.cartModified = true;
+        // Показываем уведомление
+        const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+        this.showCartNotification(name, isWeightProduct ? 1 : quantity, totalItems);
 
-        this.showCartNotification(name, isWeightProduct ? 1 : quantity);
-        console.log('✅ === КОНЕЦ addToCart ===');
+        console.log('✅ === ТОВАР ДОБАВЛЕН ===');
+        console.log('📊 Текущая корзина:', this.cart);
     }
 
 
-    showCartNotification(name, quantity) {
+    showCartNotification(name, quantity, totalItems) {
         const notification = document.createElement('div');
         notification.className = 'cart-notification';
         notification.innerHTML = `
@@ -559,202 +599,383 @@ class TelegramShop {
                     <i class="fas fa-check-circle"></i>
                     <span>${name} × ${quantity} добавлен в корзину!</span>
                 </div>
-                <button class="notification-action" onclick="shop.toggleCart()">
-                    <i class="fas fa-shopping-cart"></i> Открыть корзину (${this.cart.reduce((sum, item) => sum + item.quantity, 0)})
+                <button class="notification-action" onclick="shop.openCart()">
+                    <i class="fas fa-shopping-cart"></i> Открыть корзину (${totalItems})
                 </button>
             </div>
         `;
 
         document.body.appendChild(notification);
+
         setTimeout(() => notification.classList.add('show'), 10);
         setTimeout(() => {
             notification.classList.remove('show');
             setTimeout(() => notification.remove(), 300);
-        }, 5000);
+        }, 4000);
     }
 
     removeFromCart(cartItemId) {
-        console.log('🗑️ Удаление товара из корзины:', cartItemId);
+        console.log('🗑️ Удаление товара:', cartItemId);
 
-        // Находим товар для показа уведомления
+        // Находим товар для уведомления
         const itemToRemove = this.cart.find(item => item.id.toString() === cartItemId.toString());
 
         if (!itemToRemove) {
-            console.error('❌ Товар для удаления не найден:', cartItemId);
+            console.error('❌ Товар не найден');
             return;
         }
 
-        // Удаляем товар из корзины
+        // Удаляем товар
+        const initialLength = this.cart.length;
         this.cart = this.cart.filter(item => item.id.toString() !== cartItemId.toString());
 
-        this.saveCart();
-        this.updateCartCount();
+        if (this.cart.length < initialLength) {
+            this.saveCart();
+            this.updateCartCount();
 
-        // Если корзина открыта - обновляем отображение
-        if (this.isCartOpen()) {
-            // Проверяем существуют ли элементы
-            const cartItems = document.getElementById('cartItems');
-            const cartTotal = document.getElementById('cartTotal');
-
-            if (!cartItems || !cartTotal) {
-                // Если элементы не найдены, пересоздаем интерфейс
-                this.recreateCartInterface();
-            } else {
-                // Иначе просто обновляем
+            // Обновляем отображение если корзина открыта
+            if (this.isCartOpen()) {
                 this.updateCartDisplay();
             }
-        }
 
-        if (itemToRemove) {
-            this.showNotification(`🗑️ ${itemToRemove.name} удален из корзины`, 'info');
-            console.log('✅ Товар удален из корзины:', itemToRemove.name);
+            this.showNotification(`🗑️ "${itemToRemove.name}" удален из корзины`, 'info');
+            console.log('✅ Товар удален');
         }
     }
 
 
         // Новый метод для изменения веса весового товара
     async updateWeightProductWeight(cartItemId, newWeight) {
+        console.log('⚖️ Изменение веса:', { cartItemId, newWeight });
+
         const itemIndex = this.cart.findIndex(item => item.id.toString() === cartItemId.toString());
-        if (itemIndex === -1) return;
+        if (itemIndex === -1 || !this.cart[itemIndex].is_weight) {
+            console.error('❌ Весовой товар не найден');
+            return;
+        }
 
         const item = this.cart[itemIndex];
-        if (!item.is_weight) return;
 
         try {
+            // Получаем актуальную информацию о товаре
             const response = await fetch(`/api/products/${item.original_product_id}`);
             if (response.ok) {
                 const product = await response.json();
-                const maxWeight = product.stock_weight || product.max_weight || 5.0;
-                const minWeight = product.min_weight || 0.1;
 
                 // Проверяем границы веса
+                const maxWeight = Math.min(
+                    product.stock_weight || 5.0,
+                    product.max_weight || 5.0
+                );
+                const minWeight = product.min_weight || 0.1;
+
                 if (newWeight < minWeight) newWeight = minWeight;
                 if (newWeight > maxWeight) newWeight = maxWeight;
 
                 // Обновляем вес и пересчитываем цену
-                item.weight = newWeight;
+                item.weight = parseFloat(newWeight.toFixed(2));
                 const pricePerKg = product.price_per_kg || product.price;
-                item.price = Math.floor(newWeight * pricePerKg);
+                item.price = Math.floor(item.weight * pricePerKg);
 
-                // Если была скидка, пересчитываем
+                // Обновляем имя для отображения
+                item.name = `${product.name} (${item.weight.toFixed(2)} ${product.unit || 'кг'})`;
+
+                // Пересчитываем скидку если есть
                 if (item.discount_info) {
                     item.discounted_price = this.calculateDiscountedPrice(item.price, item.discount_info);
+                } else {
+                    item.discounted_price = item.price;
                 }
 
                 this.saveCart();
                 this.updateCartCount();
 
+                // Обновляем отображение
                 if (this.isCartOpen()) {
                     this.updateCartDisplay();
                 }
 
-                this.showNotification(`✅ Вес обновлен: ${item.name} (${newWeight.toFixed(2)} кг)`, 'success');
+                this.showNotification(`✅ Вес обновлен: ${item.weight.toFixed(2)} кг`, 'success');
             }
         } catch (error) {
             console.error('❌ Ошибка обновления веса:', error);
+            this.showNotification('❌ Ошибка обновления веса', 'error');
         }
     }
 
-    async updateCartItemQuantity(cartItemId, quantity) {
-        console.log('🔄 Обновление количества товара:', { cartItemId, quantity });
+    async updateCartItemQuantity(cartItemId, newQuantity) {
+        console.log('🔄 Изменение количества:', { cartItemId, newQuantity });
 
         const itemIndex = this.cart.findIndex(item => item.id.toString() === cartItemId.toString());
         if (itemIndex === -1) {
-            console.error('❌ Товар не найден в корзине:', cartItemId);
+            console.error('❌ Товар не найден');
             return;
         }
 
         const item = this.cart[itemIndex];
 
-        // Проверяем наличие товара на складе (только если увеличиваем количество)
-        if (quantity > item.quantity) {
+        // Проверяем минимальное количество
+        if (newQuantity < 1) {
+            this.removeFromCart(cartItemId);
+            return;
+        }
+
+        // Проверяем наличие на складе для обычных товаров
+        if (!item.is_weight && item.original_product_id) {
             try {
                 const response = await fetch(`/api/products/${item.original_product_id}`);
                 if (response.ok) {
                     const product = await response.json();
-
-                    // Для обычных товаров проверяем количество
-                    if (!item.is_weight) {
-                        if (quantity > product.stock) {
-                            this.showNotification(`❌ Доступно только ${product.stock} шт.`, 'error');
-                            quantity = product.stock; // Устанавливаем максимальное доступное количество
-                        }
-                    }
-                    // Для весовых товаров проверяем вес
-                    else if (item.is_weight) {
-                        const maxWeight = product.stock_weight || product.max_weight || 5.0;
-                        if (item.weight > maxWeight) {
-                            this.showNotification(`❌ Доступно только ${maxWeight} кг`, 'error');
-                            // Здесь можно предложить изменить вес товара
-                        }
+                    if (newQuantity > product.stock) {
+                        this.showNotification(`❌ Доступно только ${product.stock} шт.`, 'error');
+                        newQuantity = product.stock;
                     }
                 }
             } catch (error) {
-                console.error('❌ Ошибка проверки наличия товара:', error);
+                console.error('❌ Ошибка проверки наличия:', error);
             }
         }
 
-        if (quantity < 1) {
-            this.removeFromCart(cartItemId);
-        } else {
-            this.cart[itemIndex].quantity = quantity;
-            this.saveCart();
-            this.updateCartCount();
+        // Обновляем количество
+        item.quantity = newQuantity;
+        this.saveCart();
+        this.updateCartCount();
 
-            // Если корзина открыта - обновляем отображение
-            if (this.isCartOpen()) {
-                this.updateCartDisplay();
-            }
-
-            this.showNotification(`✅ Количество обновлено: ${item.name} × ${quantity}`, 'success');
+        // Обновляем отображение
+        if (this.isCartOpen()) {
+            this.updateCartDisplay();
         }
+
+        console.log('✅ Количество обновлено');
     }
-
-
     updateCartCount() {
         const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
         const cartCount = document.getElementById('cartCount');
+
         if (cartCount) {
             cartCount.textContent = totalItems;
             cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
         }
+
+        console.log('📊 Обновлен счетчик корзины:', totalItems, 'товаров');
     }
 
-    updateCartDisplay() {
-        // Проверяем, открыта ли корзина
-        if (!this.isCartOpen()) {
-            console.log('📌 Корзина закрыта, обновление отложено');
-            return;
-        }
+    // Вспомогательные методы
+    hideCartButtons() {
+        const cartActions = document.querySelector('.cart-actions');
+        if (cartActions) cartActions.style.display = 'none';
+    }
 
-        // Пытаемся найти элементы корзины
+    showCartButtons() {
+        const cartActions = document.querySelector('.cart-actions');
+        if (cartActions) cartActions.style.display = 'flex';
+    }
+
+    async editWeight(cartItemId) {
+        const item = this.cart.find(item => item.id.toString() === cartItemId.toString());
+        if (!item || !item.is_weight) return;
+
+        try {
+            // Получаем информацию о товаре
+            const response = await fetch(`/api/products/${item.original_product_id}`);
+            if (!response.ok) throw new Error('Товар не найден');
+
+            const product = await response.json();
+
+            // Создаем модальное окно для редактирования веса
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 320px;">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-edit"></i> Изменить вес</h3>
+                        <button class="close-modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Товар: ${product.name}</label>
+                            <div class="weight-input-group">
+                                <input type="number"
+                                       id="editWeightInput"
+                                       value="${item.weight}"
+                                       min="${product.min_weight || 0.1}"
+                                       max="${Math.min(product.stock_weight || 5.0, product.max_weight || 5.0)}"
+                                       step="0.1">
+                                <span>${product.unit || 'кг'}</span>
+                            </div>
+                            <div class="weight-slider-container">
+                                <input type="range"
+                                       id="editWeightSlider"
+                                       min="${product.min_weight || 0.1}"
+                                       max="${Math.min(product.stock_weight || 5.0, product.max_weight || 5.0)}"
+                                       step="0.1"
+                                       value="${item.weight}">
+                            </div>
+                            <div class="price-preview">
+                                Будет стоить: <span id="editWeightPrice">${this.formatPrice(item.price)} ₽</span>
+                            </div>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn btn-outline cancel-edit">Отмена</button>
+                            <button class="btn btn-primary save-edit">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Обработчики событий
+            const weightInput = document.getElementById('editWeightInput');
+            const weightSlider = document.getElementById('editWeightSlider');
+            const priceSpan = document.getElementById('editWeightPrice');
+
+            const updatePrice = () => {
+                const weight = parseFloat(weightInput.value);
+                const pricePerKg = product.price_per_kg || product.price;
+                const price = Math.floor(weight * pricePerKg);
+                priceSpan.textContent = `${this.formatPrice(price)} ₽`;
+            };
+
+            weightInput.addEventListener('input', () => {
+                weightSlider.value = weightInput.value;
+                updatePrice();
+            });
+
+            weightSlider.addEventListener('input', () => {
+                weightInput.value = weightSlider.value;
+                updatePrice();
+            });
+
+            // Кнопки
+            modal.querySelector('.close-modal').onclick = () => modal.remove();
+            modal.querySelector('.cancel-edit').onclick = () => modal.remove();
+            modal.querySelector('.save-edit').onclick = async () => {
+                const newWeight = parseFloat(weightInput.value);
+                await this.updateWeightProductWeight(cartItemId, newWeight);
+                modal.remove();
+            };
+
+        } catch (error) {
+            console.error('❌ Ошибка редактирования веса:', error);
+            this.showNotification('❌ Не удалось изменить вес', 'error');
+        }
+    }
+
+
+    updateCartDisplay() {
+        console.log('🔄 Обновление отображения корзины');
+
         const cartItems = document.getElementById('cartItems');
         const cartTotal = document.getElementById('cartTotal');
 
-        // Если элементы не найдены, пытаемся их найти или выходим
         if (!cartItems || !cartTotal) {
             console.error('❌ Элементы корзины не найдены');
-
-            // Попробуем найти элементы через поиск в DOM
-            const cartOverlay = document.getElementById('cartOverlay');
-            if (cartOverlay) {
-                const modal = cartOverlay.querySelector('.cart-modal');
-                if (modal) {
-                    const foundItems = modal.querySelector('#cartItems');
-                    const foundTotal = modal.querySelector('#cartTotal');
-
-                    if (foundItems && foundTotal) {
-                        // Используем найденные элементы
-                        return this.renderCartItems(foundItems, foundTotal);
-                    }
-                }
-            }
-
-            console.log('⚠️ Не удалось найти элементы корзины, возможно требуется пересоздание');
             return;
         }
 
-        this.renderCartItems(cartItems, cartTotal);
+        // Очищаем контейнер
+        cartItems.innerHTML = '';
+
+        // Проверяем пустую корзину
+        if (!this.cart || this.cart.length === 0) {
+            cartItems.innerHTML = `
+                <div class="empty-cart">
+                    <i class="fas fa-shopping-cart"></i>
+                    <p>Корзина пуста</p>
+                    <p>Добавьте товары из каталога</p>
+                </div>
+            `;
+            cartTotal.textContent = '0 ₽';
+            this.hideCartButtons();
+            return;
+        }
+
+        let subtotal = 0;
+        let discountedSubtotal = 0;
+
+        // Рендерим каждый товар
+        this.cart.forEach(item => {
+            const originalPrice = item.price || 0;
+            const discountedPrice = item.discounted_price || item.price;
+            const hasDiscount = item.discount_info && discountedPrice < originalPrice;
+            const priceToShow = hasDiscount ? discountedPrice : originalPrice;
+            const totalPrice = priceToShow * item.quantity;
+
+            subtotal += originalPrice * item.quantity;
+            discountedSubtotal += priceToShow * item.quantity;
+
+            // Создаем HTML для товара
+            const cartItemHTML = `
+                <div class="cart-item" data-id="${item.id}">
+                    ${hasDiscount ? `
+                        <div class="cart-item-discount">
+                            ${this.formatDiscountInfo(item.discount_info)}
+                        </div>
+                    ` : ''}
+
+                    <img src="${item.image || 'https://via.placeholder.com/100'}"
+                         alt="${item.name}"
+                         class="cart-item-image"
+                         onerror="this.src='https://via.placeholder.com/100'">
+
+                    <div class="cart-item-info">
+                        <div class="cart-item-header">
+                            <h4 class="cart-item-name">${item.name}</h4>
+                            <button class="remove-item" onclick="shop.removeFromCart('${item.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+
+                        ${item.is_weight ? `
+                            <div class="cart-item-weight">
+                                <i class="fas fa-weight-hanging"></i>
+                                ${item.weight.toFixed(2)} кг
+                                <button class="edit-weight-btn" onclick="shop.editWeight('${item.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                        ` : ''}
+
+                        <div class="cart-item-pricing">
+                            ${hasDiscount ? `
+                                <div class="cart-price-discounted">
+                                    <span class="cart-item-original-price">${this.formatPrice(originalPrice)} ₽</span>
+                                    <span class="cart-item-price discounted">${this.formatPrice(discountedPrice)} ₽</span>
+                                </div>
+                            ` : `
+                                <div class="cart-item-price">${this.formatPrice(originalPrice)} ₽</div>
+                            `}
+                        </div>
+
+                        <div class="cart-item-controls">
+                            <div class="quantity-selector small">
+                                <button class="qty-btn minus-btn"
+                                        onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity - 1})">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="quantity">${item.quantity} шт.</span>
+                                <button class="qty-btn plus-btn"
+                                        onclick="shop.updateCartItemQuantity('${item.id}', ${item.quantity + 1})">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="cart-item-total ${hasDiscount ? 'discounted' : ''}">
+                                ${this.formatPrice(totalPrice)} ₽
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            cartItems.innerHTML += cartItemHTML;
+        });
+
+        // Обновляем итоговую сумму
+        cartTotal.textContent = `${this.formatPrice(discountedSubtotal)} ₽`;
+
+        // Показываем кнопки
+        this.showCartButtons();
     }
 
         // Выносим рендеринг в отдельный метод
@@ -1003,32 +1224,32 @@ class TelegramShop {
         }
     }
 
-    // Метод для скрытия кнопок когда корзина пуста
-    hideCartButtons() {
-        const cartActions = document.querySelector('.cart-actions');
-        if (cartActions) {
-            cartActions.style.display = 'none';
-        }
-    }
-
-    // Метод для показа кнопок когда в корзине есть товары
-    showCartButtons() {
-        const cartActions = document.querySelector('.cart-actions');
-        if (cartActions) {
-            cartActions.style.display = 'flex';
-        }
-    }
-
     // Проверка открыта ли корзина
     isCartOpen() {
         const cartOverlay = document.getElementById('cartOverlay');
         return cartOverlay && cartOverlay.style.display === 'flex';
     }
-
-
-
-
     toggleCart() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (!cartOverlay) return;
+
+        if (cartOverlay.style.display === 'flex') {
+            this.closeCart();
+        } else {
+            this.openCart();
+        }
+    }
+
+    closeCart() {
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (cartOverlay) {
+            cartOverlay.style.display = 'none';
+            this.updateBackButton();
+        }
+    }
+
+
+    openCart() {
         const cartOverlay = document.getElementById('cartOverlay');
         if (!cartOverlay) return;
 
@@ -1048,13 +1269,12 @@ class TelegramShop {
                             <span>Итого:</span>
                             <span class="total-price" id="cartTotal">0 ₽</span>
                         </div>
-                        <div class="summary-details"></div>
                         <div class="cart-actions">
                             <button class="btn btn-outline" id="clearCart">
                                 <i class="fas fa-trash"></i> Очистить
                             </button>
                             <button class="btn btn-primary" id="checkoutBtn">
-                                <i class="fas fa-paper-plane"></i> Купить
+                                <i class="fas fa-paper-plane"></i> Оформить заказ
                             </button>
                         </div>
                     </div>
@@ -1062,33 +1282,19 @@ class TelegramShop {
             </div>
         `;
 
-        // ОБНОВЛЯЕМ СОДЕРЖИМОЕ КОРЗИНЫ СРАЗУ
-        this.updateCartDisplay();
-
         // Назначаем обработчики
-        setTimeout(() => {
-            const closeBtn = document.getElementById('closeCart');
-            const clearBtn = document.getElementById('clearCart');
-            const checkoutBtn = document.getElementById('checkoutBtn');
+        document.getElementById('closeCart').onclick = () => this.closeCart();
+        document.getElementById('clearCart').onclick = () => this.clearCart();
+        document.getElementById('checkoutBtn').onclick = () => this.checkout();
 
-            if (closeBtn) closeBtn.addEventListener('click', () => this.closeCart());
-            if (clearBtn) clearBtn.addEventListener('click', () => this.clearCart());
-            if (checkoutBtn) checkoutBtn.addEventListener('click', () => this.checkout());
-        }, 100);
-
+        // Показываем корзину
         cartOverlay.style.display = 'flex';
+        this.updateCartDisplay();
         this.updateBackButton();
     }
 
-    closeCart() {
-        const cartOverlay = document.getElementById('cartOverlay');
-        if (cartOverlay) {
-            cartOverlay.style.display = 'none';
-            this.updateBackButton();
-        }
-    }
 
-    clearCart() {
+     clearCart() {
         if (this.cart.length === 0) {
             this.showNotification('Корзина уже пуста', 'info');
             return;
@@ -1099,13 +1305,11 @@ class TelegramShop {
             this.saveCart();
             this.updateCartCount();
 
-            // Обновляем отображение корзины если она открыта
             if (this.isCartOpen()) {
                 this.updateCartDisplay();
             }
 
             this.showNotification('🗑️ Корзина очищена', 'info');
-            console.log('✅ Корзина очищена');
         }
     }
 
@@ -1736,27 +1940,24 @@ class TelegramShop {
         if (!this.currentProduct) return;
 
         const weight = this.selectedWeight || this.currentProduct.min_weight || 0.1;
-        const price = this.selectedWeightPrice || 0;
-
-        if (weight <= 0) {
-            this.showNotification('❌ Выберите вес товара', 'error');
-            return;
-        }
+        const pricePerKg = this.currentProduct.price_per_kg || this.currentProduct.price;
+        const price = Math.floor(weight * pricePerKg);
 
         this.addToCart(
             productId,
-            `${this.currentProduct.name} (${weight.toFixed(2)} ${this.currentProduct.unit || 'кг'})`,
+            this.currentProduct.name,
             price,
             1,
             this.currentProduct.image_url
         );
 
-        // Сбрасываем выбранный вес после добавления
+        // Сбрасываем вес
         this.selectedWeight = 0.1;
         this.selectedWeightPrice = 0;
 
         this.closeProductModal();
     }
+
         // ========== МЕТОДЫ ДЛЯ ШТУЧНЫХ ТОВАРОВ ==========
 
     renderProductModal(product) {
@@ -2930,7 +3131,9 @@ class TelegramShop {
 }
 
 let shopInstance = null;
-
+const styleSheet = document.createElement('style');
+styleSheet.textContent = cartStyles;
+document.head.appendChild(styleSheet);
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('📋 DOM загружен, запускаем магазин...');
 
