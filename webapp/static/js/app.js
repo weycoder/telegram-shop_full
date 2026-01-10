@@ -2905,9 +2905,13 @@ class TelegramShop {
     }
 
     async confirmOrder() {
+        if (!this.deliveryData.type) {
+            this.showNotification('❌ Выберите способ доставки', 'error');
+            this.showDeliverySelection();
+            return;
+        }
         try {
             console.log('🔍 Начинаем оформление заказа...');
-
             // Рассчитываем суммы
             const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             const discountedSubtotal = this.cart.reduce((sum, item) => {
@@ -2946,7 +2950,54 @@ class TelegramShop {
                 discount_info: item.discount_info || null
             }));
 
-            // ... (остальной код без изменений) ...
+            // === ИСПРАВЛЯЕМ ЗДЕСЬ ===
+            // Получаем данные получателя из адреса доставки или промокода
+            let recipient_name = '';
+            let phone_number = '';
+            let deliveryDetails = null;
+
+            if (this.deliveryData.type === 'courier') {
+                if (this.deliveryData.address_details) {
+                    // Есть сохраненные детали адреса
+                    const address = this.deliveryData.address_details;
+                    recipient_name = address.recipient_name || this.username || 'Получатель';
+                    phone_number = address.phone || '';
+                    deliveryDetails = {
+                        city: address.city,
+                        street: address.street,
+                        house: address.house,
+                        apartment: address.apartment || '',
+                        floor: address.floor || '',
+                        doorcode: address.doorcode || ''
+                    };
+                } else if (this.deliveryData.address_id && this.deliveryData.address_id.toString().startsWith('guest_')) {
+                    // Гостевой адрес
+                    const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
+                    const addressId = parseInt(this.deliveryData.address_id.replace('guest_', ''));
+                    const address = guestAddresses[addressId - 1];
+
+                    if (address) {
+                        recipient_name = address.recipient_name || this.username || 'Получатель';
+                        phone_number = address.phone || '';
+                        deliveryDetails = {
+                            city: address.city,
+                            street: address.street,
+                            house: address.house,
+                            apartment: address.apartment || '',
+                            floor: address.floor || '',
+                            doorcode: address.doorcode || ''
+                        };
+                    }
+                }
+            } else if (this.deliveryData.type === 'pickup') {
+                // Для самовывоза используем имя пользователя
+                recipient_name = this.username || 'Покупатель';
+            }
+
+            // Если не нашли имя, используем имя пользователя
+            if (!recipient_name) {
+                recipient_name = this.username || 'Покупатель';
+            }
 
             const orderData = {
                 user_id: parseInt(this.userId) || 0,
@@ -2956,7 +3007,7 @@ class TelegramShop {
                 items_discount: itemsDiscount,
                 discounted_subtotal: discountedSubtotal,
                 delivery_type: this.deliveryData.type,
-                delivery_address: JSON.stringify(deliveryDetails),
+                delivery_address: deliveryDetails ? JSON.stringify(deliveryDetails) : null,
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
                 recipient_name: recipient_name,
