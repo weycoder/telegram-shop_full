@@ -1945,6 +1945,307 @@ body {
 
 
 
+/* В admin.css добавь: */
+
+/* Стили для таблицы заказов */
+.orders-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.orders-table thead {
+    background: #f8fafc;
+}
+
+.orders-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.orders-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.orders-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+/* Статусы заказов */
+.order-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.order-status i.fa-circle {
+    font-size: 8px;
+}
+
+.status-pending { background: #fffbeb; }
+.status-processing { background: #eff6ff; }
+.status-delivering { background: #f5f3ff; }
+.status-completed { background: #ecfdf5; }
+.status-cancelled { background: #fef2f2; }
+
+/* Кнопки действий */
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-view-order, .btn-edit-order, .btn-complete-order {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.btn-view-order {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.btn-view-order:hover {
+    background: #e2e8f0;
+}
+
+.btn-edit-order {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.btn-edit-order:hover {
+    background: #bfdbfe;
+}
+
+.btn-complete-order {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.btn-complete-order:hover {
+    background: #bbf7d0;
+}
+
+.btn-view-order:disabled, .btn-edit-order:disabled, .btn-complete-order:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Модальное окно деталей заказа */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #1e293b;
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #64748b;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-modal:hover {
+    background: #f1f5f9;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.order-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.info-section h4 {
+    margin: 0 0 15px 0;
+    color: #334155;
+    font-size: 16px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.info-row span:first-child {
+    color: #64748b;
+}
+
+.info-row span:last-child {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.order-items-section {
+    margin-bottom: 30px;
+}
+
+.order-detail-item {
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: #f8fafc;
+}
+
+.item-name {
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: #1e293b;
+}
+
+.item-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: #64748b;
+}
+
+.item-weight {
+    font-size: 12px;
+    color: #667eea;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.order-total-section {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.total-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #475569;
+}
+
+.total-row.grand-total {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 2px solid #e2e8f0;
+}
+
+.total-row.discount {
+    color: #10b981;
+}
+
+.modal-actions {
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.status-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Состояния загрузки */
+.loading-state, .empty-state, .error-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+
+.loading-state i, .empty-state i, .error-state i {
+    font-size: 32px;
+    margin-bottom: 15px;
+    display: block;
+}
+
+.empty-state i {
+    color: #cbd5e1;
+}
+
+.error-state i {
+    color: #ef4444;
+}
+
+.empty-state p, .error-state p {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+}
+
+.empty-state small, .error-state small {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+
 /* ============================================
    УТИЛИТЫ
 ============================================ */
