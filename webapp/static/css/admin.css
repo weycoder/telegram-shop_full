@@ -1398,6 +1398,432 @@ body {
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
 
+
+
+
+/* ============================================
+   СТИЛИ ДЛЯ СКИДОК И ПРОМОКОДОВ
+============================================ */
+
+/* Контейнеры */
+.discounts-container,
+.promo-codes-container,
+.categories-tree-container {
+    background: white;
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-top: 20px;
+}
+
+/* Заголовки страниц */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.page-header h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-header h2 i {
+    color: #667eea;
+}
+
+/* Карточки скидок */
+.discount-card,
+.promo-card {
+    background: white;
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 2px solid #e2e8f0;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+}
+
+.discount-card::before,
+.promo-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+}
+
+.discount-card:hover,
+.promo-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    border-color: #cbd5e1;
+}
+
+/* Заголовки карточек */
+.discount-header,
+.promo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.discount-header h3,
+.promo-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+/* Статусы */
+.discount-status {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.discount-status.active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.discount-status.inactive {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    color: white;
+}
+
+.discount-status.expired {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+}
+
+/* Детали карточек */
+.discount-details,
+.promo-details {
+    margin-bottom: 20px;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 8px 0;
+    border-bottom: 1px dashed #f1f5f9;
+}
+
+.detail-label {
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.detail-value {
+    color: #1e293b;
+    font-weight: 600;
+    text-align: right;
+}
+
+.discount-value {
+    color: #10b981;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+/* Действия карточек */
+.card-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* Таблицы промокодов */
+.promo-codes-table-container {
+    overflow-x: auto;
+    margin-top: 20px;
+}
+
+.promo-codes-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.promo-codes-table th {
+    background: #f8fafc;
+    padding: 18px 20px;
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.promo-codes-table td {
+    padding: 18px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #475569;
+    font-size: 14px;
+}
+
+.promo-codes-table tr:hover {
+    background: #f8fafc;
+}
+
+/* Формы создания */
+.discount-form-container,
+.promo-code-form-container,
+.category-form-container {
+    background: white;
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.form-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-header h2 i {
+    color: #667eea;
+}
+
+/* Кнопки */
+.btn-small {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.btn-small.btn-edit {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-small.btn-edit:hover {
+    background: #2563eb;
+}
+
+.btn-small.btn-delete {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-small.btn-delete:hover {
+    background: #dc2626;
+}
+
+/* Поля с единицами измерения */
+.input-with-unit {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-unit input {
+    padding-right: 50px;
+    width: 100%;
+}
+
+.input-with-unit span {
+    position: absolute;
+    right: 12px;
+    color: #64748b;
+    font-weight: 500;
+    pointer-events: none;
+}
+
+/* Дерево категорий */
+.categories-tree {
+    margin-top: 20px;
+}
+
+.category-tree-item {
+    margin-bottom: 10px;
+}
+
+.category-tree-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s;
+}
+
+.category-tree-content:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    transform: translateX(5px);
+}
+
+.category-tree-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex: 1;
+}
+
+.category-tree-info i {
+    color: #667eea;
+    font-size: 18px;
+}
+
+.category-name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 16px;
+}
+
+.category-count {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.category-tree-actions {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.category-tree-content:hover .category-tree-actions {
+    opacity: 1;
+}
+
+/* Состояние загрузки */
+.loading-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+}
+
+.loading-state i {
+    font-size: 32px;
+    margin-bottom: 20px;
+    color: #667eea;
+    animation: spin 1s linear infinite;
+}
+
+.loading-state p {
+    font-size: 16px;
+    margin-top: 10px;
+    color: #64748b;
+}
+
+/* Нет данных */
+.no-data {
+    text-align: center;
+    padding: 60px 20px;
+    color: #94a3b8;
+}
+
+.no-data i {
+    font-size: 48px;
+    margin-bottom: 20px;
+    color: #cbd5e1;
+}
+
+.no-data h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 20px;
+}
+
+/* Сетка для карточек */
+.discounts-grid,
+.promo-codes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 25px;
+    margin-top: 20px;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .discounts-grid,
+    .promo-codes-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+
+    .form-header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+
+    .promo-codes-table {
+        font-size: 13px;
+    }
+
+    .promo-codes-table th,
+    .promo-codes-table td {
+        padding: 12px;
+    }
+}
+
+
+
+
 /* ============================================
    УТИЛИТЫ
 ============================================ */

@@ -1206,6 +1206,7 @@ class AdminPanel {
         `;
     }
 
+
     async handlePromoCodeSubmit(e) {
         e.preventDefault();
 
