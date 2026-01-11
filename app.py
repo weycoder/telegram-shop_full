@@ -966,12 +966,16 @@ def api_bot_get_order_detail(order_id, telegram_id):
 
 def send_order_details_notification(telegram_id, order_id, items, status, total_amount, delivery_type,
                                     courier_name=None, courier_phone=None):
-    """Отправить детализированное уведомление о заказе - ОБНОВЛЕННАЯ"""
+    """Отправить детализированное уведомление о заказе - УПРОЩЕННАЯ БЕЗ MARKDOWN"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
 
         if not telegram_id or telegram_id == 0:
             print(f"⚠️ Неверный telegram_id: {telegram_id}")
+            return False
+
+        if not BOT_TOKEN:
+            print(f"⚠️ BOT_TOKEN не установлен")
             return False
 
         # Определяем текст статуса
@@ -981,13 +985,14 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
             'processing': '⚙️ В ОБРАБОТКЕ',
             'delivering': '🚚 ДОСТАВЛЯЕТСЯ',
             'delivered': '✅ ДОСТАВЛЕН',
-            'completed': '🎉 ЗАВЕРШЕН'
+            'completed': '🎉 ЗАВЕРШЕН',
+            'pending': '⏳ ОЖИДАЕТ ОБРАБОТКИ'
         }
 
         status_text = status_texts.get(status, status.upper())
 
-        # Собираем список товаров
-        items_text = "📦 *СОСТАВ ЗАКАЗА:*\n"
+        # Собираем список товаров (ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN)
+        items_text = "📦 СОСТАВ ЗАКАЗА:\n"
         for item in items:
             name = item.get('name', 'Товар')
             quantity = item.get('quantity', 1)
@@ -1002,30 +1007,30 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
         # Добавляем информацию о курьере если есть
         courier_info = ""
         if courier_name:
-            courier_info = f"\n👤 *КУРЬЕР:* {courier_name}"
+            courier_info = f"\n👤 КУРЬЕР: {courier_name}"
             if courier_phone:
-                courier_info += f"\n📱 *ТЕЛЕФОН:* {courier_phone}"
+                courier_info += f"\n📱 ТЕЛЕФОН: {courier_phone}"
 
-        # Формируем полное сообщение
-        message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
+        # Формируем полное сообщение (БЕЗ MARKDOWN РАЗМЕТКИ)
+        message = f"""🎯 ВАШ ЗАКАЗ #{order_id}
 
 {status_text}
 
 {items_text}
 ━━━━━━━━━━━━━━━━━━━━
-💰 *ИТОГО: {total_amount} ₽*
-📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
+💰 ИТОГО: {total_amount} ₽
+📦 ТИП ДОСТАВКИ: {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
 
-⏳ *Следующее обновление статуса будет через 15-30 минут*
-📱 *Используйте команду:* /track_{order_id}"""
+⏳ Следующее обновление статуса будет через 15-30 минут
+📱 Используйте команду: /track_{order_id}"""
 
-        # Отправляем
+        # Отправляем БЕЗ parse_mode
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
             'text': message,
-            'parse_mode': 'Markdown',
             'disable_web_page_preview': True
+            # УБИРАЕМ parse_mode='Markdown'
         }
 
         response = requests.post(url, json=data, timeout=10)
@@ -4088,23 +4093,5 @@ def apply_discounts():
 
 # ========== ЗАПУСК ==========
 if __name__ == '__main__':
-    print("=" * 50)
-    print("🚀 Telegram Shop запущен!")
-    print("=" * 50)
-    print("🌐 Доступные страницы:")
-    print("   Магазин:     http://localhost:5000/")
-    print("   Админка:     http://localhost:5000/admin")
-    print("   Курьер:      http://localhost:5000/courier")
-    print("=" * 50)
-    print("📱 Система уведомлений:")
-    print("   Статусы будут отправляться в Telegram бота")
-    print("=" * 50)
-    print("🔑 Данные для входа:")
-    print("   Курьеры: courier1 / 123456")
-    print("   Курьеры: courier2 / 123456")
-    print("   Курьеры: courier3 / 123456")
-    print("   Админ:   admin / admin123")
-    print("=" * 50)
-
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
