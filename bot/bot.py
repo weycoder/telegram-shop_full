@@ -254,6 +254,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+    user = query.from_user
 
     if data == "my_orders":
         await my_orders(update, context)
@@ -270,19 +271,62 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📦 МОИ ЗАКАЗЫ - Посмотреть ваши заказы\n\n"
             "*Уведомления:*\n"
             "Бот автоматически отправляет уведомления о статусе заказов.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Назад", callback_data="back_to_start")]
+            ])
+        )
+
+    elif data == "back_to_start":
+        # Возвращаемся к начальному сообщению
+        web_app_url = f"{WEBAPP_URL}/webapp?user_id={user.id}&username={user.username or user.first_name}"
+
+        keyboard = [
+            [InlineKeyboardButton("🛒 ОТКРЫТЬ МАГАЗИН", web_app=WebAppInfo(url=web_app_url))],
+            [InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders")],
+            [InlineKeyboardButton("❓ ПОМОЩЬ", callback_data="help")]
+        ]
+
+        await query.edit_message_text(
+            f"👋 Привет, {user.first_name}!\n\n"
+            "🛍️ Добро пожаловать в наш магазин!\n\n"
+            "*Как сделать заказ:*\n"
+            "1. Нажмите '🛒 ОТКРЫТЬ МАГАЗИН'\n"
+            "2. Выберите товары\n"
+            "3. Оформите доставку\n"
+            "4. Следите за статусом здесь!\n\n"
+            "*Вы будете получать уведомления:*\n"
+            "✅ Когда заказ принят\n"
+            "👤 Когда назначен курьер\n"
+            "🚚 Когда курьер едет к вам\n"
+            "🎉 Когда заказ доставлен",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+
+    elif data == "open_shop":
+        # Кнопка "Открыть магазин" из уведомления о заказе
+        web_app_url = f"{WEBAPP_URL}/webapp?user_id={user.id}"
+
+        await query.edit_message_text(
+            "🛒 *Откройте магазин для новых покупок:*",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🛒 ОТКРЫТЬ МАГАЗИН", web_app=WebAppInfo(url=web_app_url))],
+                [InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders")],
+                [InlineKeyboardButton("🏠 В начало", callback_data="back_to_start")]
+            ]),
             parse_mode='Markdown'
         )
 
     elif data.startswith("track_"):
         order_id = data.replace("track_", "")
-        user = query.from_user
 
         try:
             response = requests.get(f"{API_BASE_URL}/api/bot/get-order/{order_id}/{user.id}", timeout=5)
             if response.status_code == 200:
-                data = response.json()
-                if data.get('success'):
-                    order = data.get('order', {})
+                response_data = response.json()  # Изменил название переменной, чтобы не конфликтовало
+                if response_data.get('success'):
+                    order = response_data.get('order', {})
 
                     status_text = {
                         'pending': '⏳ Ожидает обработки',
@@ -297,23 +341,57 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text += f"💰 Сумма: {order.get('total_price', 0)} ₽\n"
                     text += f"📅 Дата: {order.get('created_at', '')[:10]}\n"
 
+                    # Добавляем товары если есть
+                    if order.get('items_list'):
+                        text += "\n📦 *Товары:*\n"
+                        for item in order['items_list']:
+                            name = item.get('name', 'Товар')
+                            quantity = item.get('quantity', 1)
+                            price = item.get('price', 0)
+
+                            if item.get('is_weight') and item.get('weight'):
+                                text += f"• {name} ({quantity} шт, {item['weight']} кг) - {price} ₽\n"
+                            else:
+                                text += f"• {name} × {quantity} шт - {price} ₽\n"
+
                     if order.get('courier_name'):
                         text += f"\n👤 Курьер: {order['courier_name']}"
                         if order.get('courier_phone'):
                             text += f"\n📱 Телефон: {order['courier_phone']}"
 
-                    keyboard = [[InlineKeyboardButton("🔄 Обновить", callback_data=f"track_{order_id}")]]
+                    # Кнопка "Обновить" обновляет данные о заказе
+                    keyboard = [
+                        [InlineKeyboardButton("🔄 Обновить", callback_data=f"track_{order_id}")],
+                        [InlineKeyboardButton("🛒 Открыть магазин", callback_data="open_shop")],
+                        [InlineKeyboardButton("📦 Все заказы", callback_data="my_orders")]
+                    ]
 
-                    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard),
-                                                  parse_mode='Markdown')
+                    await query.edit_message_text(
+                        text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
                     return
 
-            await query.edit_message_text(f"❌ Заказ #{order_id} не найден.", parse_mode='Markdown')
+            await query.edit_message_text(
+                f"❌ Заказ #{order_id} не найден.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📦 Все заказы", callback_data="my_orders")],
+                    [InlineKeyboardButton("🏠 В начало", callback_data="back_to_start")]
+                ]),
+                parse_mode='Markdown'
+            )
 
         except Exception as e:
             logger.error(f"Ошибка получения заказа: {e}")
-            await query.edit_message_text("❌ Ошибка получения информации о заказе.", parse_mode='Markdown')
-
+            await query.edit_message_text(
+                "❌ Ошибка получения информации о заказе.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📦 Все заказы", callback_data="my_orders")],
+                    [InlineKeyboardButton("🏠 В начало", callback_data="back_to_start")]
+                ]),
+                parse_mode='Markdown'
+            )
 
 # ========== ЗАПУСК БОТА ==========
 

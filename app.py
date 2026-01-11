@@ -966,9 +966,10 @@ def api_bot_get_order_detail(order_id, telegram_id):
 
 def send_order_details_notification(telegram_id, order_id, items, status, total_amount, delivery_type,
                                     courier_name=None, courier_phone=None):
-    """Отправить детализированное уведомление о заказе - УПРОЩЕННАЯ БЕЗ MARKDOWN"""
+    """Отправить уведомление с безопасным форматированием"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         if not telegram_id or telegram_id == 0:
             print(f"⚠️ Неверный telegram_id: {telegram_id}")
@@ -991,59 +992,165 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
 
         status_text = status_texts.get(status, status.upper())
 
-        # Собираем список товаров (ПРОСТОЙ ТЕКСТ БЕЗ MARKDOWN)
-        items_text = "📦 СОСТАВ ЗАКАЗА:\n"
+        # Безопасное форматирование товаров
+        items_text = "📦 *СОСТАВ ЗАКАЗА:*\n"
+        total_items_count = 0
         for item in items:
             name = item.get('name', 'Товар')
             quantity = item.get('quantity', 1)
             price = item.get('price', 0)
+            total_items_count += quantity
 
-            # Проверяем весовой ли товар
+            # Безопасное имя (экранируем спецсимволы Markdown)
+            safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+
             if item.get('is_weight') and item.get('weight'):
-                items_text += f"• {name} ({quantity} шт, {item['weight']} кг) - {price} ₽\n"
+                items_text += f"• *{safe_name}* ({quantity} шт, {item['weight']} кг) - *{price} ₽*\n"
             else:
-                items_text += f"• {name} × {quantity} шт - {price} ₽\n"
+                items_text += f"• *{safe_name}* × {quantity} шт - *{price} ₽*\n"
 
         # Добавляем информацию о курьере если есть
         courier_info = ""
         if courier_name:
-            courier_info = f"\n👤 КУРЬЕР: {courier_name}"
+            # Экранируем имя курьера
+            safe_courier_name = courier_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+            courier_info = f"\n👤 *КУРЬЕР:* {safe_courier_name}"
             if courier_phone:
-                courier_info += f"\n📱 ТЕЛЕФОН: {courier_phone}"
+                courier_info += f"\n📱 *ТЕЛЕФОН:* {courier_phone}"
 
-        # Формируем полное сообщение (БЕЗ MARKDOWN РАЗМЕТКИ)
-        message = f"""🎯 ВАШ ЗАКАЗ #{order_id}
+        # Формируем сообщение
+        message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
 
 {status_text}
 
 {items_text}
 ━━━━━━━━━━━━━━━━━━━━
-💰 ИТОГО: {total_amount} ₽
-📦 ТИП ДОСТАВКИ: {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
+💰 *ИТОГО: {total_amount} ₽*
+📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
 
-⏳ Следующее обновление статуса будет через 15-30 минут
-📱 Используйте команду: /track_{order_id}"""
+⏳ *Следующее обновление статуса будет через 5-10 минут*"""
 
-        # Отправляем БЕЗ parse_mode
+        # URL для веб-приложения
+        webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
+
+        # Создаем кнопки (inline клавиатура)
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "🛒 ОТКРЫТЬ МАГАЗИН",
+                        "web_app": {"url": webapp_url}
+                    }
+                ],
+                [
+                    {"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"},
+                    {"text": "🚚 ОТСЛЕДИТЬ", "callback_data": f"track_{order_id}"}
+                ]
+            ]
+        }
+
+        # Отправляем
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
             'text': message,
-            'disable_web_page_preview': True
-            # УБИРАЕМ parse_mode='Markdown'
+            'parse_mode': 'Markdown',
+            'disable_web_page_preview': True,
+            'reply_markup': keyboard
         }
 
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"✅ Детализированное уведомление отправлено пользователю {telegram_id}")
+            print(f"✅ Уведомление отправлено пользователю {telegram_id}")
             return True
         else:
-            print(f"⚠️ Не удалось отправить детализированное уведомление: {response.text}")
-            return False
+            print(f"❌ Ошибка отправки: {response.text}")
+            # Пробуем альтернативный вариант - с HTML разметкой
+            try:
+                # Формируем сообщение с HTML
+                html_items_text = "<b>📦 СОСТАВ ЗАКАЗА:</b>\n"
+                for item in items:
+                    name = item.get('name', 'Товар')
+                    quantity = item.get('quantity', 1)
+                    price = item.get('price', 0)
+
+                    # Экранируем для HTML
+                    safe_name = name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+                    if item.get('is_weight') and item.get('weight'):
+                        html_items_text += f"• <b>{safe_name}</b> ({quantity} шт, {item['weight']} кг) - <b>{price} ₽</b>\n"
+                    else:
+                        html_items_text += f"• <b>{safe_name}</b> × {quantity} шт - <b>{price} ₽</b>\n"
+
+                html_courier_info = ""
+                if courier_name:
+                    safe_courier_name = courier_name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    html_courier_info = f"\n<b>👤 КУРЬЕР:</b> {safe_courier_name}"
+                    if courier_phone:
+                        html_courier_info += f"\n<b>📱 ТЕЛЕФОН:</b> {courier_phone}"
+
+                html_message = f"""<b>🎯 ВАШ ЗАКАЗ #{order_id}</b>
+
+{status_text}
+
+{html_items_text}
+━━━━━━━━━━━━━━━━━━━━
+<b>💰 ИТОГО:</b> {total_amount} ₽
+<b>📦 ТИП ДОСТАВКИ:</b> {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{html_courier_info}
+
+⏳ <i>Следующее обновление статуса будет через 5-10 минут</i>"""
+
+                data['text'] = html_message
+                data['parse_mode'] = 'HTML'
+
+                response = requests.post(url, json=data, timeout=10)
+
+                if response.status_code == 200:
+                    print(f"✅ Уведомление отправлено (HTML) пользователю {telegram_id}")
+                    return True
+                else:
+                    # Пробуем самый простой вариант без форматирования
+                    print(f"⚠️ Пробуем без форматирования...")
+                    simple_message = f"""🎯 ВАШ ЗАКАЗ #{order_id}
+
+{status_text}
+
+📦 СОСТАВ ЗАКАЗА:"""
+
+                    for item in items:
+                        name = item.get('name', 'Товар')
+                        quantity = item.get('quantity', 1)
+                        price = item.get('price', 0)
+
+                        if item.get('is_weight') and item.get('weight'):
+                            simple_message += f"\n• {name} ({quantity} шт, {item['weight']} кг) - {price} ₽"
+                        else:
+                            simple_message += f"\n• {name} × {quantity} шт - {price} ₽"
+
+                    simple_message += f"\n\n━━━━━━━━━━━━━━━━━━━━"
+                    simple_message += f"\n💰 ИТОГО: {total_amount} ₽"
+                    simple_message += f"\n📦 ТИП ДОСТАВКИ: {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}"
+
+                    if courier_name:
+                        simple_message += f"\n👤 КУРЬЕР: {courier_name}"
+                        if courier_phone:
+                            simple_message += f"\n📱 ТЕЛЕФОН: {courier_phone}"
+
+                    simple_message += f"\n\n⏳ Следующее обновление статуса будет через 5-10 минут"
+
+                    data['text'] = simple_message
+                    data.pop('parse_mode', None)
+
+                    response = requests.post(url, json=data, timeout=10)
+                    return response.status_code == 200
+
+            except Exception as e2:
+                print(f"❌ Ошибка при попытке HTML форматирования: {e2}")
+                return False
 
     except Exception as e:
-        print(f"❌ Ошибка отправки детализированного уведомления: {e}")
+        print(f"❌ Ошибка отправки уведомления: {e}")
         return False
 
 
