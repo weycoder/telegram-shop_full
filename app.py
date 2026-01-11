@@ -2117,12 +2117,14 @@ def api_create_order():
     print("=" * 50)
 
     db = get_db()
+    order_id = None  # Объявляем переменную заранее
+
     try:
         delivery_type = data.get('delivery_type')
         payment_method = data.get('payment_method', 'cash')
         delivery_address = data.get('delivery_address', '{}')
 
-        # Получаем данные о наличной оплате - ИСПРАВЛЕНО
+        # Получаем данные о наличной оплате
         cash_payment = data.get('cash_payment', {}) or {}
         cash_received = cash_payment.get('received', 0)
         cash_change = cash_payment.get('change', 0)
@@ -2157,20 +2159,6 @@ def api_create_order():
         total_with_delivery = order_total + delivery_cost
         print(
             f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
-        if delivery_type == 'courier':
-            # Отправляем уведомления курьерам
-            try:
-                send_courier_order_notification(order_id)
-            except Exception as e:
-                print(f"⚠️ Не удалось отправить уведомления курьерам: {e}")
-
-        # Создаем активный чат для нового заказа
-        db.execute('''
-                   INSERT
-                   OR IGNORE INTO active_chats (order_id, customer_id, status)
-            VALUES (?, ?, 'active')
-                   ''', (order_id, user_id))
-        db.commit()
 
         # Если оплата наличными и нет данных о полученной сумме, рассчитываем ее
         if payment_method == 'cash' and cash_received == 0:
@@ -2269,32 +2257,75 @@ def api_create_order():
                                 cash_details
                             ))
 
+        # Получаем ID созданного заказа
+        order_id = cursor.lastrowid
+        print(f"✅ Заказ создан с ID: {order_id}")
+
         # Обновляем остатки товаров
         for item in data['items']:
             try:
                 quantity = int(item.get('quantity', 1))
-            except (ValueError, TypeError):
-                quantity = 1
+                product_id = item.get('id')
 
-            db.execute('UPDATE products SET stock = stock - ? WHERE id = ?', (quantity, item.get('id')))
+                if product_id:
+                    # Для весовых товаров
+                    if item.get('is_weight'):
+                        weight = item.get('weight', 0)
+                        if weight > 0:
+                            db.execute('UPDATE products SET stock_weight = stock_weight - ? WHERE id = ?',
+                                       (weight, product_id))
+                    else:
+                        # Для штучных товаров
+                        db.execute('UPDATE products SET stock = stock - ? WHERE id = ?',
+                                   (quantity, product_id))
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Ошибка обновления остатков для товара {item.get('id')}: {e}")
+            except Exception as e:
+                print(f"⚠️ Общая ошибка обновления остатков: {e}")
 
         db.commit()
-        order_id = cursor.lastrowid
 
-        # Отправляем уведомление о создании заказа
+        # Создаем активный чат для нового заказа
+        try:
+            db.execute('''
+                       INSERT
+                       OR IGNORE INTO active_chats (order_id, customer_id, status)
+                VALUES (?, ?, 'active')
+                       ''', (order_id, user_id))
+            db.commit()
+            print(f"✅ Создан активный чат для заказа #{order_id}")
+        except Exception as e:
+            print(f"⚠️ Не удалось создать чат: {e}")
+            # Продолжаем выполнение, даже если чат не создался
+
+        # Отправляем уведомления
         if delivery_type == 'courier':
-            print(f"📋 Создан заказ #{order_id} для доставки курьером (ожидает назначения)")
-            send_order_notification(order_id, 'created')
-        else:
-            send_order_notification(order_id, 'created')
-            print(f"✅ Уведомление о создании заказа #{order_id} отправлено")
+            print(f"📋 Создан заказ #{order_id} для доставки курьером")
 
-        db.close()
+            # Отправляем уведомление покупателю
+            try:
+                send_order_notification(order_id, 'created')
+            except Exception as e:
+                print(f"⚠️ Не удалось отправить уведомление покупателю: {e}")
+
+            # Отправляем уведомления курьерам
+            try:
+                send_courier_order_notification(order_id)
+            except Exception as e:
+                print(f"⚠️ Не удалось отправить уведомления курьерам: {e}")
+        else:
+            # Для самовывоза
+            try:
+                send_order_notification(order_id, 'created')
+                print(f"✅ Уведомление о создании заказа #{order_id} отправлено")
+            except Exception as e:
+                print(f"⚠️ Не удалось отправить уведомление: {e}")
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
         print(f"💰 Сумма: {total_with_delivery} руб")
         print(f"💵 Наличные: получено {cash_received} руб, сдача {cash_change} руб")
         print("=" * 50)
+
         return jsonify({
             'success': True,
             'order_id': order_id,
@@ -2303,12 +2334,25 @@ def api_create_order():
         })
 
     except Exception as e:
-        db.close()
         print(f"❌ Ошибка создания заказа: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
 
+        # Пытаемся откатить изменения
+        try:
+            if order_id:
+                db.execute('DELETE FROM orders WHERE id = ?', (order_id,))
+                db.commit()
+                print(f"⚠️ Заказ #{order_id} удален из-за ошибки")
+        except:
+            pass
+
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        try:
+            db.close()
+        except:
+            pass
 
 @app.route('/api/admin/chats', methods=['GET'])
 def api_admin_chats():

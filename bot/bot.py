@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime
 
-import filters
+from telegram.ext import filters  # Добавляем этот импорт
 import requests
 import sys
 import asyncio
