@@ -155,7 +155,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
 
     # Проверяем, является ли пользователь администратором
-    admin_telegram_id = os.getenv('ADMIN_TELEGRAM_ID')
+    admin_telegram_id = os.getenv('ADMIN_IDS')
     if not admin_telegram_id or str(user.id) != admin_telegram_id:
         if update.callback_query:
             await query.edit_message_text(
@@ -194,6 +194,301 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👨‍💼 *ПАНЕЛЬ АДМИНИСТРАТОРА*\n\n"
             "Выберите раздел для управления:",
             reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+
+
+async def admin_manage_couriers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Управление курьерами - главное меню"""
+    if update.callback_query:
+        query = update.callback_query
+        user = query.from_user
+        await query.answer()
+        message_func = query.edit_message_text
+    else:
+        user = update.effective_user
+        message_func = update.message.reply_text
+
+    # Проверяем права администратора
+    if not await check_admin(user.id):
+        await message_func("❌ У вас нет прав администратора")
+        return
+
+    keyboard = [
+        [
+            InlineKeyboardButton("📋 Список курьеров", callback_data="admin_couriers_list"),
+            InlineKeyboardButton("➕ Добавить курьера", callback_data="admin_add_courier")
+        ],
+        [
+            InlineKeyboardButton("📊 Статистика", callback_data="admin_couriers_stats"),
+            InlineKeyboardButton("🏠 В панель", callback_data="admin_panel")
+        ]
+    ]
+
+    await message_func(
+        "🚚 *УПРАВЛЕНИЕ КУРЬЕРАМИ*\n\n"
+        "Выберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+
+async def admin_couriers_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Список всех курьеров"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    # Проверяем права администратора
+    if not await check_admin(user.id):
+        await query.edit_message_text("❌ У вас нет прав администратора")
+        return
+
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/admin/couriers", timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if data.get('success'):
+                couriers = data.get('couriers', [])
+
+                if not couriers:
+                    await query.edit_message_text(
+                        "🚚 *Курьеров пока нет*\n\n"
+                        "Нажмите '➕ Добавить курьера' чтобы создать первого курьера.",
+                        parse_mode='Markdown'
+                    )
+                    return
+
+                text = "🚚 *ВСЕ КУРЬЕРЫ*\n\n"
+
+                for courier in couriers[:10]:  # Показываем первые 10 курьеров
+                    status = "✅ Активен" if courier.get('is_active') else "❌ Неактивен"
+                    telegram_status = "📱 Telegram: Есть" if courier.get('has_telegram') else "📵 Telegram: Нет"
+
+                    text += f"━━━━━━━━━━━━━━━━━━━━\n"
+                    text += f"👤 *{courier.get('full_name', 'Не указано')}*\n"
+                    text += f"🆔 ID: {courier.get('id')}\n"
+                    text += f"📞 {courier.get('phone', 'Не указан')}\n"
+                    text += f"🚗 {courier.get('vehicle_type', 'Не указан')}\n"
+                    text += f"{status} | {telegram_status}\n"
+
+                    if courier.get('active_orders', 0) > 0:
+                        text += f"📦 Активных заказов: {courier['active_orders']}\n"
+
+                    # Кнопки для каждого курьера
+                    keyboard_row = [
+                        InlineKeyboardButton("✏️ Изменить", callback_data=f"admin_edit_courier_{courier['id']}"),
+                        InlineKeyboardButton("🗑️ Удалить", callback_data=f"admin_delete_courier_{courier['id']}")
+                    ]
+
+                    if courier.get('has_telegram'):
+                        keyboard_row.append(
+                            InlineKeyboardButton("📱 Telegram", callback_data=f"admin_courier_tg_{courier['id']}"))
+
+                    await query.message.reply_text(
+                        text,
+                        reply_markup=InlineKeyboardMarkup([keyboard_row]),
+                        parse_mode='Markdown'
+                    )
+                    text = ""
+
+                # Основные кнопки
+                keyboard = [
+                    [
+                        InlineKeyboardButton("➕ Добавить курьера", callback_data="admin_add_courier"),
+                        InlineKeyboardButton("🔄 Обновить", callback_data="admin_couriers_list")
+                    ],
+                    [
+                        InlineKeyboardButton("🏠 В панель", callback_data="admin_panel")
+                    ]
+                ]
+
+                if len(couriers) > 10:
+                    await query.message.reply_text(
+                        f"📊 Показано 10 из {len(couriers)} курьеров",
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await query.message.reply_text(
+                        "📊 Все курьеры показаны",
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
+            else:
+                await query.edit_message_text(
+                    f"❌ Ошибка: {data.get('error', 'Неизвестная ошибка')}",
+                    parse_mode='Markdown'
+                )
+        else:
+            await query.edit_message_text(
+                f"❌ Ошибка сервера: {response.status_code}",
+                parse_mode='Markdown'
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка получения списка курьеров: {e}")
+        await query.edit_message_text(
+            "❌ Ошибка получения списка курьеров",
+            parse_mode='Markdown'
+        )
+
+
+async def admin_add_courier(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Добавление нового курьера"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    # Проверяем права администратора
+    if not await check_admin(user.id):
+        await query.edit_message_text("❌ У вас нет прав администратора")
+        return
+
+    # Запрашиваем данные для создания курьера
+    context.user_data['adding_courier'] = True
+    context.user_data['courier_data'] = {}
+
+    await query.edit_message_text(
+        "➕ *ДОБАВЛЕНИЕ НОВОГО КУРЬЕРА*\n\n"
+        "Шаг 1/5\n"
+        "Введите *логин* курьера (на английском, без пробелов):",
+        parse_mode='Markdown'
+    )
+
+
+async def admin_edit_courier(update: Update, context: ContextTypes.DEFAULT_TYPE, courier_id):
+    """Редактирование курьера"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    # Проверяем права администратора
+    if not await check_admin(user.id):
+        await query.edit_message_text("❌ У вас нет прав администратора")
+        return
+
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/admin/couriers/{courier_id}", timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if data.get('success'):
+                courier = data.get('courier', {})
+
+                text = f"✏️ *РЕДАКТИРОВАНИЕ КУРЬЕРА #{courier_id}*\n\n"
+                text += f"👤 *ФИО:* {courier.get('full_name', 'Не указано')}\n"
+                text += f"📞 *Телефон:* {courier.get('phone', 'Не указан')}\n"
+                text += f"🚗 *Транспорт:* {courier.get('vehicle_type', 'Не указан')}\n"
+                text += f"📱 *Telegram ID:* {courier.get('telegram_id', 'Не привязан')}\n"
+
+                if courier.get('stats'):
+                    stats = courier['stats']
+                    text += f"\n📊 *СТАТИСТИКА:*\n"
+                    text += f"✅ Завершенных заказов: {stats.get('completed_orders', 0)}\n"
+                    text += f"📦 Активных заказов: {stats.get('active_orders', 0)}\n"
+                    text += f"💰 Общая выручка: {stats.get('total_revenue', 0)} ₽\n"
+
+                keyboard = [
+                    [
+                        InlineKeyboardButton("✏️ Изменить данные", callback_data=f"admin_update_courier_{courier_id}"),
+                        InlineKeyboardButton("🔐 Сменить пароль", callback_data=f"admin_change_pass_{courier_id}")
+                    ],
+                    [
+                        InlineKeyboardButton(f"{'❌ Деактивировать' if courier.get('is_active') else '✅ Активировать'}",
+                                             callback_data=f"admin_toggle_courier_{courier_id}"),
+                        InlineKeyboardButton("🗑️ Удалить", callback_data=f"admin_confirm_delete_{courier_id}")
+                    ],
+                    [
+                        InlineKeyboardButton("📋 Назад к списку", callback_data="admin_couriers_list"),
+                        InlineKeyboardButton("🏠 В панель", callback_data="admin_panel")
+                    ]
+                ]
+
+                await query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+
+    except Exception as e:
+        logger.error(f"Ошибка получения информации о курьере: {e}")
+        await query.edit_message_text(
+            "❌ Ошибка получения информации о курьере",
+            parse_mode='Markdown'
+        )
+
+
+async def admin_delete_courier_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, courier_id):
+    """Подтверждение удаления курьера"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    # Проверяем права администратора
+    if not await check_admin(user.id):
+        await query.edit_message_text("❌ У вас нет прав администратора")
+        return
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Да, удалить", callback_data=f"admin_delete_confirm_{courier_id}"),
+            InlineKeyboardButton("❌ Нет, отмена", callback_data=f"admin_edit_courier_{courier_id}")
+        ]
+    ]
+
+    await query.edit_message_text(
+        f"⚠️ *ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ*\n\n"
+        f"Вы уверены, что хотите удалить курьера #{courier_id}?\n\n"
+        f"*Внимание:* Это действие нельзя отменить!",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+
+async def admin_delete_courier_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, courier_id):
+    """Выполнение удаления курьера"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    # Проверяем права администратора
+    if not await check_admin(user.id):
+        await query.edit_message_text("❌ У вас нет прав администратора")
+        return
+
+    try:
+        response = requests.delete(f"{API_BASE_URL}/api/admin/couriers?id={courier_id}", timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if data.get('success'):
+                await query.edit_message_text(
+                    f"✅ Курьер #{courier_id} успешно удален",
+                    parse_mode='Markdown'
+                )
+                # Возвращаемся к списку курьеров через 2 секунды
+                await asyncio.sleep(2)
+                await admin_couriers_list(update, context)
+            else:
+                await query.edit_message_text(
+                    f"❌ Ошибка: {data.get('error', 'Не удалось удалить курьера')}",
+                    parse_mode='Markdown'
+                )
+        else:
+            await query.edit_message_text(
+                f"❌ Ошибка сервера: {response.status_code}",
+                parse_mode='Markdown'
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка удаления курьера: {e}")
+        await query.edit_message_text(
+            "❌ Ошибка удаления курьера",
             parse_mode='Markdown'
         )
 
@@ -518,6 +813,32 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "courier_register":
         await courier_register(user, query)
+
+    elif data == "admin_couriers":
+        await admin_manage_couriers(update, context)
+
+    elif data == "admin_couriers_list":
+        await admin_couriers_list(update, context)
+
+    elif data == "admin_add_courier":
+        await admin_add_courier(update, context)
+
+    elif data.startswith("admin_edit_courier_"):
+        courier_id = data.replace("admin_edit_courier_", "")
+        await admin_edit_courier(update, context, courier_id)
+
+    elif data.startswith("admin_delete_courier_"):
+        courier_id = data.replace("admin_delete_courier_", "")
+        await admin_delete_courier_confirm(update, context, courier_id)
+
+    elif data.startswith("admin_confirm_delete_"):
+        courier_id = data.replace("admin_confirm_delete_", "")
+        await admin_delete_courier_execute(update, context, courier_id)
+
+    # Обработчики для чата
+    elif data.startswith("admin_open_chat_"):
+        order_id = data.replace("admin_open_chat_", "")
+        await admin_open_chat(update, context, order_id)
 
     if data == "my_orders":
         await my_orders(update, context)
@@ -1112,6 +1433,70 @@ async def show_admin_chats(user, query):
         )
 
 
+async def admin_open_chat(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id):
+    """Открыть чат с клиентом"""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    # Проверяем права администратора
+    if not await check_admin(user.id):
+        await query.edit_message_text("❌ У вас нет прав администратора")
+        return
+
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/admin/chat/messages/{order_id}", timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if data.get('success'):
+                messages = data.get('messages', [])
+
+                text = f"💬 *ЧАТ ПО ЗАКАЗУ #{order_id}*\n\n"
+
+                if not messages:
+                    text += "Сообщений пока нет. Напишите первое сообщение!\n\n"
+                else:
+                    for msg in messages[-10:]:  # Показываем последние 10 сообщений
+                        sender = msg.get('sender_name', 'Неизвестно')
+                        time = msg.get('time_formatted', '')
+                        message = msg.get('message', '')
+
+                        text += f"*{sender}* ({time}):\n"
+                        text += f"{message}\n\n"
+
+                keyboard = [
+                    [
+                        InlineKeyboardButton("💬 Ответить", callback_data=f"chat_reply_{order_id}"),
+                        InlineKeyboardButton("📦 Заказ", callback_data=f"admin_order_{order_id}")
+                    ],
+                    [
+                        InlineKeyboardButton("💬 Назад к чатам", callback_data="admin_active_chats"),
+                        InlineKeyboardButton("🏠 В панель", callback_data="admin_panel")
+                    ]
+                ]
+
+                await query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+
+    except Exception as e:
+        logger.error(f"Ошибка открытия чата: {e}")
+        await query.edit_message_text(
+            "❌ Ошибка открытия чата",
+            parse_mode='Markdown'
+        )
+
+
+async def check_admin(telegram_id):
+    """Проверка, является ли пользователь администратором"""
+    admin_ids = os.getenv('ADMIN_IDS', '').split(',')
+    return str(telegram_id) in admin_ids
+
+
 async def courier_take_order(user, query, order_id):
     """Курьер берет заказ"""
     try:
@@ -1185,11 +1570,11 @@ async def courier_take_order(user, query, order_id):
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик текстовых сообщений (для ответов в чате)"""
+    """Обработчик текстовых сообщений"""
     user = update.effective_user
     message_text = update.message.text
 
-    # Проверяем, ожидается ли ответ в чате
+    # 1. Проверяем, ожидается ли ответ в чате
     if 'awaiting_chat_reply' in context.user_data:
         order_id = context.user_data['awaiting_chat_reply']
 
@@ -1198,28 +1583,115 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         if success:
             await update.message.reply_text(
-                f"✅ Сообщение отправлено в чат заказа #{order_id}",
-                parse_mode='Markdown'
+                f"✅ Сообщение отправлено в чат заказа #{order_id}"
             )
         else:
             await update.message.reply_text(
-                "❌ Ошибка отправки сообщения",
-                parse_mode='Markdown'
+                "❌ Ошибка отправки сообщения"
             )
 
         # Очищаем состояние
         del context.user_data['awaiting_chat_reply']
         return
 
-    # Обычное текстовое сообщение
+    # 2. Проверяем, создается ли курьер
+    elif 'adding_courier' in context.user_data and context.user_data['adding_courier']:
+        courier_data = context.user_data.get('courier_data', {})
+        step = len(courier_data) + 1
+
+        if step == 1:
+            # Шаг 1: Логин
+            courier_data['username'] = message_text
+            context.user_data['courier_data'] = courier_data
+            await update.message.reply_text(
+                f"Шаг 2/5\nВведите *пароль* курьера:",
+                parse_mode='Markdown'
+            )
+
+        elif step == 2:
+            # Шаг 2: Пароль
+            courier_data['password'] = message_text
+            context.user_data['courier_data'] = courier_data
+            await update.message.reply_text(
+                f"Шаг 3/5\nВведите *ФИО* курьера:",
+                parse_mode='Markdown'
+            )
+
+        elif step == 3:
+            # Шаг 3: ФИО
+            courier_data['full_name'] = message_text
+            context.user_data['courier_data'] = courier_data
+            await update.message.reply_text(
+                f"Шаг 4/5\nВведите *телефон* курьера:",
+                parse_mode='Markdown'
+            )
+
+        elif step == 4:
+            # Шаг 4: Телефон
+            courier_data['phone'] = message_text
+            context.user_data['courier_data'] = courier_data
+            await update.message.reply_text(
+                f"Шаг 5/5\nВведите *тип транспорта* (авто, мото, вело, пеший):",
+                parse_mode='Markdown'
+            )
+
+        elif step == 5:
+            # Шаг 5: Транспорт
+            courier_data['vehicle_type'] = message_text
+            context.user_data['courier_data'] = courier_data
+
+            # Создаем курьера через API
+            try:
+                response = requests.post(
+                    f"{API_BASE_URL}/api/admin/couriers",
+                    json=courier_data,
+                    timeout=5
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+
+                    if data.get('success'):
+                        courier_id = data.get('id')
+
+                        # Очищаем состояние
+                        del context.user_data['adding_courier']
+                        del context.user_data['courier_data']
+
+                        await update.message.reply_text(
+                            f"✅ Курьер успешно создан!\n\n"
+                            f"*Данные курьера:*\n"
+                            f"🆔 ID: {courier_id}\n"
+                            f"👤 ФИО: {courier_data['full_name']}\n"
+                            f"📞 Телефон: {courier_data['phone']}\n"
+                            f"🚗 Транспорт: {courier_data['vehicle_type']}\n\n"
+                            f"Сообщите курьеру его логин и пароль для входа.",
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        await update.message.reply_text(
+                            f"❌ Ошибка: {data.get('error', 'Неизвестная ошибка')}"
+                        )
+                else:
+                    await update.message.reply_text(
+                        f"❌ Ошибка сервера: {response.status_code}"
+                    )
+
+            except Exception as e:
+                logger.error(f"Ошибка создания курьера: {e}")
+                await update.message.reply_text("❌ Ошибка создания курьера")
+
+        return
+
+    # 3. Обычное текстовое сообщение
     await update.message.reply_text(
         "👋 Для навигации используйте команды:\n\n"
         "/start - Главное меню\n"
-        "/courier - Панель курьера (если вы курьер)\n"
+        "/admin - Панель администратора\n"
+        "/courier - Панель курьера\n"
         "/track <номер> - Отследить заказ\n"
         "/myorders - Мои заказы\n\n"
-        "Или используйте кнопки в меню.",
-        parse_mode='Markdown'
+        "Или используйте кнопки в меню."
     )
 
 

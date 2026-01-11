@@ -1410,36 +1410,196 @@ def api_send_chat_message():
         db.close()
 
 
-@app.route('/api/admin/couriers', methods=['GET'])
+@app.route('/api/admin/couriers', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def api_admin_couriers():
-    """Получить список курьеров для администратора"""
+    """Управление курьерами - получение списка, создание, обновление, удаление"""
     db = get_db()
     try:
-        couriers = db.execute('''
-                              SELECT c.*,
-                                     CASE WHEN ct.telegram_id IS NOT NULL THEN 1 ELSE 0 END as has_telegram,
-                                     (SELECT COUNT(*)
-                                      FROM order_assignments oa
-                                      WHERE oa.courier_id = c.id
-                                        AND oa.status != 'delivered') as active_orders
-                              FROM couriers c
-                                  LEFT JOIN courier_telegram ct
-                              ON c.id = ct.courier_id
-                              ORDER BY c.is_active DESC, c.full_name
-                              ''').fetchall()
+        if request.method == 'GET':
+            # Получить всех курьеров
+            couriers = db.execute('''
+                                  SELECT c.*,
+                                         CASE WHEN ct.telegram_id IS NOT NULL THEN 1 ELSE 0 END as has_telegram,
+                                         (SELECT COUNT(*)
+                                          FROM order_assignments oa
+                                          WHERE oa.courier_id = c.id
+                                            AND oa.status != 'delivered') as active_orders
+                                  FROM couriers c
+                                      LEFT JOIN courier_telegram ct
+                                  ON c.id = ct.courier_id
+                                  ORDER BY c.is_active DESC, c.full_name
+                                  ''').fetchall()
 
-        couriers_list = []
-        for courier in couriers:
-            courier_dict = dict(courier)
-            couriers_list.append(courier_dict)
+            couriers_list = []
+            for courier in couriers:
+                courier_dict = dict(courier)
+                couriers_list.append(courier_dict)
+
+            return jsonify({
+                'success': True,
+                'couriers': couriers_list
+            })
+
+        elif request.method == 'POST':
+            # Создать нового курьера
+            data = request.json
+
+            # Валидация
+            if not data.get('username'):
+                return jsonify({'success': False, 'error': 'Введите логин курьера'}), 400
+            if not data.get('password'):
+                return jsonify({'success': False, 'error': 'Введите пароль курьера'}), 400
+            if not data.get('full_name'):
+                return jsonify({'success': False, 'error': 'Введите ФИО курьера'}), 400
+            if not data.get('phone'):
+                return jsonify({'success': False, 'error': 'Введите телефон курьера'}), 400
+
+            # Проверяем уникальность логина
+            existing = db.execute('SELECT id FROM couriers WHERE username = ?',
+                                  (data['username'],)).fetchone()
+            if existing:
+                return jsonify({'success': False, 'error': 'Курьер с таким логином уже существует'}), 400
+
+            # Создаем курьера
+            cursor = db.execute('''
+                                INSERT INTO couriers (username, password, full_name, phone, vehicle_type, is_active)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    data['username'],
+                                    data['password'],
+                                    data['full_name'],
+                                    data['phone'],
+                                    data.get('vehicle_type', 'car'),
+                                    data.get('is_active', True)
+                                ))
+
+            courier_id = cursor.lastrowid
+            db.commit()
+
+            return jsonify({
+                'success': True,
+                'id': courier_id,
+                'message': 'Курьер успешно создан'
+            })
+
+        elif request.method == 'PUT':
+            # Обновить курьера
+            courier_id = request.args.get('id', type=int)
+            data = request.json
+
+            if not courier_id:
+                return jsonify({'success': False, 'error': 'Не указан ID курьера'}), 400
+
+            # Проверяем существование курьера
+            courier = db.execute('SELECT id FROM couriers WHERE id = ?', (courier_id,)).fetchone()
+            if not courier:
+                return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+            # Обновляем данные
+            db.execute('''
+                       UPDATE couriers
+                       SET full_name    = ?,
+                           phone        = ?,
+                           vehicle_type = ?,
+                           is_active    = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('full_name', ''),
+                           data.get('phone', ''),
+                           data.get('vehicle_type', 'car'),
+                           data.get('is_active', True),
+                           courier_id
+                       ))
+
+            db.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Курьер успешно обновлен'
+            })
+
+        elif request.method == 'DELETE':
+            # Удалить курьера
+            courier_id = request.args.get('id', type=int)
+
+            if not courier_id:
+                return jsonify({'success': False, 'error': 'Не указан ID курьера'}), 400
+
+            # Проверяем существование курьера
+            courier = db.execute('SELECT id FROM couriers WHERE id = ?', (courier_id,)).fetchone()
+            if not courier:
+                return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+            # Проверяем, есть ли активные заказы у курьера
+            active_orders = db.execute('''
+                                       SELECT COUNT(*)
+                                       FROM order_assignments
+                                       WHERE courier_id = ?
+                                         AND status != 'delivered'
+                                       ''', (courier_id,)).fetchone()[0]
+
+            if active_orders > 0:
+                return jsonify({
+                    'success': False,
+                    'error': 'Нельзя удалить курьера с активными заказами'
+                }), 400
+
+            # Удаляем курьера
+            db.execute('DELETE FROM couriers WHERE id = ?', (courier_id,))
+            db.execute('DELETE FROM courier_telegram WHERE courier_id = ?', (courier_id,))
+            db.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Курьер успешно удален'
+            })
+
+    except Exception as e:
+        print(f"❌ Ошибка управления курьерами: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/couriers/<int:courier_id>', methods=['GET'])
+def api_admin_courier_detail(courier_id):
+    """Получить детальную информацию о курьере"""
+    db = get_db()
+    try:
+        courier = db.execute('''
+                             SELECT c.*, ct.telegram_id, ct.username as telegram_username
+                             FROM couriers c
+                                      LEFT JOIN courier_telegram ct ON c.id = ct.courier_id
+                             WHERE c.id = ?
+                             ''', (courier_id,)).fetchone()
+
+        if not courier:
+            return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+        # Получаем статистику курьера
+        stats = db.execute('''
+                           SELECT COUNT(CASE WHEN oa.status = 'delivered' THEN 1 END)  as completed_orders,
+                                  COUNT(CASE WHEN oa.status != 'delivered' THEN 1 END) as active_orders,
+                                  COALESCE(SUM(o.total_price), 0)                      as total_revenue
+                           FROM order_assignments oa
+                                    LEFT JOIN orders o ON oa.order_id = o.id
+                           WHERE oa.courier_id = ?
+                           ''', (courier_id,)).fetchone()
+
+        courier_dict = dict(courier)
+        courier_dict['stats'] = dict(stats) if stats else {
+            'completed_orders': 0,
+            'active_orders': 0,
+            'total_revenue': 0
+        }
 
         return jsonify({
             'success': True,
-            'couriers': couriers_list
+            'courier': courier_dict
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения курьеров: {e}")
+        print(f"❌ Ошибка получения информации о курьере: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -1471,32 +1631,6 @@ def api_courier_profile():
 
     except Exception as e:
         print(f"❌ Ошибка получения профиля курьера: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-@app.route('/api/courier/telegram/by-telegram/<int:telegram_id>', methods=['GET'])
-def api_get_courier_by_telegram(telegram_id):
-    """Получить информацию о курьере по Telegram ID"""
-    db = get_db()
-    try:
-        courier = db.execute('''
-                             SELECT ct.*, c.full_name, c.phone, c.vehicle_type, c.is_active
-                             FROM courier_telegram ct
-                                      JOIN couriers c ON ct.courier_id = c.id
-                             WHERE ct.telegram_id = ?
-                             ''', (telegram_id,)).fetchone()
-
-        if not courier:
-            return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
-
-        return jsonify({
-            'success': True,
-            'courier_info': dict(courier)
-        })
-
-    except Exception as e:
-        print(f"❌ Ошибка получения курьера по Telegram ID: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -2445,6 +2579,7 @@ def api_create_order():
         except:
             pass
 
+
 @app.route('/api/admin/chats', methods=['GET'])
 def api_admin_chats():
     """Получить список активных чатов для администратора"""
@@ -2494,6 +2629,90 @@ def api_admin_chats():
     finally:
         db.close()
 
+
+@app.route('/api/admin/chat/messages/<int:order_id>', methods=['GET'])
+def api_admin_chat_messages(order_id):
+    """Получить сообщения чата для администратора"""
+    db = get_db()
+    try:
+        messages = db.execute('''
+                              SELECT cm.*,
+                                     CASE
+                                         WHEN cm.sender_type = 'admin' THEN '👨‍💼 Администратор'
+                                         WHEN cm.sender_type = 'courier' THEN '🚚 Курьер'
+                                         ELSE o.username
+                                         END as sender_name,
+                                     CASE
+                                         WHEN cm.sender_type = 'admin' THEN 'admin'
+                                         WHEN cm.sender_type = 'courier' THEN 'courier'
+                                         ELSE 'customer'
+                                         END as sender_role
+                              FROM chat_messages cm
+                                       LEFT JOIN orders o ON cm.order_id = o.id
+                              WHERE cm.order_id = ?
+                              ORDER BY cm.created_at ASC
+                              ''', (order_id,)).fetchall()
+
+        # Помечаем сообщения как прочитанные
+        db.execute('UPDATE chat_messages SET is_read = 1 WHERE order_id = ? AND sender_type = "customer"',
+                   (order_id,))
+        db.execute('UPDATE active_chats SET unread_admin = 0 WHERE order_id = ?', (order_id,))
+        db.commit()
+
+        messages_list = []
+        for msg in messages:
+            msg_dict = dict(msg)
+            # Форматируем дату
+            if msg_dict.get('created_at'):
+                try:
+                    dt = datetime.strptime(msg_dict['created_at'], '%Y-%m-%d %H:%M:%S')
+                    msg_dict['time_formatted'] = dt.strftime('%H:%M')
+                    msg_dict['date_formatted'] = dt.strftime('%d.%m.%Y')
+                except:
+                    msg_dict['time_formatted'] = msg_dict['created_at'][11:16]
+                    msg_dict['date_formatted'] = msg_dict['created_at'][:10]
+
+            messages_list.append(msg_dict)
+
+        return jsonify({
+            'success': True,
+            'messages': messages_list
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения сообщений чата: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+# ========== API ДЛЯ РЕГИСТРАЦИИ КУРЬЕРА В ТЕЛЕГРАМ ==========
+
+@app.route('/api/courier/telegram/by-telegram/<int:telegram_id>', methods=['GET'])
+def api_get_courier_by_telegram(telegram_id):
+    """Получить информацию о курьере по Telegram ID"""
+    db = get_db()
+    try:
+        courier = db.execute('''
+                             SELECT ct.*, c.full_name, c.phone, c.vehicle_type, c.is_active
+                             FROM courier_telegram ct
+                                      JOIN couriers c ON ct.courier_id = c.id
+                             WHERE ct.telegram_id = ?
+                             ''', (telegram_id,)).fetchone()
+
+        if not courier:
+            return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+        return jsonify({
+            'success': True,
+            'courier_info': dict(courier)
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения курьера по Telegram ID: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
 
 @app.route('/api/admin/chat/send', methods=['POST'])
 def api_admin_send_message():
