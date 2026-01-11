@@ -75,7 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать заказы пользователя с товарами в блоке"""
+    """Показать заказы пользователя"""
     if update.callback_query:
         query = update.callback_query
         user = query.from_user
@@ -94,24 +94,26 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         text = "📋 *ВАШИ ЗАКАЗЫ*\n\n"
 
-        for idx, order in enumerate(orders, 1):
+        for order in orders:
             status = order.get('status', 'pending')
             status_text = {
-                'pending': '⏳ Ожидает',
-                'processing': '🔄 В обработке',
-                'delivering': '🚚 Доставляется',
-                'completed': '✅ Завершен',
-                'cancelled': '❌ Отменен'
-            }.get(status, status)
+                'pending': '⏳ *Ожидает обработки*',
+                'processing': '🔄 *В обработке*',
+                'delivering': '🚚 *Доставляется*',
+                'delivered': '✅ *Доставлен*',
+                'completed': '🎉 *Завершен*',
+                'cancelled': '❌ *Отменен*',
+                'picked_up': '📦 *Курьер забрал заказ*'
+            }.get(status, f"📊 *{status}*")
 
             text += f"━━━━━━━━━━━━━━━━━━━━\n"
             text += f"📦 *ЗАКАЗ #{order['id']}*\n"
             text += f"━━━━━━━━━━━━━━━━━━━━\n"
-            text += f"📊 Статус: {status_text}\n"
-            text += f"💰 Сумма: {order.get('total_price', 0)} ₽\n"
-            text += f"📅 Дата: {order.get('created_at', '')[:10]}\n\n"
+            text += f"{status_text}\n"
+            text += f"💰 *Сумма:* {order.get('total_price', 0)} ₽\n"
+            text += f"📅 *Дата:* {order.get('created_at', '')[:10]}\n"
 
-            # Получаем товары
+            # Получаем детали заказа
             try:
                 response = requests.get(f"{API_BASE_URL}/api/bot/get-order/{order['id']}/{user.id}", timeout=3)
                 if response.status_code == 200:
@@ -121,33 +123,31 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         items_list = order_details.get('items_list', [])
 
                         if items_list:
-                            text += "📦 *СОСТАВ ЗАКАЗА:*\n"
-                            text += "┌───────────────────────\n"
+                            text += f"\n📦 *Товары ({len(items_list)}):*\n"
+                            text += "```\n"
 
-                            total_items = 0
                             for item in items_list:
                                 name = item.get('name', 'Товар')
                                 quantity = item.get('quantity', 1)
                                 price = item.get('price', 0)
-                                total_items += quantity
 
-                                # Форматируем строку
-                                item_name = name[:20] + "..." if len(name) > 20 else name
+                                # Обрезаем длинные названия
+                                if len(name) > 20:
+                                    name = name[:18] + "..."
 
                                 if item.get('is_weight') and item.get('weight'):
-                                    text += f"│ • {item_name}\n"
-                                    text += f"│   {quantity}шт × {item['weight']}кг = {price}₽\n"
+                                    text += f"• {name}\n"
+                                    text += f"  {quantity}шт × {item['weight']}кг = {price}₽\n"
                                 else:
-                                    text += f"│ • {item_name}\n"
-                                    text += f"│   {quantity}шт × {price / quantity if quantity > 0 else price}₽ = {price}₽\n"
+                                    text += f"• {name}\n"
+                                    text += f"  {quantity}шт × {price}₽\n"
 
-                            text += "└───────────────────────\n\n"
+                            text += "```\n"
 
             except Exception as e:
                 print(f"⚠️ Ошибка получения товаров заказа: {e}")
-                text += "📦 Товары: _(информация не загружена)_\n\n"
 
-        text += f"_🕒 Обновлено: {datetime.now().strftime('%H:%M:%S')}_"
+        text += f"\n_🕒 Обновлено: {datetime.now().strftime('%H:%M:%S')}_"
 
         keyboard = [
             [InlineKeyboardButton("🛒 ОТКРЫТЬ МАГАЗИН",
@@ -156,13 +156,22 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
     if update.callback_query:
-        await safe_edit_message(query, text, keyboard)
+        try:
+            await query.edit_message_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                print(f"⚠️ Ошибка редактирования сообщения: {e}")
     else:
         await update.message.reply_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
+
 
 
 async def safe_edit_message(query, text, keyboard, parse_mode='Markdown'):
