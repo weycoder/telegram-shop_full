@@ -65,6 +65,147 @@ def init_db():
 
         # ========== СНАЧАЛА СОЗДАЕМ ВСЕ ТАБЛИЦЫ С ПРАВИЛЬНОЙ СТРУКТУРОЙ ==========
 
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS chat_messages
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           order_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           user_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           message
+                           TEXT
+                           NOT
+                           NULL,
+                           sender_type
+                           TEXT
+                           CHECK (
+                           sender_type
+                           IN
+                       (
+                           'customer',
+                           'admin',
+                           'courier'
+                       )),
+                           is_read INTEGER DEFAULT 0,
+                           file_url TEXT,
+                           file_type TEXT,
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           FOREIGN KEY
+                       (
+                           order_id
+                       ) REFERENCES orders
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
+        # 15. Активные чаты
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS active_chats
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           order_id
+                           INTEGER
+                           UNIQUE
+                           NOT
+                           NULL,
+                           customer_id
+                           INTEGER
+                           NOT
+                           NULL,
+                           admin_id
+                           INTEGER,
+                           courier_id
+                           INTEGER,
+                           status
+                           TEXT
+                           DEFAULT
+                           'active',
+                           last_message_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           unread_admin
+                           INTEGER
+                           DEFAULT
+                           0,
+                           unread_customer
+                           INTEGER
+                           DEFAULT
+                           0,
+                           unread_courier
+                           INTEGER
+                           DEFAULT
+                           0,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           order_id
+                       ) REFERENCES orders
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
+        # 16. Telegram ID курьеров
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS courier_telegram
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           courier_id
+                           INTEGER
+                           NOT
+                           NULL
+                           UNIQUE,
+                           telegram_id
+                           BIGINT
+                           NOT
+                           NULL
+                           UNIQUE,
+                           username
+                           TEXT,
+                           first_name
+                           TEXT,
+                           last_name
+                           TEXT,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           courier_id
+                       ) REFERENCES couriers
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
         # 1. Курьеры
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS couriers
@@ -1116,6 +1257,431 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
         return False
 
 
+def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_name, is_admin=False):
+    """Отправить уведомление о новом сообщении в Telegram"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        if not BOT_TOKEN or not telegram_id:
+            return False
+
+        # Определяем тип отправителя
+        if is_admin:
+            sender_prefix = "👨‍💼 АДМИНИСТРАТОР"
+        else:
+            sender_prefix = "👤 КЛИЕНТ"
+
+        # Обрезаем длинное сообщение
+        short_message = message[:200] + "..." if len(message) > 200 else message
+
+        # Формируем сообщение
+        text = f"💬 *НОВОЕ СООБЩЕНИЕ В ЧАТЕ*\n\n"
+        text += f"📦 *Заказ:* #{order_id}\n"
+        text += f"{sender_prefix} ({sender_name}):\n"
+        text += f"_{short_message}_\n\n"
+        text += f"📝 *Ответить:* /chat_{order_id}"
+
+        # Кнопки для быстрого ответа
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "💬 Ответить", "callback_data": f"chat_reply_{order_id}"},
+                    {"text": "📦 Просмотр заказа", "callback_data": f"view_order_{order_id}"}
+                ]
+            ]
+        }
+
+        # Отправляем сообщение
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+        data = {
+            'chat_id': int(telegram_id),
+            'text': text,
+            'parse_mode': 'Markdown',
+            'reply_markup': json.dumps(keyboard)
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+        if response.status_code == 200:
+            print(f"✅ Уведомление чата отправлено пользователю {telegram_id}")
+            return True
+        else:
+            print(f"❌ Ошибка отправки уведомления чата: {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомления чата: {e}")
+        return False
+
+
+@app.route('/api/chat/send', methods=['POST'])
+def api_send_chat_message():
+    """Отправить сообщение в чат"""
+    db = get_db()
+    try:
+        data = request.json
+        order_id = data.get('order_id')
+        user_id = data.get('user_id')
+        message = data.get('message', '').strip()
+        sender_type = data.get('sender_type', 'customer')
+        file_url = data.get('file_url')
+        file_type = data.get('file_type')
+
+        if not order_id or not user_id or not message:
+            return jsonify({'success': False, 'error': 'Не указаны обязательные поля'}), 400
+
+        # Получаем информацию о заказе
+        order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
+
+        order_dict = dict(order)
+
+        # Определяем отправителя
+        is_admin = sender_type == 'admin'
+        sender_name = "Администратор" if is_admin else order_dict.get('username', 'Клиент')
+
+        # Сохраняем сообщение в БД
+        cursor = db.execute('''
+                            INSERT INTO chat_messages (order_id, user_id, message, sender_type, file_url, file_type)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                            ''', (order_id, user_id, message, sender_type, file_url, file_type))
+
+        message_id = cursor.lastrowid
+
+        # Обновляем или создаем активный чат
+        chat = db.execute('SELECT * FROM active_chats WHERE order_id = ?', (order_id,)).fetchone()
+
+        if not chat:
+            # Создаем новый активный чат
+            db.execute('''
+                       INSERT INTO active_chats (order_id, customer_id, last_message_at)
+                       VALUES (?, ?, CURRENT_TIMESTAMP)
+                       ''', (order_id, order_dict['user_id']))
+        else:
+            # Обновляем счетчик непрочитанных
+            if sender_type == 'customer':
+                db.execute('''
+                           UPDATE active_chats
+                           SET last_message_at = CURRENT_TIMESTAMP,
+                               unread_admin    = unread_admin + 1
+                           WHERE order_id = ?
+                           ''', (order_id,))
+            elif sender_type == 'admin':
+                db.execute('''
+                           UPDATE active_chats
+                           SET last_message_at = CURRENT_TIMESTAMP,
+                               unread_customer = unread_customer + 1
+                           WHERE order_id = ?
+                           ''', (order_id,))
+
+        db.commit()
+
+        # Отправляем уведомление получателю
+        if sender_type == 'customer':
+            # Клиент написал - уведомляем администратора
+            admin_telegram_id = os.getenv('ADMIN_TELEGRAM_ID')
+            if admin_telegram_id:
+                send_chat_notification_to_telegram(
+                    int(admin_telegram_id),
+                    order_id,
+                    message,
+                    sender_name,
+                    is_admin=False
+                )
+        elif sender_type == 'admin':
+            # Администратор написал - уведомляем клиента
+            send_chat_notification_to_telegram(
+                order_dict['user_id'],
+                order_id,
+                message,
+                sender_name,
+                is_admin=True
+            )
+
+        return jsonify({
+            'success': True,
+            'message_id': message_id,
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка отправки сообщения чата: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/chat/messages', methods=['GET'])
+def api_get_chat_messages():
+    """Получить сообщения чата для заказа"""
+    db = get_db()
+    try:
+        order_id = request.args.get('order_id', type=int)
+        user_id = request.args.get('user_id', type=int)
+
+        if not order_id:
+            return jsonify({'success': False, 'error': 'Не указан ID заказа'}), 400
+
+        # Получаем сообщения
+        messages = db.execute('''
+                              SELECT cm.*,
+                                     CASE
+                                         WHEN cm.sender_type = 'admin' THEN 'Администратор'
+                                         WHEN cm.sender_type = 'courier' THEN 'Курьер'
+                                         ELSE o.username
+                                         END as sender_name
+                              FROM chat_messages cm
+                                       LEFT JOIN orders o ON cm.order_id = o.id
+                              WHERE cm.order_id = ?
+                              ORDER BY cm.created_at ASC
+                              ''', (order_id,)).fetchall()
+
+        # Помечаем сообщения как прочитанные
+        if user_id:
+            db.execute('''
+                       UPDATE chat_messages
+                       SET is_read = 1
+                       WHERE order_id = ?
+                         AND sender_type != 'customer'
+                       ''', (order_id,))
+
+            # Сбрасываем счетчик непрочитанных для этого пользователя
+            if user_id == db.execute('SELECT customer_id FROM active_chats WHERE order_id = ?', (order_id,)).fetchone()[
+                'customer_id']:
+                db.execute('UPDATE active_chats SET unread_customer = 0 WHERE order_id = ?', (order_id,))
+
+        db.commit()
+
+        messages_list = []
+        for msg in messages:
+            msg_dict = dict(msg)
+            # Форматируем дату
+            if msg_dict.get('created_at'):
+                try:
+                    dt = datetime.strptime(msg_dict['created_at'], '%Y-%m-%d %H:%M:%S')
+                    msg_dict['time_formatted'] = dt.strftime('%H:%M')
+                    msg_dict['date_formatted'] = dt.strftime('%d.%m.%Y')
+                except:
+                    msg_dict['time_formatted'] = msg_dict['created_at'][11:16]
+                    msg_dict['date_formatted'] = msg_dict['created_at'][:10]
+
+            messages_list.append(msg_dict)
+
+        return jsonify({
+            'success': True,
+            'messages': messages_list,
+            'order_id': order_id
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения сообщений чата: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+def send_courier_order_notification(order_id):
+    """Отправить уведомление всем курьерам о новом заказе"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        if not BOT_TOKEN:
+            print("⚠️ BOT_TOKEN не установлен")
+            return False
+
+        db = get_db()
+
+        # Получаем информацию о заказе
+        order = db.execute('''
+                           SELECT o.*,
+                                  json_extract(o.delivery_address, '$.city')      as city,
+                                  json_extract(o.delivery_address, '$.street')    as street,
+                                  json_extract(o.delivery_address, '$.house')     as house,
+                                  json_extract(o.delivery_address, '$.apartment') as apartment
+                           FROM orders o
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
+        if not order:
+            print(f"⚠️ Заказ #{order_id} не найден")
+            return False
+
+        order_dict = dict(order)
+
+        # Форматируем адрес
+        address_parts = []
+        if order_dict.get('city'):
+            address_parts.append(order_dict['city'])
+        if order_dict.get('street'):
+            address_parts.append(f"ул. {order_dict['street']}")
+        if order_dict.get('house'):
+            address_parts.append(f"д. {order_dict['house']}")
+        if order_dict.get('apartment'):
+            address_parts.append(f"кв. {order_dict['apartment']}")
+
+        address = ', '.join(address_parts) if address_parts else "Адрес не указан"
+
+        # Парсим товары
+        items_list = []
+        total_items = 0
+        if order_dict.get('items'):
+            try:
+                items_list = json.loads(order_dict['items'])
+                total_items = sum(item.get('quantity', 1) for item in items_list)
+            except:
+                pass
+
+        # Получаем всех курьеров с telegram_id
+        couriers = db.execute('''
+                              SELECT c.id, c.full_name, ct.telegram_id
+                              FROM couriers c
+                                       LEFT JOIN courier_telegram ct ON c.id = ct.courier_id
+                              WHERE c.is_active = 1
+                                AND ct.telegram_id IS NOT NULL
+                              ''').fetchall()
+
+        if not couriers:
+            print("⚠️ Нет курьеров с Telegram ID")
+            return False
+
+        # Формируем сообщение для курьера
+        text = f"🚚 *НОВЫЙ ЗАКАЗ ДЛЯ ДОСТАВКИ*\n\n"
+        text += f"📦 *Заказ:* #{order_id}\n"
+        text += f"👤 *Клиент:* {order_dict.get('recipient_name', order_dict.get('username', 'Клиент'))}\n"
+        text += f"📱 *Телефон:* {order_dict.get('phone_number', 'Не указан')}\n"
+        text += f"📍 *Адрес:* {address}\n"
+        text += f"📊 *Товаров:* {total_items} шт\n"
+        text += f"💰 *Сумма:* {order_dict.get('total_price', 0)} ₽\n"
+
+        if order_dict.get('cash_received', 0) > 0:
+            text += f"💵 *Оплата наличными:* {order_dict['cash_received']} ₽\n"
+            if order_dict.get('cash_change', 0) > 0:
+                text += f"💰 *Сдача:* {order_dict['cash_change']} ₽\n"
+
+        text += f"\n⏰ *Создан:* {order_dict.get('created_at', '')[:16]}"
+
+        # Кнопки для курьера
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ ВЗЯТЬ ЗАКАЗ", "callback_data": f"courier_take_{order_id}"},
+                    {"text": "🚀 КУРЬЕР ПАНЕЛЬ", "callback_data": "courier_panel"}
+                ]
+            ]
+        }
+
+        # Отправляем сообщение всем курьерам
+        success_count = 0
+        for courier in couriers:
+            try:
+                telegram_id = courier['telegram_id']
+
+                url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+                data = {
+                    'chat_id': int(telegram_id),
+                    'text': text,
+                    'parse_mode': 'Markdown',
+                    'reply_markup': json.dumps(keyboard)
+                }
+
+                response = requests.post(url, json=data, timeout=10)
+                if response.status_code == 200:
+                    print(f"✅ Уведомление отправлено курьеру {courier['full_name']} ({telegram_id})")
+                    success_count += 1
+                else:
+                    print(f"❌ Ошибка отправки курьеру {courier['full_name']}: {response.text}")
+
+            except Exception as e:
+                print(f"❌ Ошибка отправки курьеру {courier['full_name']}: {e}")
+
+        print(f"📨 Уведомления отправлены: {success_count}/{len(couriers)} курьерам")
+        return success_count > 0
+
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомлений курьерам: {e}")
+        return False
+    finally:
+        if 'db' in locals():
+            db.close()
+
+
+@app.route('/api/courier/register-telegram', methods=['POST'])
+def api_register_courier_telegram():
+    """Зарегистрировать Telegram ID курьера"""
+    db = get_db()
+    try:
+        data = request.json
+        courier_id = data.get('courier_id')
+        telegram_id = data.get('telegram_id')
+        username = data.get('username')
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+
+        if not courier_id or not telegram_id:
+            return jsonify({'success': False, 'error': 'Не указаны обязательные поля'}), 400
+
+        # Проверяем существование курьера
+        courier = db.execute('SELECT id FROM couriers WHERE id = ?', (courier_id,)).fetchone()
+        if not courier:
+            return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
+
+        # Регистрируем или обновляем Telegram ID
+        existing = db.execute('SELECT id FROM courier_telegram WHERE courier_id = ? OR telegram_id = ?',
+                              (courier_id, telegram_id)).fetchone()
+
+        if existing:
+            db.execute('''
+                       UPDATE courier_telegram
+                       SET telegram_id = ?,
+                           username    = ?,
+                           first_name  = ?,
+                           last_name   = ?
+                       WHERE id = ?
+                       ''', (telegram_id, username, first_name, last_name, existing['id']))
+        else:
+            db.execute('''
+                       INSERT INTO courier_telegram (courier_id, telegram_id, username, first_name, last_name)
+                       VALUES (?, ?, ?, ?, ?)
+                       ''', (courier_id, telegram_id, username, first_name, last_name))
+
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Telegram ID зарегистрирован'
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка регистрации Telegram ID курьера: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/courier/telegram/<int:courier_id>', methods=['GET'])
+def api_get_courier_telegram(courier_id):
+    """Получить Telegram ID курьера"""
+    db = get_db()
+    try:
+        courier = db.execute('''
+                             SELECT ct.*, c.full_name, c.phone
+                             FROM courier_telegram ct
+                                      JOIN couriers c ON ct.courier_id = c.id
+                             WHERE ct.courier_id = ?
+                             ''', (courier_id,)).fetchone()
+
+        if not courier:
+            return jsonify({'success': False, 'error': 'Telegram ID не найден'}), 404
+
+        return jsonify({
+            'success': True,
+            'telegram_info': dict(courier)
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения Telegram ID курьера: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
 def send_order_notification(order_id, status, courier_id=None):
     """Отправка уведомлений покупателю через Telegram бота - ИСПРАВЛЕННАЯ"""
     db = None
@@ -1591,6 +2157,20 @@ def api_create_order():
         total_with_delivery = order_total + delivery_cost
         print(
             f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
+        if delivery_type == 'courier':
+            # Отправляем уведомления курьерам
+            try:
+                send_courier_order_notification(order_id)
+            except Exception as e:
+                print(f"⚠️ Не удалось отправить уведомления курьерам: {e}")
+
+        # Создаем активный чат для нового заказа
+        db.execute('''
+                   INSERT
+                   OR IGNORE INTO active_chats (order_id, customer_id, status)
+            VALUES (?, ?, 'active')
+                   ''', (order_id, user_id))
+        db.commit()
 
         # Если оплата наличными и нет данных о полученной сумме, рассчитываем ее
         if payment_method == 'cash' and cash_received == 0:
@@ -1728,6 +2308,113 @@ def api_create_order():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/chats', methods=['GET'])
+def api_admin_chats():
+    """Получить список активных чатов для администратора"""
+    db = get_db()
+    try:
+        # Получаем активные чаты с непрочитанными сообщениями
+        chats = db.execute('''
+                           SELECT ac.*,
+                                  o.username                       as customer_name,
+                                  o.status                         as order_status,
+                                  o.total_price,
+                                  o.created_at                     as order_created,
+                                  (SELECT COUNT(*)
+                                   FROM chat_messages
+                                   WHERE order_id = ac.order_id
+                                     AND is_read = 0
+                                     AND sender_type = 'customer') as unread_count,
+                                  (SELECT message
+                                   FROM chat_messages
+                                   WHERE order_id = ac.order_id
+                                   ORDER BY created_at DESC           LIMIT 1) as last_message
+                           FROM active_chats ac
+                               JOIN orders o
+                           ON ac.order_id = o.id
+                           WHERE ac.status = 'active'
+                           ORDER BY ac.last_message_at DESC
+                           ''').fetchall()
+
+        chats_list = []
+        for chat in chats:
+            chat_dict = dict(chat)
+
+            # Форматируем последнее сообщение
+            if chat_dict.get('last_message') and len(chat_dict['last_message']) > 50:
+                chat_dict['last_message_short'] = chat_dict['last_message'][:50] + '...'
+
+            chats_list.append(chat_dict)
+
+        return jsonify({
+            'success': True,
+            'chats': chats_list
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка получения чатов администратора: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/chat/send', methods=['POST'])
+def api_admin_send_message():
+    """Администратор отправляет сообщение в чат"""
+    db = get_db()
+    try:
+        data = request.json
+        order_id = data.get('order_id')
+        message = data.get('message', '').strip()
+
+        if not order_id or not message:
+            return jsonify({'success': False, 'error': 'Не указаны обязательные поля'}), 400
+
+        # Получаем информацию о заказе
+        order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
+
+        order_dict = dict(order)
+
+        # Сохраняем сообщение от администратора
+        db.execute('''
+                   INSERT INTO chat_messages (order_id, user_id, message, sender_type)
+                   VALUES (?, 0, ?, 'admin')
+                   ''', (order_id, message))
+
+        # Обновляем счетчик непрочитанных для клиента
+        db.execute('''
+                   UPDATE active_chats
+                   SET last_message_at = CURRENT_TIMESTAMP,
+                       unread_customer = unread_customer + 1
+                   WHERE order_id = ?
+                   ''', (order_id,))
+
+        db.commit()
+
+        # Отправляем уведомление клиенту
+        send_chat_notification_to_telegram(
+            order_dict['user_id'],
+            order_id,
+            message,
+            "Администратор",
+            is_admin=True
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Сообщение отправлено'
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка отправки сообщения администратора: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
 
 @app.route('/api/courier/available-orders', methods=['GET'])
 def get_available_orders():
