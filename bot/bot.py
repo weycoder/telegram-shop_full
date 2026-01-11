@@ -147,15 +147,24 @@ async def send_chat_message(user_id, order_id, message, is_admin=False):
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Панель администратора"""
-    user = update.effective_user
+    if update.callback_query:
+        query = update.callback_query
+        user = query.from_user
+        await query.answer()
+    else:
+        user = update.effective_user
 
     # Проверяем, является ли пользователь администратором
     admin_telegram_id = os.getenv('ADMIN_TELEGRAM_ID')
     if not admin_telegram_id or str(user.id) != admin_telegram_id:
-        await update.message.reply_text(
-            "❌ У вас нет прав для доступа к панели администратора.",
-            parse_mode='Markdown'
-        )
+        if update.callback_query:
+            await query.edit_message_text(
+                "❌ У вас нет прав для доступа к панели администратора."
+            )
+        else:
+            await update.message.reply_text(
+                "❌ У вас нет прав для доступа к панели администратора."
+            )
         return
 
     keyboard = [
@@ -173,17 +182,32 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
 
-    await update.message.reply_text(
-        "👨‍💼 *ПАНЕЛЬ АДМИНИСТРАТОРА*\n\n"
-        "Выберите раздел для управления:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    if update.callback_query:
+        await query.edit_message_text(
+            "👨‍💼 *ПАНЕЛЬ АДМИНИСТРАТОРА*\n\n"
+            "Выберите раздел для управления:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "👨‍💼 *ПАНЕЛЬ АДМИНИСТРАТОРА*\n\n"
+            "Выберите раздел для управления:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
 
 
 async def courier_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда для курьеров: /courier"""
     user = update.effective_user
+
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        message_func = query.edit_message_text
+    else:
+        message_func = update.message.reply_text
 
     # Проверяем, является ли пользователь курьером
     try:
@@ -215,14 +239,25 @@ async def courier_panel_command(update: Update, context: ContextTypes.DEFAULT_TY
                     ]
                 ]
 
-                await update.message.reply_text(
+                text = (
                     f"🚚 *ПАНЕЛЬ КУРЬЕРА*\n\n"
                     f"👤 *Имя:* {courier_info.get('full_name', 'Не указано')}\n"
                     f"📱 *Телефон:* {courier_info.get('phone', 'Не указан')}\n\n"
-                    f"Выберите действие:",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
+                    f"Выберите действие:"
                 )
+
+                if update.callback_query:
+                    await query.edit_message_text(
+                        text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await update.message.reply_text(
+                        text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
                 return
     except Exception as e:
         logger.error(f"Ошибка проверки курьера: {e}")
@@ -232,13 +267,24 @@ async def courier_panel_command(update: Update, context: ContextTypes.DEFAULT_TY
         InlineKeyboardButton("📝 Регистрация курьера", callback_data="courier_register")
     ]]
 
-    await update.message.reply_text(
+    text = (
         "🚚 *ДОБРО ПОЖАЛОВАТЬ В СИСТЕМУ КУРЬЕРОВ*\n\n"
         "Для доступа к панели курьера необходимо зарегистрироваться.\n\n"
-        "Если вы уже курьер, обратитесь к администратору.",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        "Если вы уже курьер, обратитесь к администратору."
     )
+
+    if update.callback_query:
+        await query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
 
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать заказы пользователя"""
@@ -827,8 +873,8 @@ async def courier_register(user, query):
 
     await query.edit_message_text(
         text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
+        # Без parse_mode
     )
 
 
