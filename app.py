@@ -1134,9 +1134,9 @@ def api_bot_get_order_detail(order_id, telegram_id):
         db.close()
 
 
-def send_order_details_notification(telegram_id, order_id, items, status, total_amount, delivery_type,
+def send_order_details_notification(telegram_id, order_id, items, status, delivery_type,
                                     courier_name=None, courier_phone=None):
-    """Отправить уведомление с корректными статусами"""
+    """Отправить уведомление с корректными статусами - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
@@ -1148,6 +1148,43 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
         if not BOT_TOKEN:
             print(f"⚠️ BOT_TOKEN не установлен")
             return False
+
+        # ВАЖНО: Получаем реальные данные заказа из базы
+        db = get_db()
+        try:
+            order = db.execute('''
+                               SELECT o.total_price,
+                                      o.delivery_cost,
+                                      o.discount_amount,
+                                      (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
+                               FROM orders o
+                               WHERE o.id = ?
+                               ''', (order_id,)).fetchone()
+
+            if not order:
+                print(f"❌ Заказ #{order_id} не найден в базе")
+                db.close()
+                return False
+
+            order_data = dict(order)
+            # Правильная итоговая сумма для клиента
+            correct_total_amount = order_data['total_with_delivery']
+            delivery_cost = order_data['delivery_cost'] or 0
+            discount_amount = order_data['discount_amount'] or 0
+            original_total = order_data['total_price'] or 0
+
+            print(f"📊 ДАННЫЕ ЗАКАЗА #{order_id} ДЛЯ УВЕДОМЛЕНИЯ:")
+            print(f"   • Исходная сумма: {original_total} руб")
+            print(f"   • Скидка: {discount_amount} руб")
+            print(f"   • Доставка: {delivery_cost} руб")
+            print(f"   • ИТОГО К ОПЛАТЕ: {correct_total_amount} руб")
+
+        except Exception as e:
+            print(f"❌ Ошибка получения данных заказа #{order_id}: {e}")
+            db.close()
+            return False
+        finally:
+            db.close()
 
         # Корректные тексты статусов для уведомлений
         status_texts = {
@@ -1193,14 +1230,19 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
         if status == 'picked_up':
             extra_info = "\n\n⚡ *Курьер уже в пути! Приготовьтесь к встрече.*"
 
-        # Формируем сообщение
+        # ИНФОРМАЦИЯ О СКИДКЕ (если есть)
+        discount_info = ""
+        if discount_amount > 0:
+            discount_info = f"\n🎁 *СКИДКА:* -{discount_amount} ₽\n"
+
+        # Формируем сообщение с ПРАВИЛЬНОЙ суммой
         message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
 
 {status_text}{extra_info}
 
 {items_text}
-━━━━━━━━━━━━━━━━━━━━
-💰 *ИТОГО: {total_amount} ₽*
+{discount_info}━━━━━━━━━━━━━━━━━━━━
+💰 *ИТОГО К ОПЛАТЕ: {correct_total_amount} ₽*
 📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
 
 ⏳ *Следующее обновление будет при изменении статуса*"""
@@ -1241,45 +1283,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, total_
             return True
         else:
             print(f"❌ Ошибка отправки: {response.text}")
-            # Пробуем без форматирования
-            try:
-                # Простое сообщение без Markdown
-                simple_message = f"""ВАШ ЗАКАЗ #{order_id}
-
-{status_text.replace('*', '')}{extra_info.replace('*', '')}
-
-СОСТАВ ЗАКАЗА:"""
-
-                for item in items:
-                    name = item.get('name', 'Товар')
-                    quantity = item.get('quantity', 1)
-                    price = item.get('price', 0)
-
-                    if item.get('is_weight') and item.get('weight'):
-                        simple_message += f"\n• {name} ({quantity} шт, {item['weight']} кг) - {price} ₽"
-                    else:
-                        simple_message += f"\n• {name} × {quantity} шт - {price} ₽"
-
-                simple_message += f"\n\n━━━━━━━━━━━━━━━━━━━━"
-                simple_message += f"\nИТОГО: {total_amount} ₽"
-                simple_message += f"\nТИП ДОСТАВКИ: {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}"
-
-                if courier_name:
-                    simple_message += f"\nКУРЬЕР: {courier_name}"
-                    if courier_phone:
-                        simple_message += f"\nТЕЛЕФОН: {courier_phone}"
-
-                simple_message += f"\n\nСледующее обновление будет при изменении статуса"
-
-                data['text'] = simple_message
-                data.pop('parse_mode', None)
-
-                response = requests.post(url, json=data, timeout=10)
-                return response.status_code == 200
-
-            except Exception as e2:
-                print(f"❌ Ошибка при попытке простого сообщения: {e2}")
-                return False
+            return False
 
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления: {e}")
