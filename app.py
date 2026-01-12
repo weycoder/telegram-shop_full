@@ -1941,7 +1941,6 @@ def api_get_courier_telegram(courier_id):
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
-
 def send_order_notification(order_id, status, courier_id=None):
     """Отправка уведомлений покупателю через Telegram бота - ИСПРАВЛЕННАЯ"""
     db = None
@@ -1984,16 +1983,14 @@ def send_order_notification(order_id, status, courier_id=None):
             except:
                 items_list = []
 
-        total_amount = order_dict.get('total_price', 0)
         delivery_type = order_dict.get('delivery_type', 'courier')
 
-        # Отправляем уведомление
+        # Отправляем уведомление - ИСПРАВЛЕННЫЙ ВЫЗОВ
         status_sent = send_order_details_notification(
             telegram_id=telegram_id,
             order_id=order_id,
             items=items_list,
             status=status,
-            total_amount=total_amount,
             delivery_type=delivery_type,
             courier_name=courier_name,
             courier_phone=courier_phone
