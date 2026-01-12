@@ -3979,6 +3979,62 @@ def get_status_name(status):
     }
     return status_names.get(status, status)
 
+
+@app.route('/api/admin/promo-codes', methods=['POST'])
+def create_promo_code():
+    """Создание нового промокода"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "error": "Нет данных"}), 400
+
+        required_fields = ['code', 'discount_type', 'value']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"success": False, "error": f"Отсутствует поле: {field}"}), 400
+
+        # Генерация кода, если не предоставлен
+        code = data['code'].upper().strip()
+        discount_type = data['discount_type']
+        value = float(data['value'])
+
+        # Проверка существования кода
+        existing = collection_promo_codes.find_one({"code": code})
+        if existing:
+            return jsonify({"success": False, "error": "Такой промокод уже существует"}), 400
+
+        # Создание промокода
+        promo_data = {
+            "code": code,
+            "discount_type": discount_type,
+            "value": value,
+            "is_active": data.get('is_active', True),
+            "used_count": 0,
+            "created_at": datetime.now(),
+            "updated_at": datetime.now()
+        }
+
+        # Добавление дат действия, если указаны
+        if data.get('start_date'):
+            promo_data["start_date"] = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+        if data.get('end_date'):
+            promo_data["end_date"] = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+
+        # Сохранение в MongoDB
+        result = collection_promo_codes.insert_one(promo_data)
+
+        return jsonify({
+            "success": True,
+            "message": "Промокод создан",
+            "id": str(result.inserted_id),
+            "promo_code": promo_data
+        }), 201
+
+    except Exception as e:
+        print(f"❌ Ошибка создания промокода: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/admin/promo-codes', methods=['GET'])
 def get_promo_codes_admin():
     """Получить все промокоды для админки"""

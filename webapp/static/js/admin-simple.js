@@ -1412,6 +1412,7 @@ class AdminPanel {
             return;
         }
 
+
         const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
         if (!allowedTypes.includes(imageFile.type)) {
             this.showAlert('❌ Неподдерживаемый формат файла', 'error');
