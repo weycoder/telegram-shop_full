@@ -49,7 +49,7 @@ def validate_admin_token():
 
 
 # app.py - исправленный декоратор
-def rate_limit(max_requests=100, window=60):
+def rate_limit(max_requests=30, window=60):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
