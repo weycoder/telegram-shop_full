@@ -3007,7 +3007,7 @@ def courier_take_order():
 
 # ========== API ДЛЯ КУРЬЕРОВ ==========
 @app.route('/api/courier/login', methods=['POST'])
-@rate_limit(max_per_minute=10)
+@rate_limit(max_requests=30)
 @validate_json_request
 def courier_login():
     try:
@@ -3291,7 +3291,7 @@ def update_delivery_status():
 
 @app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
 @admin_required
-@rate_limit(max_per_minute=60)
+@rate_limit(max_requests=30)
 def admin_get_order_details(order_id):
     """Получить детали заказа для админки"""
     db = get_db()
