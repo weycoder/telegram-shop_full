@@ -3983,6 +3983,7 @@ def get_status_name(status):
 @app.route('/api/admin/promo-codes', methods=['POST'])
 def create_promo_code():
     """Создание нового промокода"""
+    db = get_db()
     try:
         data = request.json
         if not data:
@@ -3999,58 +4000,75 @@ def create_promo_code():
         value = float(data['value'])
 
         # Проверка существования кода
-        existing = collection_promo_codes.find_one({"code": code})
+        existing = db.execute('SELECT id FROM promo_codes WHERE code = ?', (code,)).fetchone()
         if existing:
             return jsonify({"success": False, "error": "Такой промокод уже существует"}), 400
 
         # Создание промокода
-        promo_data = {
-            "code": code,
-            "discount_type": discount_type,
-            "value": value,
-            "is_active": data.get('is_active', True),
-            "used_count": 0,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now()
-        }
+        cursor = db.execute('''
+            INSERT INTO promo_codes (
+                code, discount_type, value, usage_limit, used_count,
+                min_order_amount, start_date, end_date, is_active,
+                one_per_customer, exclude_sale_items, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (
+            code,
+            discount_type,
+            value,
+            data.get('usage_limit'),
+            data.get('used_count', 0),
+            data.get('min_order_amount', 0),
+            data.get('start_date'),
+            data.get('end_date'),
+            data.get('is_active', True),
+            data.get('one_per_customer', False),
+            data.get('exclude_sale_items', False)
+        ))
 
-        # Добавление дат действия, если указаны
-        if data.get('start_date'):
-            promo_data["start_date"] = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
-        if data.get('end_date'):
-            promo_data["end_date"] = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
-
-        # Сохранение в MongoDB
-        result = collection_promo_codes.insert_one(promo_data)
+        promo_id = cursor.lastrowid
+        db.commit()
 
         return jsonify({
             "success": True,
             "message": "Промокод создан",
-            "id": str(result.inserted_id),
-            "promo_code": promo_data
+            "id": promo_id
         }), 201
 
     except Exception as e:
         print(f"❌ Ошибка создания промокода: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
 
-
-# Маршрут для удаления промокода (DELETE)
-@app.route('/api/admin/promo-codes/<promo_id>', methods=['DELETE'])
+@app.route('/api/admin/promo-codes/<int:promo_id>', methods=['DELETE'])
 def delete_promo_code(promo_id):
+    """Удаление промокода"""
+    db = get_db()
     try:
-        from bson.objectid import ObjectId
-
-        result = collection_promo_codes.delete_one({"_id": ObjectId(promo_id)})
-
-        if result.deleted_count > 0:
-            return jsonify({"success": True, "message": "Промокод удален"}), 200
-        else:
+        # Проверяем существование промокода
+        promo = db.execute('SELECT id FROM promo_codes WHERE id = ?', (promo_id,)).fetchone()
+        if not promo:
             return jsonify({"success": False, "error": "Промокод не найден"}), 404
+
+        # Проверяем, используется ли промокод в заказах
+        usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE promo_code_id = ?', (promo_id,)).fetchone()[0]
+        if usage_count > 0:
+            return jsonify({
+                "success": False,
+                "error": "Нельзя удалить промокод, который уже использовался в заказах"
+            }), 400
+
+        # Удаляем промокод
+        db.execute('DELETE FROM promo_codes WHERE id = ?', (promo_id,))
+        db.commit()
+
+        return jsonify({"success": True, "message": "Промокод удален"})
 
     except Exception as e:
         print(f"❌ Ошибка удаления промокода: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
 
 @app.route('/api/admin/promo-codes', methods=['GET'])
 def get_promo_codes_admin():
