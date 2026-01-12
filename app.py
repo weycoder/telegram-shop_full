@@ -38,6 +38,22 @@ UPLOAD_PATH = app.config['UPLOAD_FOLDER']
 if not os.path.exists(UPLOAD_PATH):
     os.makedirs(UPLOAD_PATH)
     print(f"📁 Создана папка для загрузок: {UPLOAD_PATH}")
+    
+# ========== ХЕЛПЕР ДЛЯ БЕЗОПАСНЫХ ЗАПРОСОВ ==========
+
+def execute_safe_query(query, params=()):
+    """Безопасное выполнение SQL запроса"""
+    db = get_db()
+    try:
+        cursor = db.execute(query, params)
+        result = cursor.fetchall()
+        return [dict(row) for row in result]
+    except Exception as e:
+        print(f"❌ SQL Error: {e}")
+        return []
+    finally:
+        db.close()
+
 
 # app.py - исправленный декоратор
 def rate_limit(max_requests=30, window=60):
@@ -5887,21 +5903,6 @@ def clear_failed_logins():
         return jsonify({'success': True, 'message': 'Cleared old failed login attempts'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-# ========== ХЕЛПЕР ДЛЯ БЕЗОПАСНЫХ ЗАПРОСОВ ==========
-
-def execute_safe_query(query, params=()):
-    """Безопасное выполнение SQL запроса"""
-    db = get_db()
-    try:
-        cursor = db.execute(query, params)
-        result = cursor.fetchall()
-        return [dict(row) for row in result]
-    except Exception as e:
-        print(f"❌ SQL Error: {e}")
-        return []
-    finally:
-        db.close()
 
 
 # ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
