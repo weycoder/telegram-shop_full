@@ -48,30 +48,34 @@ def validate_admin_token():
     return secrets.compare_digest(token, ADMIN_TOKEN)
 
 
-def rate_limit(max_per_minute=60):
-    """Декоратор для ограничения запросов"""
-
+# app.py - исправленный декоратор
+def rate_limit(max_requests=100, window=60):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # Проверяем, существует ли _ip_blocks
+            if '_ip_blocks' not in globals():
+                globals()['_ip_blocks'] = {}
+
             ip = request.remote_addr
-
-            # Проверка блокировки
-            if ip in _ip_blocks and _ip_blocks[ip] > time.time():
-                return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
-
             current_time = time.time()
 
-            # Очистка старых запросов
-            _request_counts[ip] = [t for t in _request_counts[ip]
-                                   if current_time - t < 60]
+            # Инициализируем счетчик для IP если его нет
+            if ip not in _ip_blocks:
+                _ip_blocks[ip] = {'count': 1, 'window_start': current_time}
+            else:
+                # Проверяем не истекло ли окно времени
+                if current_time - _ip_blocks[ip]['window_start'] > window:
+                    # Сбрасываем счетчик
+                    _ip_blocks[ip] = {'count': 1, 'window_start': current_time}
+                else:
+                    # Увеличиваем счетчик
+                    _ip_blocks[ip]['count'] += 1
 
-            # Проверка лимита
-            if len(_request_counts[ip]) >= max_per_minute:
-                _ip_blocks[ip] = current_time + 300  # Блокировка на 5 минут
-                return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+            # Проверяем не превышен ли лимит
+            if _ip_blocks[ip]['count'] > max_requests:
+                return jsonify({'error': 'Превышен лимит запросов. Попробуйте позже.'}), 429
 
-            _request_counts[ip].append(current_time)
             return f(*args, **kwargs)
 
         return decorated_function
