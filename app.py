@@ -1544,7 +1544,7 @@ def api_send_chat_message():
 
 @app.route('/api/admin/couriers', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @admin_required
-@rate_limit(max_per_minute=30)
+@rate_limit(max_requests=30)
 @validate_json_request
 def api_admin_couriers():
     """Управление курьерами - получение списка, создание, обновление, удаление"""
