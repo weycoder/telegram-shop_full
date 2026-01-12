@@ -3687,9 +3687,9 @@ async editOrder(orderId) {
         `;
         document.body.appendChild(errorDiv);
     }
+}
 
-
-    // ========== ДОПОЛНИТЕЛЬНАЯ ЗАЩИТА НА КЛИЕНТСКОЙ СТОРОНЕ ==========
+// ========== ДОПОЛНИТЕЛЬНАЯ ЗАЩИТА НА КЛИЕНТСКОЙ СТОРОНЕ ==========
 
     // 1. Защита от повторной отправки форм
     function setupFormProtection() {
@@ -3859,8 +3859,6 @@ async editOrder(orderId) {
             console.warn('Недостаточно данных инициализации Telegram WebApp');
         }
     }
-}
-
 
 
 
