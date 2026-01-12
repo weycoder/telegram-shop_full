@@ -1202,26 +1202,19 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         # Безопасное форматирование товаров
         items_text = "📦 *СОСТАВ ЗАКАЗА:*\n"
-        items_total = 0.0
-
         for item in items:
             name = item.get('name', 'Товар')
-            quantity = item.get('quantity', 1)
-
-            # Безопасное имя (экранируем спецсимволы Markdown)
             safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
 
-            if item.get('is_weight') and item.get('weight'):
-                weight = float(item.get('weight', 0))
-                price_per_kg = float(item.get('price_per_kg', item.get('price', 0)))
-                item_total = price_per_kg * weight
-                items_total += item_total
-                items_text += f"• *{safe_name}* - {weight} кг × {price_per_kg} ₽/кг = *{item_total:.2f} ₽*\n"
+            if item.get('is_weight'):
+                weight = item.get('weight', 0)
+                price = item.get('price', 0)  # Это уже итоговая цена
+                items_text += f"• *{safe_name}* - {weight} кг = *{price} ₽*\n"
             else:
-                price = float(item.get('price', 0))
+                quantity = item.get('quantity', 1)
+                price = item.get('price', 0)
                 item_total = price * quantity
-                items_total += item_total
-                items_text += f"• *{safe_name}* × {quantity} шт - *{item_total:.2f} ₽*\n"
+                items_text += f"• *{safe_name}* × {quantity} шт - *{item_total} ₽*\n"
 
         # Добавляем информацию о курьере если есть
         courier_info = ""
@@ -1247,12 +1240,12 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         # Формируем сообщение
         message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
 
-        {status_text}{extra_info}
-
-        {items_text}
-        {discount_info}━━━━━━━━━━━━━━━━━━━━
-        💰 *ИТОГО К ОПЛАТЕ: {correct_total_amount:.2f} ₽*
-        📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
+{status_text}{extra_info}
+{items_text}
+{discount_info}
+━━━━━━━━━━━━━━━━━━━━
+💰 *ИТОГО К ОПЛАТЕ: {correct_total_amount:.2f} ₽*
+📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
 
 ⏳ *Следующее обновление будет при изменении статуса*"""
 
@@ -2416,8 +2409,8 @@ def api_create_order():
 
                             # Для весовых товаров используем вес
                             if item.get('is_weight'):
-                                weight = float(item.get('weight', 0))
-                                items_total += price * weight
+                                # Для весовых товаров price уже содержит итоговую стоимость
+                                items_total += float(item.get('price', 0))  # ✅
                             else:
                                 items_total += price * quantity
 
@@ -2440,25 +2433,49 @@ def api_create_order():
                 print(f"⚠️ Ошибка обработки промокода: {e}")
                 discount_amount = 0.0
 
-        # ========== РАСЧЕТ СТОИМОСТИ ==========
         try:
-            # Рассчитываем сумму товаров
-            order_total = 0.0
-            for item in data['items']:
-                # Для весовых товаров используем price_per_kg
-                if item.get('is_weight'):
-                    weight = float(item.get('weight', 0))
-                    price_per_kg = float(item.get('price_per_kg', item.get('price', 0)))
-                    item_total = price_per_kg * weight
-                    print(f"📊 Весовой товар: {weight} кг × {price_per_kg} ₽/кг = {item_total} ₽")
-                    order_total += item_total
-                else:
-                    # Для штучных товаров
-                    price = float(item.get('price', 0))
-                    quantity = float(item.get('quantity', 1))
-                    item_total = price * quantity
-                    print(f"📊 Штучный товар: {quantity} шт × {price} ₽ = {item_total} ₽")
-                    order_total += item_total
+            print("=" * 50)
+            print("📊 ДАННЫЕ ОТ ФРОНТЕНДА:")
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            print("=" * 50)
+
+            # ========== РАСЧЕТ СТОИМОСТИ ==========
+            try:
+                order_total = 0.0
+
+                for item in data['items']:
+                    print(f"\n📦 Обработка товара: {item.get('name')}")
+                    print(f"   Тип: {'весовой' if item.get('is_weight') else 'штучный'}")
+                    print(f"   Данные: {item}")
+
+                    if item.get('is_weight'):
+                        # Для весовых товаров: price уже содержит итоговую стоимость
+                        item_total = float(item.get('price', 0))  # ✅ Просто берем итоговую цену
+                        item_total = price_per_kg * weight
+
+                        print(f"   Вес: {weight} кг")
+                        print(f"   Цена за кг: {price_per_kg} ₽")
+                        print(f"   Стоимость: {item_total} ₽")
+
+                        order_total += item_total
+                    else:
+                        price = float(item.get('price', 0))
+                        quantity = float(item.get('quantity', 1))
+                        item_total = price * quantity
+
+                        print(f"   Цена: {price} ₽")
+                        print(f"   Количество: {quantity} шт")
+                        print(f"   Стоимость: {item_total} ₽")
+
+                        order_total += item_total
+
+                print(f"\n💰 ИТОГО ТОВАРЫ: {order_total} ₽")
+
+            except Exception as e:
+                print(f"❌ Ошибка расчета: {e}")
+                import traceback
+                traceback.print_exc()
+                order_total = 0.0
 
             print(f"💰 Сумма товаров: {order_total} руб")
 
