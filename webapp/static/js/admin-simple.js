@@ -230,22 +230,40 @@ class AdminPanel {
 
     // ========== ЗАГРУЗКА ДАННЫХ ==========
 
-    async loadProducts() {
+    async function loadProducts() {
         try {
+            showLoading(true);
             console.log('📥 Загрузка товаров...');
 
-            const response = await fetch('/api/admin/products');
-            const products = await response.json();
+            const response = await fetch('/api/admin/products');  // Убедитесь что этот endpoint существует
 
-            console.log('📦 Получены товары:', products);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
 
-            await this.renderProducts(products);
+            const result = await response.json();
+
+            // Проверяем структуру ответа
+            if (result.success && Array.isArray(result.products)) {
+                window.products = result.products;
+                renderProducts(result.products);
+            } else if (Array.isArray(result)) {
+                // Если API возвращает просто массив
+                window.products = result;
+                renderProducts(result);
+            } else {
+                throw new Error('Некорректный формат данных от сервера');
+            }
 
         } catch (error) {
             console.error('❌ Ошибка загрузки товаров:', error);
-            this.showNotification('❌ Не удалось загрузить товары', 'error');
+            showNotification(`❌ Не удалось загрузить товары: ${error.message}`, 'error');
+            renderProducts([]); // Передаем пустой массив
+        } finally {
+            showLoading(false);
         }
     }
+
 
     async renderProducts(products) {
         try {
@@ -276,7 +294,7 @@ class AdminPanel {
             let html = '';
 
             // Проходим по каждому товару
-            products.forEach((product, index) => {
+            products.forEach(product => {
                 console.log(`--- Товар #${index + 1} ---`, product);
 
                 // Определяем тип товара

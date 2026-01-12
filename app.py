@@ -3523,7 +3523,7 @@ def assign_courier():
 
 
 # ========== API ДЛЯ АДМИНА ==========
-@app.route('/api/admin/dashboard')
+@app.route('/api/admin/dashboard', methods=['GET'])
 def admin_dashboard():
     db = get_db()
     try:
