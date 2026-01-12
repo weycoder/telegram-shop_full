@@ -2461,8 +2461,7 @@ def get_categories_tree():
 
 
 @app.route('/api/create-order', methods=['POST'])
-@rate_limit(max_per_minute=20)
-@validate_json_request
+@rate_limit(max_requests=30, window=60)  # <-- 30 запросов в минуту@validate_json_request
 def api_create_order():
     data = request.json
     db = get_db()
