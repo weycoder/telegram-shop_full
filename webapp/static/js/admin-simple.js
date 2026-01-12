@@ -106,6 +106,14 @@ class AdminPanel {
         }, 3000);
     }
 
+        // Добавьте в класс (где-то после showNotification):
+    showLoading(show) {
+        const loading = document.getElementById('loading');
+        if (loading) {
+            loading.style.display = show ? 'block' : 'none';
+        }
+    }
+
 
     // ========== ОСНОВНЫЕ МЕТОДЫ ==========
 
@@ -226,12 +234,12 @@ class AdminPanel {
 
     // ========== ЗАГРУЗКА ДАННЫХ ==========
 
-    async function loadProducts() {
+    async loadProducts() {
         try {
-            showLoading(true);
+            this.showLoading(true);
             console.log('📥 Загрузка товаров...');
 
-            const response = await fetch('/api/admin/products');  // Убедитесь что этот endpoint существует
+            const response = await fetch('/api/admin/products');
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -241,28 +249,33 @@ class AdminPanel {
 
             // Проверяем структуру ответа
             if (result.success && Array.isArray(result.products)) {
-                window.products = result.products;
-                renderProducts(result.products);
+                this.products = result.products;
+                this.renderProducts(result.products);
             } else if (Array.isArray(result)) {
-                // Если API возвращает просто массив
-                window.products = result;
-                renderProducts(result);
+                this.products = result;
+                this.renderProducts(result);
             } else {
                 throw new Error('Некорректный формат данных от сервера');
             }
 
         } catch (error) {
             console.error('❌ Ошибка загрузки товаров:', error);
-            showNotification(`❌ Не удалось загрузить товары: ${error.message}`, 'error');
-            renderProducts([]); // Передаем пустой массив
+            this.showNotification(`❌ Не удалось загрузить товары: ${error.message}`, 'error');
+            this.renderProducts([]);
         } finally {
-            showLoading(false);
+            this.showLoading(false);
         }
     }
 
 
-    function renderProducts(products) {
+
+    renderProducts(products) {
         try {
+            // Локальная функция formatPrice чтобы избежать проблем с this
+            const formatPrice = (price) => {
+                return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
+            };
+
             console.log('📦 Рендеринг товаров...');
 
             const productsTableBody = document.getElementById('productsTableBody');
@@ -289,8 +302,8 @@ class AdminPanel {
             console.log('🔄 Начинаем рендеринг таблицы товаров...');
             let html = '';
 
-            // Проходим по каждому товару - ВОТ ОШИБКА, нет переменной index!
-            products.forEach((product, index) => {  // <-- ДОБАВЬТЕ index здесь
+            // Проходим по каждому товару
+            products.forEach((product, index) => {
                 console.log(`--- Товар #${index + 1} ---`, product);
 
                 // Определяем тип товара
@@ -298,15 +311,15 @@ class AdminPanel {
                 const hasDiscount = product.has_discount === true;
                 const discountedPrice = product.discounted_price || product.price;
 
-                // Формируем цену для отображения
+                // Формируем цену для отображения (используем локальную formatPrice)
                 let priceDisplay = '';
                 if (isWeightProduct) {
                     const pricePerKg = product.price_per_kg || product.price;
-                    priceDisplay = `${this.formatPrice(pricePerKg)} ₽/кг`;  // <-- Проблема с this!
+                    priceDisplay = `${formatPrice(pricePerKg)} ₽/кг`;  // <-- Локальная функция
                 } else {
                     priceDisplay = hasDiscount ?
-                        `<span style="color: #10b981; font-weight: 500;">${this.formatPrice(discountedPrice)} ₽</span>` :  // <-- Проблема с this!
-                        `${this.formatPrice(product.price)} ₽`;  // <-- Проблема с this!
+                        `<span style="color: #10b981; font-weight: 500;">${formatPrice(discountedPrice)} ₽</span>` :
+                        `${formatPrice(product.price)} ₽`;  // <-- Локальная функция
                 }
 
                 // Формируем остаток для отображения
@@ -394,6 +407,7 @@ class AdminPanel {
             }
         }
     }
+
     async loadOrders() {
         try {
             console.log('📥 Загрузка заказов...');
