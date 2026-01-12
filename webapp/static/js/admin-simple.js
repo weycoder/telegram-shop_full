@@ -115,8 +115,6 @@ class AdminPanel {
         }
     }
 
-
-
     // ========== ОСНОВНЫЕ МЕТОДЫ ==========
 
     showAlert(message, type = 'info') {
@@ -1305,19 +1303,36 @@ class AdminPanel {
         const weightFields = document.querySelectorAll('.product-type-weight');
 
         if (type === 'piece') {
-            pieceFields.forEach(el => el.style.display = 'block');
-            weightFields.forEach(el => el.style.display = 'none');
+            pieceFields.forEach(el => {
+                el.style.display = 'block';
+                // Убираем required у скрытых полей
+                const inputs = el.querySelectorAll('input[required], select[required]');
+                inputs.forEach(input => input.required = true);
+            });
 
-            const priceInput = document.getElementById('productPrice');
-            const stockInput = document.getElementById('productStock');
-            if (priceInput) priceInput.required = true;
-            if (stockInput) stockInput.required = true;
+            weightFields.forEach(el => {
+                el.style.display = 'none';
+                // Убираем required у скрытых полей
+                const inputs = el.querySelectorAll('input[required], select[required]');
+                inputs.forEach(input => input.required = false);
+            });
+
         } else {
-            weightFields.forEach(el => el.style.display = 'block');
-            pieceFields.forEach(el => el.style.display = 'none');
+            weightFields.forEach(el => {
+                el.style.display = 'block';
+                // Устанавливаем required для видимых полей
+                const pricePerKgInput = el.querySelector('#pricePerKg');
+                if (pricePerKgInput) pricePerKgInput.required = true;
+            });
 
-            const pricePerKgInput = document.getElementById('pricePerKg');
-            if (pricePerKgInput) pricePerKgInput.required = true;
+            pieceFields.forEach(el => {
+                el.style.display = 'none';
+                // Убираем required у скрытых полей
+                const priceInput = el.querySelector('#productPrice');
+                const stockInput = el.querySelector('#productStock');
+                if (priceInput) priceInput.required = false;
+                if (stockInput) stockInput.required = false;
+            });
         }
     }
 
@@ -1342,6 +1357,9 @@ class AdminPanel {
                 } else {
                     element.value = '';
                 }
+
+                // Убираем required атрибут при сбросе
+                element.removeAttribute('required');
             }
         });
 
@@ -1349,7 +1367,10 @@ class AdminPanel {
         if (filePreview) filePreview.innerHTML = '';
 
         const fileInput = document.getElementById('productImageFile');
-        if (fileInput) fileInput.value = '';
+        if (fileInput) {
+            fileInput.value = '';
+            fileInput.required = true; // Только файл всегда required
+        }
     }
 
     async handleProductSubmit(e) {
@@ -1357,6 +1378,28 @@ class AdminPanel {
 
         const activeTypeBtn = document.querySelector('.type-btn.active');
         const productType = activeTypeBtn ? activeTypeBtn.dataset.type : 'piece';
+
+        // Валидация в зависимости от типа товара
+        if (productType === 'piece') {
+            const price = document.getElementById('productPrice').value;
+            const stock = document.getElementById('productStock').value;
+
+            if (!price || price <= 0) {
+                this.showAlert('❌ Укажите цену товара', 'error');
+                return;
+            }
+            if (!stock || stock < 0) {
+                this.showAlert('❌ Укажите количество товара', 'error');
+                return;
+            }
+        } else {
+            const pricePerKg = document.getElementById('pricePerKg').value;
+
+            if (!pricePerKg || pricePerKg <= 0) {
+                this.showAlert('❌ Укажите цену за кг', 'error');
+                return;
+            }
+        }
 
         const fileInput = document.getElementById('productImageFile');
         let imageFile = null;
@@ -2051,7 +2094,17 @@ class AdminPanel {
                 body: JSON.stringify(formData)
             });
 
-            const result = await response.json();
+            // ВАЖНО: Проверяем ответ перед парсингом
+            const responseText = await response.text();
+            console.log('📥 Ответ сервера:', responseText);
+
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('❌ Ошибка парсинга JSON:', parseError);
+                throw new Error(`Некорректный ответ сервера: ${responseText.substring(0, 100)}...`);
+            }
 
             if (result.success) {
                 this.showAlert('✅ Промокод успешно создан', 'success');
