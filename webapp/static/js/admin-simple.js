@@ -106,6 +106,7 @@ class AdminPanel {
         }, 3000);
     }
 
+
         // Добавьте в класс (где-то после showNotification):
     showLoading(show) {
         const loading = document.getElementById('loading');
@@ -113,6 +114,7 @@ class AdminPanel {
             loading.style.display = show ? 'block' : 'none';
         }
     }
+
 
 
     // ========== ОСНОВНЫЕ МЕТОДЫ ==========
@@ -206,6 +208,8 @@ class AdminPanel {
         }, 50);
     }
 
+
+
     refreshCurrentPage() {
         if (this.currentPage === 'dashboard') {
             this.loadDashboardData();
@@ -237,7 +241,8 @@ class AdminPanel {
             this.showLoading(true);
             console.log('📥 Загрузка товаров...');
 
-            const response = await fetch('/api/admin/products/list');
+            const response = await fetch('/api/admin/products');
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -1887,7 +1892,7 @@ class AdminPanel {
 
     async loadPromoCodes() {
         try {
-            const response = await fetch('/api/admin/promo-codes');
+            const response = await fetch('/api/promo-codes');
             const data = await response.json();
             this.promo_codes = Array.isArray(data) ? data : [];
             this.renderPromoCodes();
