@@ -2357,46 +2357,115 @@ def get_categories_tree():
 
 
 @app.route('/api/create-order', methods=['POST'])
-@rate_limit(max_requests=30, window=60)  # <-- 30 запросов в минуту@validate_json_request
+@rate_limit(max_requests=30, window=60)
+@validate_json_request
 def api_create_order():
     data = request.json
     db = get_db()
-    order_id = None  # Объявляем переменную заранее
+    order_id = None
 
     try:
         delivery_type = data.get('delivery_type')
         payment_method = data.get('payment_method', 'cash')
         delivery_address = data.get('delivery_address', '{}')
+        promo_code = data.get('promo_code')
 
-        # Получаем данные о наличной оплате
-        cash_payment = data.get('cash_payment', {}) or {}
-        cash_received = cash_payment.get('received', 0)
-        cash_change = cash_payment.get('change', 0)
-        cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
+        # ========== ПРОВЕРКА ПРОМОКОДА ==========
+        discount_amount = 0.0
+        promo_code_id = None
 
-        # Преобразуем данные о наличных в числа
+        if promo_code:
+            try:
+                # Проверяем валидность промокода
+                promo_result = db.execute('''
+                                          SELECT id,
+                                                 discount_type,
+                                                 value,
+                                                 min_order_amount,
+                                                 usage_limit,
+                                                 used_count,
+                                                 exclude_sale_items,
+                                                 is_active
+                                          FROM promo_codes
+                                          WHERE code = ?
+                                            AND is_active = 1
+                                          ''', (promo_code.upper(),)).fetchone()
+
+                if promo_result:
+                    promo_dict = dict(promo_result)
+
+                    # Проверяем лимит использований
+                    if promo_dict['usage_limit'] and promo_dict['used_count'] >= promo_dict['usage_limit']:
+                        print(f"⚠️ Промокод {promo_code} достиг лимита использований")
+                    else:
+                        # Рассчитываем сумму товаров без доставки
+                        items_total = 0.0
+                        for item in data['items']:
+                            price = float(item.get('price', 0))
+                            quantity = float(item.get('quantity', 1))
+
+                            # Для весовых товаров используем вес
+                            if item.get('is_weight'):
+                                weight = float(item.get('weight', 0))
+                                items_total += price * weight
+                            else:
+                                items_total += price * quantity
+
+                        # Проверяем минимальную сумму заказа
+                        if promo_dict['min_order_amount'] and items_total < float(promo_dict['min_order_amount']):
+                            print(f"⚠️ Промокод {promo_code} требует мин. сумму {promo_dict['min_order_amount']}")
+                        else:
+                            promo_code_id = promo_dict['id']
+
+                            # Рассчитываем скидку
+                            if promo_dict['discount_type'] == 'percentage':
+                                discount_amount = items_total * (float(promo_dict['value']) / 100)
+                            elif promo_dict['discount_type'] == 'fixed':
+                                discount_amount = float(promo_dict['value'])
+                            elif promo_dict['discount_type'] == 'free_delivery':
+                                discount_amount = 0  # Доставка будет бесплатной
+
+                            print(f"✅ Применен промокод {promo_code}, скидка: {discount_amount} руб")
+            except Exception as e:
+                print(f"⚠️ Ошибка обработки промокода: {e}")
+                discount_amount = 0.0
+
+        # ========== РАСЧЕТ СТОИМОСТИ ==========
         try:
-            cash_received = float(cash_received) if cash_received not in [None, '', 0] else 0.0
-            cash_change = float(cash_change) if cash_change not in [None, '', 0] else 0.0
-        except (ValueError, TypeError):
-            cash_received = 0.0
-            cash_change = 0.0
+            # Рассчитываем сумму товаров
+            order_total = 0.0
+            for item in data['items']:
+                price = float(item.get('price', 0))
+                quantity = float(item.get('quantity', 1))
 
-        # ========== РАСЧЕТ СТОИМОСТИ ДОСТАВКИ ==========
-        try:
-            order_total = float(data.get('total', 0))
+                # Для весовых товаров используем вес
+                if item.get('is_weight'):
+                    weight = float(item.get('weight', 0))
+                    order_total += price * weight
+                else:
+                    order_total += price * quantity
+
+            # Применяем скидку
+            if discount_amount > 0:
+                order_total = max(0, order_total - discount_amount)
+                print(f"💰 Применена скидка по промокоду: {discount_amount} руб")
+                print(f"💰 Сумма после скидки: {order_total} руб")
         except (ValueError, TypeError):
-            print("⚠️ Ошибка преобразования total в float, используем 0")
+            print("⚠️ Ошибка расчета суммы товаров")
             order_total = 0.0
 
+        # ========== РАСЧЕТ ДОСТАВКИ ==========
         delivery_cost = 0.0
 
         if delivery_type == 'courier':
-            print(f"💰 Проверяем доставку: заказ {order_total} руб, тип {type(order_total)}")
+            print(f"💰 Проверяем доставку: заказ {order_total} руб")
 
-            if order_total < 1000.0:
+            # Если промокод с бесплатной доставкой
+            if promo_code and promo_dict and promo_dict['discount_type'] == 'free_delivery':
+                print(f"✅ Доставка бесплатная по промокоду {promo_code}")
+            elif order_total < 1000.0:
                 delivery_cost = 100.0
-                print(f"💰 Доставка платная: +{delivery_cost} руб (сумма заказа: {order_total} руб)")
+                print(f"💰 Доставка платная: +{delivery_cost} руб")
             else:
                 print(f"✅ Доставка бесплатная (сумма заказа: {order_total} руб)")
 
@@ -2404,15 +2473,26 @@ def api_create_order():
         print(
             f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
 
-        # Если оплата наличными и нет данных о полученной сумме, рассчитываем ее
+        # ========== ОПЛАТА НАЛИЧНЫМИ ==========
+        cash_payment = data.get('cash_payment', {}) or {}
+        cash_received = cash_payment.get('received', 0)
+        cash_change = cash_payment.get('change', 0)
+
+        try:
+            cash_received = float(cash_received) if cash_received not in [None, '', 0] else 0.0
+            cash_change = float(cash_change) if cash_change not in [None, '', 0] else 0.0
+        except (ValueError, TypeError):
+            cash_received = 0.0
+            cash_change = 0.0
+
         if payment_method == 'cash' and cash_received == 0:
-            # Округляем до ближайших 500 рублей
             cash_received = math.ceil(total_with_delivery / 500) * 500
             cash_change = cash_received - total_with_delivery
             print(f"💵 Авторасчет наличных: получено={cash_received}, сдача={cash_change}")
 
-        print(f"💵 Наличные: получено={cash_received} руб, сдача={cash_change} руб")
+        cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
 
+        # ========== ОСТАЛЬНАЯ ЛОГИКА (остается без изменений) ==========
         # ОБРАБОТКА АДРЕСА
         address_obj = {}
         if isinstance(delivery_address, str):
@@ -2474,15 +2554,15 @@ def api_create_order():
 
         print(f"👤 Используемый user_id: {user_id}")
         print(f"👤 Используемый username: {username}")
-        print(f"💵 Данные наличной оплаты: received={cash_received}, change={cash_change}")
 
-        # Вставляем заказ с дополнительными полями для наличных
+        # ========== СОХРАНЕНИЕ ЗАКАЗА ==========
         cursor = db.execute('''
                             INSERT INTO orders (user_id, username, items, total_price, delivery_cost, status,
                                                 delivery_type, delivery_address, pickup_point,
                                                 payment_method, recipient_name, phone_number,
-                                                cash_received, cash_change, cash_details)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                cash_received, cash_change, cash_details,
+                                                promo_code_id, discount_amount)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 user_id,
                                 username,
@@ -2498,8 +2578,22 @@ def api_create_order():
                                 phone_number,
                                 cash_received,
                                 cash_change,
-                                cash_details
+                                cash_details,
+                                promo_code_id,
+                                discount_amount
                             ))
+
+        # ========== ОБНОВЛЕНИЕ ПРОМОКОДА ==========
+        if promo_code_id:
+            try:
+                db.execute('''
+                           UPDATE promo_codes
+                           SET used_count = used_count + 1
+                           WHERE id = ?
+                           ''', (promo_code_id,))
+                print(f"✅ Обновлен счетчик использований промокода #{promo_code_id}")
+            except Exception as e:
+                print(f"⚠️ Не удалось обновить счетчик промокода: {e}")
 
         # Получаем ID созданного заказа
         order_id = cursor.lastrowid
@@ -2540,7 +2634,6 @@ def api_create_order():
             print(f"✅ Создан активный чат для заказа #{order_id}")
         except Exception as e:
             print(f"⚠️ Не удалось создать чат: {e}")
-            # Продолжаем выполнение, даже если чат не создался
 
         # Отправляем уведомления
         if delivery_type == 'courier':
@@ -2566,7 +2659,8 @@ def api_create_order():
                 print(f"⚠️ Не удалось отправить уведомление: {e}")
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
-        print(f"💰 Сумма: {total_with_delivery} руб")
+        print(f"💰 Итоговая сумма: {total_with_delivery} руб")
+        print(f"📊 Скидка по промокоду: {discount_amount} руб")
         print(f"💵 Наличные: получено {cash_received} руб, сдача {cash_change} руб")
         print("=" * 50)
 
@@ -2574,7 +2668,8 @@ def api_create_order():
             'success': True,
             'order_id': order_id,
             'delivery_cost': delivery_cost,
-            'total_with_delivery': total_with_delivery
+            'total_with_delivery': total_with_delivery,
+            'discount_amount': discount_amount
         })
 
     except Exception as e:
@@ -3184,14 +3279,20 @@ def update_delivery_status():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
-
 @app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
 @rate_limit(max_requests=30)
 def admin_get_order_details(order_id):
     """Получить детали заказа для админки"""
     db = get_db()
     try:
-        order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+        order = db.execute('''
+                           SELECT o.*,
+                                  pc.code as promo_code
+                           FROM orders o
+                                    LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
         if not order:
             db.close()
             return jsonify({'error': 'Заказ не найден'}), 404
@@ -3293,23 +3394,26 @@ def get_order_details(order_id):
     try:
         db = get_db()
         order = db.execute('''
-                           SELECT o.*,
-                                  a.status    as assignment_status,
-                                  a.assigned_at,
-                                  a.delivery_started,
-                                  a.delivered_at,
-                                  a.photo_proof,
-                                  a.delivery_notes,
-                                  c.full_name as courier_name,
-                                  c.phone     as courier_phone,
-                                  o.cash_received,
-                                  o.cash_change,      
-                                  o.cash_details     
-                           FROM orders o
-                                    LEFT JOIN order_assignments a ON o.id = a.order_id
-                                    LEFT JOIN couriers c ON a.courier_id = c.id
-                           WHERE o.id = ?
-                           ''', (order_id,)).fetchone()
+            SELECT o.*,
+                   a.status    as assignment_status,
+                   a.assigned_at,
+                   a.delivery_started,
+                   a.delivered_at,
+                   a.photo_proof,
+                   a.delivery_notes,
+                   c.full_name as courier_name,
+                   c.phone     as courier_phone,
+                   o.cash_received,
+                   o.cash_change,      
+                   o.cash_details,
+                   o.discount_amount,
+                   pc.code as promo_code
+            FROM orders o
+                LEFT JOIN order_assignments a ON o.id = a.order_id
+                LEFT JOIN couriers c ON a.courier_id = c.id
+                LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
+            WHERE o.id = ?
+        ''', (order_id,)).fetchone()
 
         if not order:
             db.close()
@@ -3344,7 +3448,6 @@ def get_order_details(order_id):
     except Exception as e:
         print(f"❌ Ошибка получения деталей заказа: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @app.route('/api/courier/profile', methods=['GET', 'PUT'])
 def courier_profile():
@@ -4665,21 +4768,23 @@ def api_admin_orders():
     try:
         db = get_db()
 
-        # Получаем все заказы с информацией о курьере
+        # Получаем все заказы с информацией о курьере и промокоде
         orders = db.execute('''
             SELECT o.*,
                    a.status    as assignment_status,
                    c.full_name as courier_name,
                    c.phone     as courier_phone,
+                   pc.code as promo_code,
                    (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
             FROM orders o
             LEFT JOIN order_assignments a ON o.id = a.order_id
             LEFT JOIN couriers c ON a.courier_id = c.id
+            LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
             ORDER BY o.created_at DESC LIMIT 100
         ''').fetchall()
 
         if not orders:
-            return jsonify([])  # Возвращаем пустой массив вместо объекта с ошибкой
+            return jsonify([])
 
         orders_list = []
         for order in orders:
@@ -4711,11 +4816,11 @@ def api_admin_orders():
 
             orders_list.append(order_dict)
 
-        return jsonify(orders_list)  # Возвращаем массив
+        return jsonify(orders_list)
 
     except Exception as e:
         print(f"❌ Ошибка получения заказов для админки: {e}")
-        return jsonify([])  # Возвращаем пустой массив при ошибке
+        return jsonify([])
     finally:
         if 'db' in locals():
             db.close()

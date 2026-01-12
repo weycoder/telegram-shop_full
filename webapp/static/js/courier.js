@@ -681,16 +681,66 @@ class CourierApp {
         let cashInfo = "";
         let paymentInfo = "Не указан";
 
+        // ========== РАСЧЕТ СУММ С УЧЕТОМ СКИДКИ ==========
+        const originalTotal = parseFloat(order.total_price) || 0;
+        const discountAmount = parseFloat(order.discount_amount) || 0;
+        const totalAfterDiscount = Math.max(0, originalTotal - discountAmount);
+        const deliveryCost = parseFloat(order.delivery_cost) || 0;
+        const totalWithDelivery = totalAfterDiscount + deliveryCost;
+
+        // ИНФОРМАЦИЯ О СКИДКЕ
+        let discountInfo = '';
+        if (discountAmount > 0) {
+            discountInfo = `
+                <div class="info-item" style="background: #d4edda; padding: 6px 10px; border-radius: 6px; margin: 5px 0;">
+                    <span class="info-label" style="color: #155724;">
+                        <i class="fas fa-tag"></i> Скидка:
+                    </span>
+                    <span class="info-value" style="color: #155724; font-weight: bold;">
+                        -${this.formatPrice(discountAmount)} ₽
+                    </span>
+                </div>
+                ${order.promo_code ? `
+                    <div class="info-item">
+                        <span class="info-label">Промокод:</span>
+                        <span class="info-value" style="color: #6c757d; font-size: 12px;">
+                            ${order.promo_code}
+                        </span>
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        // ========== ИНФОРМАЦИЯ О ЦЕНАХ ==========
+        let priceInfo = '';
+        if (discountAmount > 0) {
+            priceInfo = `
+                <div class="info-item">
+                    <span class="info-label">Товары:</span>
+                    <span class="info-value">${this.formatPrice(originalTotal)} ₽</span>
+                </div>
+                ${discountInfo}
+                <div class="info-item">
+                    <span class="info-label">После скидки:</span>
+                    <span class="info-value" style="font-weight: 500;">${this.formatPrice(totalAfterDiscount)} ₽</span>
+                </div>
+            `;
+        } else {
+            priceInfo = `
+                <div class="info-item">
+                    <span class="info-label">Товары:</span>
+                    <span class="info-value">${this.formatPrice(originalTotal)} ₽</span>
+                </div>
+            `;
+        }
+
         // 1. Определяем способ оплаты
         if (order.payment_method === 'cash') {
             paymentInfo = "💵 Наличные";
 
-            // Используем данные из базы
-            const total = order.total_price || 0;
-            const deliveryCost = order.delivery_cost || 0;
-            const totalWithDelivery = total + deliveryCost;
-            const cashReceived = order.cash_received || 0;
-            const cashChange = order.cash_change || 0;
+            // Используем данные из базы (обновленные с учетом скидки)
+            const cashReceived = parseFloat(order.cash_received) || 0;
+            const cashChange = parseFloat(order.cash_change) || 0;
 
             // Всегда показываем информацию о наличной оплате для наличных заказов
             cashInfo = `
@@ -737,7 +787,6 @@ class CourierApp {
         } else if (order.payment_method === 'terminal') {
             paymentInfo = "💳 Терминал";
         }
-
 
         // 2. Получаем данные получателя и адреса
         if (order.recipient_name && order.recipient_name !== 'Гость' && order.recipient_name !== 'Не указан') {
@@ -796,10 +845,23 @@ class CourierApp {
             recipient = order.username;
         }
 
-        // Сумма с доставкой
-        const total = order.total_price || 0;
-        const deliveryCost = order.delivery_cost || 0;
-        const totalWithDelivery = total + deliveryCost;
+        // ИНФОРМАЦИЯ О ДОСТАВКЕ
+        let deliveryInfo = '';
+        if (deliveryCost > 0) {
+            deliveryInfo = `
+                <div class="info-item">
+                    <span class="info-label">Доставка:</span>
+                    <span class="info-value">${this.formatPrice(deliveryCost)} ₽</span>
+                </div>
+            `;
+        } else {
+            deliveryInfo = `
+                <div class="info-item">
+                    <span class="info-label">Доставка:</span>
+                    <span class="info-value" style="color: #27ae60;">Бесплатно</span>
+                </div>
+            `;
+        }
 
         // Кнопки действий
         let actionsHtml = '';
@@ -854,10 +916,16 @@ class CourierApp {
                 </div>
 
                 <div class="order-info">
-                    <div class="info-item">
-                        <span class="info-label">Сумма:</span>
-                        <span class="info-value">${totalWithDelivery} ₽</span>
+                    ${priceInfo}
+                    ${deliveryInfo}
+
+                    <div class="info-item" style="border-top: 2px solid #e2e8f0; padding-top: 10px; margin-top: 10px;">
+                        <span class="info-label" style="font-weight: bold; font-size: 15px;">Итого к оплате:</span>
+                        <span class="info-value" style="font-weight: bold; color: #2c3e50; font-size: 16px;">
+                            ${this.formatPrice(totalWithDelivery)} ₽
+                        </span>
                     </div>
+
                     <div class="info-item">
                         <span class="info-label">Оплата:</span>
                         <span class="info-value" style="${order.payment_method === 'cash' && order.cash_change > 0 ? 'color: #dc3545; font-weight: bold;' : ''}">
