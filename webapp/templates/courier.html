@@ -6,7 +6,6 @@
     <title>Курьерская панель</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/courier.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
 </head>
 <body>
     <div class="container" id="app">
@@ -117,6 +116,17 @@
                         <p><strong>Дата регистрации:</strong> <span id="profile-created">-</span></p>
                     </div>
 
+                    <!-- Блок привязки Telegram -->
+                    <div id="telegram-section" style="margin: 20px 0; padding: 15px; border-radius: 10px; border: 2px solid #e0e0e0;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px;">
+                            <i class="fab fa-telegram" style="color: #0088cc;"></i>
+                            Привязка Telegram
+                        </h3>
+                        <div id="telegram-status-container">
+                            <!-- Здесь будет динамически загружаться статус Telegram -->
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>Полное имя:</label>
                         <input type="text" id="profile-fullname" placeholder="Иванов Иван Иванович">
@@ -180,6 +190,105 @@
         </div>
     </div>
 
+    <!-- Модальное окно для привязки Telegram -->
+    <div id="telegram-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 15px; padding: 30px; max-width: 500px; width: 90%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">
+                    <i class="fab fa-telegram" style="color: #0088cc;"></i>
+                    Привязка Telegram
+                </h2>
+                <button onclick="closeTelegramModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">×</button>
+            </div>
+
+            <div id="telegram-modal-content">
+                <div id="telegram-guide">
+                    <h3 style="color: #0088cc; margin-bottom: 15px;">Как найти свой Telegram ID?</h3>
+
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 10px; background: #e3f2fd; padding: 10px; border-radius: 8px;">
+                            <div style="background: #0088cc; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-weight: bold;">1</div>
+                            <div>
+                                <strong>Откройте Telegram</strong><br>
+                                <small>На телефоне или компьютере</small>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; margin-bottom: 10px; background: #e3f2fd; padding: 10px; border-radius: 8px;">
+                            <div style="background: #0088cc; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-weight: bold;">2</div>
+                            <div>
+                                <strong>Найдите бота @userinfobot</strong><br>
+                                <small>Введите в поиске "userinfobot"</small>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; margin-bottom: 10px; background: #e3f2fd; padding: 10px; border-radius: 8px;">
+                            <div style="background: #0088cc; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-weight: bold;">3</div>
+                            <div>
+                                <strong>Напишите ему /start</strong><br>
+                                <small>Просто отправьте команду</small>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; background: #e3f2fd; padding: 10px; border-radius: 8px;">
+                            <div style="background: #0088cc; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-weight: bold;">4</div>
+                            <div>
+                                <strong>Скопируйте ваш ID</strong><br>
+                                <small>Найдите "Your Telegram ID:"</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin: 20px 0;">
+                        <img src="https://telegram.org/img/t_logo.png" alt="Telegram Logo" style="width: 80px; height: 80px; opacity: 0.7;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label for="telegram-id-input" style="display: block; margin-bottom: 8px; font-weight: bold;">
+                            Введите ваш Telegram ID:
+                        </label>
+                        <input type="number" id="telegram-id-input" placeholder="Например: 1234567890"
+                               style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #e0e0e0; font-size: 16px;">
+                        <small style="color: #666; display: block; margin-top: 5px;">
+                            Только цифры, без пробелов и других символов
+                        </small>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="bindTelegram()" style="flex: 1; background: #0088cc; color: white;">
+                            <i class="fab fa-telegram"></i> Привязать Telegram
+                        </button>
+                        <button class="btn" onclick="closeTelegramModal()" style="flex: 1; background: #e0e0e0;">
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+
+                <div id="telegram-success" style="display: none; text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; color: #4CAF50; margin-bottom: 15px;">
+                        ✅
+                    </div>
+                    <h3 style="color: #4CAF50; margin-bottom: 10px;">Telegram успешно привязан!</h3>
+                    <p>Теперь вы будете получать уведомления о новых заказах прямо в Telegram.</p>
+                    <button class="btn" onclick="closeTelegramModal()" style="margin-top: 20px; background: #0088cc; color: white;">
+                        Понятно
+                    </button>
+                </div>
+
+                <div id="telegram-error" style="display: none; text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; color: #f44336; margin-bottom: 15px;">
+                        ❌
+                    </div>
+                    <h3 style="color: #f44336; margin-bottom: 10px;" id="telegram-error-title">Ошибка привязки</h3>
+                    <p id="telegram-error-message"></p>
+                    <button class="btn" onclick="showTelegramGuide()" style="margin-top: 20px; background: #f44336; color: white;">
+                        Попробовать снова
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentCourier = null;
         let currentToken = null;
@@ -226,6 +335,7 @@
                     loadAvailableOrders();
                     loadActiveOrders();
                     loadStatistics();
+                    loadTelegramStatus(); // Загружаем статус Telegram
 
                 } else {
                     errorDiv.textContent = data.error || 'Ошибка входа';
@@ -254,11 +364,188 @@
                     loadAvailableOrders();
                     loadActiveOrders();
                     loadStatistics();
+                    loadTelegramStatus(); // Загружаем статус Telegram
                 } catch (e) {
                     localStorage.removeItem('courier_data');
                 }
             }
         });
+
+        // Загрузить статус привязки Telegram
+        async function loadTelegramStatus() {
+            if (!currentCourier) return;
+
+            const container = document.getElementById('telegram-status-container');
+            container.innerHTML = '<div style="text-align: center; padding: 10px; color: #666;">Загрузка статуса Telegram...</div>';
+
+            try {
+                const response = await fetch(`/api/courier/telegram/${currentCourier.id}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const telegramInfo = data.telegram_info;
+
+                    container.innerHTML = `
+                        <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; border: 1px solid #c3e6cb;">
+                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                <i class="fab fa-telegram" style="font-size: 24px; color: #0088cc; margin-right: 10px;"></i>
+                                <div>
+                                    <strong>Telegram привязан</strong><br>
+                                    <small style="color: #155724;">ID: ${telegramInfo.telegram_id}</small>
+                                </div>
+                            </div>
+                            <p style="margin: 0; font-size: 14px;">
+                                <i class="fas fa-bell"></i> Вы будете получать уведомления о новых заказах
+                            </p>
+                            <button class="btn-action" onclick="unbindTelegram()" style="margin-top: 10px; width: 100%; background: #f44336; color: white;">
+                                <i class="fas fa-unlink"></i> Отвязать Telegram
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; border: 1px solid #ffeaa7;">
+                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                <i class="fab fa-telegram" style="font-size: 24px; color: #ffc107; margin-right: 10px;"></i>
+                                <div>
+                                    <strong>Telegram не привязан</strong><br>
+                                    <small style="color: #856404;">Привяжите для получения уведомлений</small>
+                                </div>
+                            </div>
+                            <p style="margin: 0 0 15px 0; font-size: 14px;">
+                                После привязки вы будете получать уведомления о новых заказах прямо в Telegram
+                            </p>
+                            <button class="btn-action" onclick="showTelegramModal()" style="width: 100%; background: #0088cc; color: white;">
+                                <i class="fab fa-telegram"></i> Привязать Telegram
+                            </button>
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ffc107; font-size: 12px; color: #856404;">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Преимущества привязки:</strong><br>
+                                • Уведомления о новых заказах<br>
+                                • Возможность брать заказы из бота<br>
+                                • Быстрое изменение статуса заказа
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading Telegram status:', error);
+                container.innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; border: 1px solid #f5c6cb;">
+                        <div style="display: flex; align-items: center;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #dc3545; margin-right: 10px;"></i>
+                            <div>
+                                <strong>Ошибка загрузки статуса</strong><br>
+                                <small style="color: #721c24;">Не удалось проверить статус Telegram</small>
+                            </div>
+                        </div>
+                        <button class="btn-action" onclick="loadTelegramStatus()" style="margin-top: 10px; width: 100%; background: #6c757d; color: white;">
+                            <i class="fas fa-redo"></i> Попробовать снова
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Показать модальное окно привязки Telegram
+        function showTelegramModal() {
+            document.getElementById('telegram-modal').style.display = 'flex';
+            showTelegramGuide();
+        }
+
+        // Закрыть модальное окно Telegram
+        function closeTelegramModal() {
+            document.getElementById('telegram-modal').style.display = 'none';
+        }
+
+        // Показать инструкцию по привязке
+        function showTelegramGuide() {
+            document.getElementById('telegram-guide').style.display = 'block';
+            document.getElementById('telegram-success').style.display = 'none';
+            document.getElementById('telegram-error').style.display = 'none';
+            document.getElementById('telegram-id-input').value = '';
+        }
+
+        // Привязать Telegram ID
+        async function bindTelegram() {
+            const telegramId = document.getElementById('telegram-id-input').value.trim();
+
+            if (!telegramId) {
+                showTelegramError('Ошибка', 'Введите Telegram ID');
+                return;
+            }
+
+            if (isNaN(telegramId) || telegramId.length < 5) {
+                showTelegramError('Ошибка', 'Введите корректный Telegram ID (только цифры)');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/courier/register-telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        courier_id: currentCourier.id,
+                        telegram_id: parseInt(telegramId),
+                        username: currentCourier.username,
+                        first_name: currentCourier.full_name,
+                        last_name: ''
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Показываем успешное сообщение
+                    document.getElementById('telegram-guide').style.display = 'none';
+                    document.getElementById('telegram-success').style.display = 'block';
+
+                    // Обновляем статус в профиле через 2 секунды
+                    setTimeout(() => {
+                        closeTelegramModal();
+                        loadTelegramStatus();
+                    }, 2000);
+                } else {
+                    showTelegramError('Ошибка привязки', data.error || 'Не удалось привязать Telegram');
+                }
+            } catch (error) {
+                console.error('Error binding Telegram:', error);
+                showTelegramError('Ошибка соединения', 'Не удалось подключиться к серверу');
+            }
+        }
+
+        // Отвязать Telegram
+        async function unbindTelegram() {
+            if (!confirm('Вы уверены, что хотите отвязать Telegram? Вы перестанете получать уведомления.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/courier/telegram/${currentCourier.id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Telegram успешно отвязан');
+                    loadTelegramStatus();
+                } else {
+                    throw new Error(data.error || 'Ошибка отвязки');
+                }
+            } catch (error) {
+                console.error('Error unbinding Telegram:', error);
+                alert('❌ ' + error.message);
+            }
+        }
+
+        // Показать ошибку привязки Telegram
+        function showTelegramError(title, message) {
+            document.getElementById('telegram-guide').style.display = 'none';
+            document.getElementById('telegram-error').style.display = 'block';
+            document.getElementById('telegram-error-title').textContent = title;
+            document.getElementById('telegram-error-message').textContent = message;
+        }
 
         // Обновить информацию о курьере
         function updateCourierInfo() {
@@ -303,6 +590,7 @@
                     break;
                 case 'settings':
                     loadProfile();
+                    loadTelegramStatus();
                     break;
             }
         }
@@ -753,7 +1041,7 @@
                                 <p><strong>Номер заказа:</strong> #${order.id}</p>
                                 <p><strong>Статус заказа:</strong> ${getStatusText(order.status || order.assignment_status)}</p>
                                 <p><strong>Сумма товаров:</strong> ${formatPrice(total)} ₽</p>
-                                <p><strong>Стоимость доставки:</strong> ${deliveryCost > 0 ? deliveryCost + ' ₽' : 'Бесплатно'}</p>
+                                <p><strong>Стоимость доставка:</strong> ${deliveryCost > 0 ? deliveryCost + ' ₽' : 'Бесплатно'}</p>
                                 <p><strong>Итого к оплате:</strong> <strong style="font-size: 16px;">${formatPrice(totalWithDelivery)} ₽</strong></p>
                                 <p><strong>Тип доставки:</strong> ${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</p>
                                 <p><strong>Способ оплата:</strong> ${order.payment_method === 'cash' ? 'Наличные' :
@@ -934,7 +1222,7 @@
             }
         }
 
-                // Функция для форматирования цены
+        // Функция для форматирования цены
         function formatPrice(price) {
             return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
         }
@@ -1271,6 +1559,13 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeModal();
+            }
+        });
+
+        // Обработчик для Telegram модального окна
+        document.getElementById('telegram-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeTelegramModal();
             }
         });
     </script>

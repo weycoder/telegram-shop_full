@@ -61,6 +61,65 @@ class CourierApp {
         }
     }
 
+
+
+
+    async bindTelegram() {
+        if (!this.currentCourier) {
+            this.showNotification('❌ Сначала войдите в систему', 'error');
+            return;
+        }
+
+        const telegramId = prompt('📱 Введите ваш Telegram ID (цифры без пробелов):');
+        if (!telegramId || isNaN(telegramId)) {
+            this.showNotification('❌ Введите корректный Telegram ID', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/courier/register-telegram', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    courier_id: this.currentCourier.id,
+                    telegram_id: parseInt(telegramId),
+                    username: this.currentCourier.username,
+                    first_name: this.currentCourier.full_name,
+                    last_name: ''
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showNotification('✅ Telegram ID успешно привязан!', 'success');
+                // Обновляем профиль
+                this.loadProfile();
+            } else {
+                throw new Error(result.error || 'Ошибка привязки Telegram');
+            }
+        } catch (error) {
+            console.error('Ошибка привязки Telegram:', error);
+            this.showNotification(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    async checkTelegramStatus() {
+        if (!this.currentCourier) return false;
+
+        try {
+            const response = await fetch(`/api/courier/telegram/${this.currentCourier.id}`);
+            const result = await response.json();
+
+            return result.success;
+        } catch (error) {
+            console.error('Ошибка проверки Telegram:', error);
+            return false;
+        }
+    }
+
     // Назначение обработчиков событий
     bindEvents() {
         console.log('🔗 Назначаем обработчики событий...');
@@ -850,13 +909,56 @@ class CourierApp {
         if (statCompleted) statCompleted.textContent = data.completed_orders?.length || 0;
     }
 
-    // Загрузка профиля
     async loadProfile() {
         if (!this.currentCourier) return;
 
         const usernameEl = document.getElementById('profile-username');
         const idEl = document.getElementById('profile-id');
         const createdEl = document.getElementById('profile-created');
+
+        // Добавляем элемент для статуса Telegram
+        const telegramStatusEl = document.getElementById('telegram-status') ||
+            document.createElement('div');
+
+        telegramStatusEl.id = 'telegram-status';
+        telegramStatusEl.style.marginTop = '15px';
+        telegramStatusEl.style.padding = '10px';
+        telegramStatusEl.style.borderRadius = '8px';
+
+        // Проверяем статус Telegram
+        const hasTelegram = await this.checkTelegramStatus();
+
+        if (hasTelegram) {
+            telegramStatusEl.innerHTML = `
+                <div style="background: #d4edda; color: #155724; padding: 10px; border-radius: 8px; border: 1px solid #c3e6cb;">
+                    <i class="fab fa-telegram"></i> <strong>Telegram привязан</strong>
+                    <p style="margin: 5px 0 0 0; font-size: 12px;">Бот будет отправлять уведомления о новых заказах</p>
+                </div>
+            `;
+        } else {
+            telegramStatusEl.innerHTML = `
+                <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; border: 1px solid #ffeaa7;">
+                    <i class="fab fa-telegram"></i> <strong>Telegram не привязан</strong>
+                    <p style="margin: 5px 0 10px 0; font-size: 12px;">Привяжите Telegram для получения уведомлений</p>
+                    <button class="btn-action" onclick="window.courierApp.bindTelegram()" style="width: 100%;">
+                        <i class="fab fa-telegram"></i> Привязать Telegram
+                    </button>
+                    <p style="margin-top: 5px; font-size: 11px; color: #666;">
+                        Как найти Telegram ID?<br>
+                        1. Найдите бота <strong>@userinfobot</strong><br>
+                        2. Напишите ему <strong>/start</strong><br>
+                        3. Скопируйте ваш ID
+                    </p>
+                </div>
+            `;
+        }
+
+        // Добавляем в контейнер профиля
+        const profileContainer = document.querySelector('.profile-container') ||
+            document.querySelector('.content-section.active .content');
+        if (profileContainer && !document.getElementById('telegram-status')) {
+            profileContainer.appendChild(telegramStatusEl);
+        }
 
         if (usernameEl) usernameEl.textContent = this.currentCourier.username;
         if (idEl) idEl.textContent = this.currentCourier.id;
