@@ -214,12 +214,6 @@ class TelegramShop {
                 ? `/api/products?category=${encodeURIComponent(category)}`
                 : '/api/products';
 
-            const response = await fetch('/api/admin/products', {
-                headers: {
-                    'X-Admin-Token': ADMIN_TOKEN
-                }
-            });
-
             const response = await fetch(url);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
