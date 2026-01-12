@@ -1149,15 +1149,16 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             print(f"⚠️ BOT_TOKEN не установлен")
             return False
 
-        # ВАЖНО: Получаем реальные данные заказа из базы
+        # ВАЖНО: Получаем полные данные заказа из базы
         db = get_db()
         try:
             order = db.execute('''
-                               SELECT o.total_price,
-                                      o.delivery_cost,
-                                      o.discount_amount,
-                                      (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
+                               SELECT o.*,
+                                      pc.code                                                                         as promo_code,
+                                      (o.total_price + COALESCE(o.delivery_cost, 0) -
+                                       COALESCE(o.discount_amount, 0))                                                as total_with_discount
                                FROM orders o
+                                        LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
                                WHERE o.id = ?
                                ''', (order_id,)).fetchone()
 
@@ -1167,30 +1168,26 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                 return False
 
             order_data = dict(order)
-            # Правильная итоговая сумма для клиента
-            correct_total_amount = order_data['total_with_delivery']
-            delivery_cost = order_data['delivery_cost'] or 0
-            discount_amount = order_data['discount_amount'] or 0
-            original_total = order_data['total_price'] or 0
-
             print(f"📊 ДАННЫЕ ЗАКАЗА #{order_id} ДЛЯ УВЕДОМЛЕНИЯ:")
-            print(f"   • Исходная сумма: {original_total} руб")
-            print(f"   • Скидка: {discount_amount} руб")
-            print(f"   • Доставка: {delivery_cost} руб")
-            print(f"   • ИТОГО К ОПЛАТЕ: {correct_total_amount} руб")
+            print(f"   • Исходная сумма товаров: {order_data.get('total_price', 0)} руб")
+            print(f"   • Доставка: {order_data.get('delivery_cost', 0)} руб")
+            print(f"   • Скидка: {order_data.get('discount_amount', 0)} руб")
+            print(f"   • ИТОГО К ОПЛАТЕ: {order_data.get('total_with_discount', 0)} руб")
 
         except Exception as e:
             print(f"❌ Ошибка получения данных заказа #{order_id}: {e}")
             db.close()
             return False
         finally:
-            db.close()
+            if db:
+                db.close()
 
         # Корректные тексты статусов для уведомлений
         status_texts = {
             'created': '🔄 *СОЗДАН И ОЖИДАЕТ ОБРАБОТКИ*',
             'assigned': '👤 *КУРЬЕР НАЗНАЧЕН*',
             'processing': '⚙️ *В ОБРАБОТКЕ*',
+            'ready_for_pickup': '🏪 *ГОТОВ К ВЫДАЧЕ*',  # Новый статус для самовывоза!
             'picked_up': '📦 *КУРЬЕР ЗАБРАЛ ЗАКАЗ И УЖЕ МЧИТСЯ К ВАМ*',
             'delivering': '🚚 *В ПУТИ К ВАМ*',
             'delivered': '✅ *ДОСТАВЛЕН*',
@@ -1202,52 +1199,85 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         # Безопасное форматирование товаров
         items_text = "📦 *СОСТАВ ЗАКАЗА:*\n"
+
+        # Если items уже переданы как список, используем их, иначе используем из базы
+        if not items:
+            try:
+                if order_data.get('items'):
+                    items = json.loads(order_data['items'])
+            except:
+                items = []
+
+        total_items_value = 0
+
         for item in items:
             name = item.get('name', 'Товар')
             safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
 
             if item.get('is_weight'):
                 weight = item.get('weight', 0)
-                price = item.get('price', 0)  # Это уже итоговая цена
+                price = item.get('price', 0)
                 items_text += f"• *{safe_name}* - {weight} кг = *{price} ₽*\n"
+                total_items_value += price
             else:
                 quantity = item.get('quantity', 1)
                 price = item.get('price', 0)
                 item_total = price * quantity
                 items_text += f"• *{safe_name}* × {quantity} шт - *{item_total} ₽*\n"
+                total_items_value += item_total
 
         # Добавляем информацию о курьере если есть
         courier_info = ""
         if courier_name:
-            # Экранируем имя курьера
             safe_courier_name = courier_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
             courier_info = f"\n👤 *КУРЬЕР:* {safe_courier_name}"
             if courier_phone:
                 courier_info += f"\n📱 *ТЕЛЕФОН:* {courier_phone}"
 
-        # Добавляем дополнительный текст для статуса picked_up
+        # Добавляем дополнительный текст для разных статусов
         extra_info = ""
         if status == 'picked_up':
             extra_info = "\n\n⚡ *Курьер уже в пути! Приготовьтесь к встрече.*"
+        elif status == 'ready_for_pickup' and delivery_type == 'pickup':
+            extra_info = "\n\n🏪 *Заказ готов к выдаче! Можете забирать его в точке самовывоза.*"
 
         # ИНФОРМАЦИЯ О СКИДКЕ (если есть)
         discount_info = ""
+        discount_amount = order_data.get('discount_amount', 0)
         if discount_amount > 0:
-            discount_info = f"\n🎁 *СКИДКА:* -{discount_amount} ₽\n"
+            discount_info = f"\n\n🎁 *СКИДКА:* -{discount_amount} ₽\n"
 
-        correct_total_amount = order_data['total_with_delivery']
+        # ИНФОРМАЦИЯ О ПРОМОКОДЕ (если есть)
+        promo_info = ""
+        promo_code = order_data.get('promo_code')
+        if promo_code:
+            promo_info = f"\n\n🎟️ *ПРОМОКОД:* {promo_code}\n"
+
+        # ИНФОРМАЦИЯ О ДОСТАВКЕ
+        delivery_info = ""
+        delivery_cost = order_data.get('delivery_cost', 0)
+        if delivery_type == 'courier':
+            if delivery_cost > 0:
+                delivery_info = f"\n\n🚚 *ДОСТАВКА:* {delivery_cost} ₽"
+            else:
+                delivery_info = f"\n\n🚚 *ДОСТАВКА:* Бесплатно"
+        else:
+            delivery_info = f"\n\n🏪 *САМОВЫВОЗ:* Бесплатно"
+
+        # ИТОГОВАЯ СУММА
+        total_amount = order_data.get('total_with_discount', 0)
 
         # Формируем сообщение
         message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
 
 {status_text}{extra_info}
 {items_text}
-{discount_info}
+{discount_info}{promo_info}
 ━━━━━━━━━━━━━━━━━━━━
-💰 *ИТОГО К ОПЛАТЕ: {correct_total_amount:.2f} ₽*
-📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
+💰 *ТОВАРЫ:* {total_items_value} ₽
+{delivery_info}{courier_info}
 
-⏳ *Следующее обновление будет при изменении статуса*"""
+💰 *ИТОГО К ОПЛАТЕ: {total_amount:.2f} ₽*"""
 
         # URL для веб-приложения
         webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
@@ -1289,8 +1319,41 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
+
+@app.route('/api/admin/orders/<int:order_id>/ready', methods=['PUT'])
+def admin_mark_order_ready(order_id):
+    """Пометить заказ как готовый к выдаче (для самовывоза)"""
+    db = get_db()
+    try:
+        # Получаем заказ
+        order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
+
+        order_dict = dict(order)
+
+        # Проверяем что это самовывоз
+        if order_dict.get('delivery_type') != 'pickup':
+            return jsonify({'success': False, 'error': 'Это не заказ на самовывоз'}), 400
+
+        # Обновляем статус
+        db.execute('UPDATE orders SET status = ? WHERE id = ?',
+                   ('ready_for_pickup', order_id))
+        db.commit()
+
+        # Отправляем уведомление клиенту
+        send_order_notification(order_id, 'ready_for_pickup')
+
+        return jsonify({'success': True, 'message': 'Заказ помечен как готовый к выдаче'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
 
 def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_name, is_admin=False):
     """Отправить уведомление о новом сообщении в Telegram"""
@@ -2665,26 +2728,30 @@ def api_create_order():
 
         # Отправляем уведомления
         if delivery_type == 'courier':
-            print(f"📋 Создан заказ #{order_id} для доставки курьером")
+            # Отправляем уведомления ДЛЯ ВСЕХ ЗАКАЗОВ
+            print(f"📋 Создан заказ #{order_id} (тип: {delivery_type})")
 
-            # Отправляем уведомление покупателю
+            # 1. Всегда отправляем уведомление покупателю
             try:
                 send_order_notification(order_id, 'created')
+                print(f"✅ Уведомление покупателю отправлено")
             except Exception as e:
                 print(f"⚠️ Не удалось отправить уведомление покупателю: {e}")
 
-            # Отправляем уведомления курьерам
+            # 2. Если доставка курьером - отправляем уведомления курьерам
+            if delivery_type == 'courier':
+                try:
+                    send_courier_order_notification(order_id)
+                    print(f"✅ Уведомления курьерам отправлены")
+                except Exception as e:
+                    print(f"⚠️ Не удалось отправить уведомления курьерам: {e}")
+
+            # 3. Всегда отправляем уведомление админу о новом заказе
             try:
-                send_courier_order_notification(order_id)
+                send_admin_order_notification(order_id)
+                print(f"✅ Уведомление админу отправлено")
             except Exception as e:
-                print(f"⚠️ Не удалось отправить уведомления курьерам: {e}")
-        else:
-            # Для самовывоза
-            try:
-                send_order_notification(order_id, 'created')
-                print(f"✅ Уведомление о создании заказа #{order_id} отправлено")
-            except Exception as e:
-                print(f"⚠️ Не удалось отправить уведомление: {e}")
+                print(f"⚠️ Не удалось отправить уведомление админу: {e}")
 
         print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
         print(f"💰 Итоговая сумма: {total_with_delivery} руб")
@@ -2722,6 +2789,142 @@ def api_create_order():
         except:
             pass
 
+
+
+def send_admin_order_notification(order_id):
+    """Отправить уведомление админу о новом заказе"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        ADMIN_TELEGRAM_IDS = os.getenv('ADMIN_IDS', '')
+
+        if not BOT_TOKEN or not ADMIN_TELEGRAM_IDS:
+            print("⚠️ BOT_TOKEN или ADMIN_IDS не установлены")
+            return False
+
+        db = get_db()
+
+        # Получаем информацию о заказе
+        order = db.execute('''
+                           SELECT o.*,
+                                  (o.total_price + COALESCE(o.delivery_cost, 0) - COALESCE(o.discount_amount, 0)) as total_amount
+                           FROM orders o
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
+        if not order:
+            print(f"⚠️ Заказ #{order_id} не найден")
+            db.close()
+            return False
+
+        order_data = dict(order)
+        db.close()
+
+        # Разбираем ID админов (может быть несколько через запятую)
+        admin_ids = []
+        for admin_id in ADMIN_TELEGRAM_IDS.split(','):
+            admin_id = admin_id.strip()
+            if admin_id and admin_id.isdigit():
+                admin_ids.append(int(admin_id))
+
+        if not admin_ids:
+            print("⚠️ Нет валидных ID админов")
+            return False
+
+        # Парсим товары
+        items_list = []
+        items_count = 0
+        if order_data.get('items'):
+            try:
+                items_list = json.loads(order_data['items'])
+                items_count = sum(item.get('quantity', 1) for item in items_list)
+            except:
+                items_list = []
+
+        # Форматируем адрес или точку самовывоза
+        delivery_info = ""
+        if order_data.get('delivery_type') == 'courier':
+            if order_data.get('delivery_address'):
+                try:
+                    addr_data = json.loads(order_data['delivery_address'])
+                    address_parts = []
+                    if addr_data.get('city'):
+                        address_parts.append(addr_data['city'])
+                    if addr_data.get('street'):
+                        address_parts.append(f"ул. {addr_data['street']}")
+                    if addr_data.get('house'):
+                        address_parts.append(f"д. {addr_data['house']}")
+                    if addr_data.get('apartment'):
+                        address_parts.append(f"кв. {addr_data['apartment']}")
+                    delivery_info = "📍 *Адрес доставки:* " + ', '.join(address_parts) + "\n"
+                except:
+                    delivery_info = f"📍 *Адрес:* {order_data.get('delivery_address', 'Не указан')}\n"
+        else:
+            delivery_info = "🏪 *Самовывоз*\n"
+
+        # Формируем сообщение для админа
+        text = f"🆕 *НОВЫЙ ЗАКАЗ #{order_id}*\n\n"
+        text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
+        text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
+        text += f"📦 *Товаров:* {items_count} шт\n"
+        text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
+        text += f"🚚 *Тип:* {'Доставка курьером' if order_data.get('delivery_type') == 'courier' else 'Самовывоз'}\n"
+        text += f"{delivery_info}"
+        text += f"💳 *Оплата:* {order_data.get('payment_method', 'cash')}\n"
+        text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
+
+        if order_data.get('discount_amount', 0) > 0:
+            text += f"🎁 *Скидка:* {order_data.get('discount_amount', 0)} ₽\n"
+
+        if order_data.get('cash_received', 0) > 0:
+            text += f"💵 *Наличные:* получено {order_data.get('cash_received', 0)} ₽"
+            if order_data.get('cash_change', 0) > 0:
+                text += f", сдача {order_data.get('cash_change', 0)} ₽"
+            text += "\n"
+
+        # Кнопки для админа
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "📋 ДЕТАЛИ ЗАКАЗА", "callback_data": f"admin_order_{order_id}"},
+                    {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"}
+                ],
+                [
+                    {"text": "✅ ВЗЯТЬ В РАБОТУ", "callback_data": f"admin_process_{order_id}"},
+                    {"text": "🚚 НАЗНАЧИТЬ КУРЬЕРА", "callback_data": f"admin_assign_{order_id}"}
+                ]
+            ]
+        }
+
+        # Отправляем всем админам
+        success_count = 0
+        for admin_id in admin_ids:
+            try:
+                url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+                data = {
+                    'chat_id': int(admin_id),
+                    'text': text,
+                    'parse_mode': 'Markdown',
+                    'reply_markup': json.dumps(keyboard)
+                }
+
+                response = requests.post(url, json=data, timeout=10)
+                if response.status_code == 200:
+                    print(f"✅ Уведомление отправлено админу {admin_id}")
+                    success_count += 1
+                else:
+                    print(f"❌ Ошибка отправки админу {admin_id}: {response.text}")
+
+            except Exception as e:
+                print(f"❌ Ошибка отправки админу {admin_id}: {e}")
+
+        print(f"📨 Уведомления админам отправлены: {success_count}/{len(admin_ids)}")
+        return success_count > 0
+
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомления админу: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 @app.route('/api/admin/chats', methods=['GET'])
 def api_admin_chats():
