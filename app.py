@@ -2451,22 +2451,16 @@ def api_create_order():
                     if item.get('is_weight'):
                         # Для весовых товаров: price уже содержит итоговую стоимость
                         item_total = float(item.get('price', 0))  # ✅ Просто берем итоговую цену
-                        item_total = price_per_kg * weight
-
-                        print(f"   Вес: {weight} кг")
-                        print(f"   Цена за кг: {price_per_kg} ₽")
+                        print(f"   Вес: {item.get('weight', 0)} кг")
                         print(f"   Стоимость: {item_total} ₽")
-
                         order_total += item_total
                     else:
                         price = float(item.get('price', 0))
                         quantity = float(item.get('quantity', 1))
                         item_total = price * quantity
-
                         print(f"   Цена: {price} ₽")
                         print(f"   Количество: {quantity} шт")
                         print(f"   Стоимость: {item_total} ₽")
-
                         order_total += item_total
 
                 print(f"\n💰 ИТОГО ТОВАРЫ: {order_total} ₽")
@@ -2479,7 +2473,7 @@ def api_create_order():
 
             print(f"💰 Сумма товаров: {order_total} руб")
 
-            # Применяем скидку
+            # Применяем скидку по промокоду
             if discount_amount > 0:
                 order_total = max(0, order_total - discount_amount)
                 print(f"💰 Применена скидка по промокоду: {discount_amount} руб")
@@ -2505,8 +2499,7 @@ def api_create_order():
                 print(f"✅ Доставка бесплатная (сумма заказа: {order_total} руб)")
 
         total_with_delivery = order_total + delivery_cost
-        print(
-            f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
+        print(f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
 
         # ========== ОПЛАТА НАЛИЧНЫМИ ==========
         cash_payment = data.get('cash_payment', {}) or {}
@@ -2602,7 +2595,7 @@ def api_create_order():
                                 user_id,
                                 username,
                                 json.dumps(data['items'], ensure_ascii=False),
-                                order_total,
+                                order_total,  # ВАЖНО: сохраняем сумму товаров
                                 delivery_cost,
                                 'pending',
                                 delivery_type,
@@ -2704,7 +2697,8 @@ def api_create_order():
             'order_id': order_id,
             'delivery_cost': delivery_cost,
             'total_with_delivery': total_with_delivery,
-            'discount_amount': discount_amount
+            'discount_amount': discount_amount,
+            'order_total': order_total  # Добавляем для отладки
         })
 
     except Exception as e:
@@ -3442,7 +3436,8 @@ def get_order_details(order_id):
                    o.cash_change,      
                    o.cash_details,
                    o.discount_amount,
-                   pc.code as promo_code
+                   pc.code as promo_code,
+                   (o.total_price + COALESCE(o.delivery_cost, 0) - COALESCE(o.discount_amount, 0)) as total_with_discount
             FROM orders o
                 LEFT JOIN order_assignments a ON o.id = a.order_id
                 LEFT JOIN couriers c ON a.courier_id = c.id
@@ -3483,6 +3478,7 @@ def get_order_details(order_id):
     except Exception as e:
         print(f"❌ Ошибка получения деталей заказа: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+    
 
 @app.route('/api/courier/profile', methods=['GET', 'PUT'])
 def courier_profile():
@@ -4810,7 +4806,7 @@ def api_admin_orders():
                    c.full_name as courier_name,
                    c.phone     as courier_phone,
                    pc.code as promo_code,
-                   (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
+                   (o.total_price + COALESCE(o.delivery_cost, 0) - COALESCE(o.discount_amount, 0)) as total_with_discount
             FROM orders o
             LEFT JOIN order_assignments a ON o.id = a.order_id
             LEFT JOIN couriers c ON a.courier_id = c.id
