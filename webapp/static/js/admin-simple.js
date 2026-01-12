@@ -265,7 +265,7 @@ class AdminPanel {
     }
 
 
-    async renderProducts(products) {
+    renderProducts(products) {
         try {
             console.log('📦 Рендеринг товаров...');
 
@@ -276,7 +276,7 @@ class AdminPanel {
             }
 
             // Проверяем, есть ли товары
-            if (!products || products.length === 0) {
+            if (!products || !Array.isArray(products) || products.length === 0) {
                 console.log('⚠️ Нет товаров для отображения');
                 productsTableBody.innerHTML = `
                     <tr>
@@ -293,8 +293,8 @@ class AdminPanel {
             console.log('🔄 Начинаем рендеринг таблицы товаров...');
             let html = '';
 
-            // Проходим по каждому товару
-            products.forEach(product => {
+            // Проходим по каждому товару - ВОТ ОШИБКА, нет переменной index!
+            products.forEach((product, index) => {  // <-- ДОБАВЬТЕ index здесь
                 console.log(`--- Товар #${index + 1} ---`, product);
 
                 // Определяем тип товара
@@ -306,11 +306,11 @@ class AdminPanel {
                 let priceDisplay = '';
                 if (isWeightProduct) {
                     const pricePerKg = product.price_per_kg || product.price;
-                    priceDisplay = `${this.formatPrice(pricePerKg)} ₽/кг`;
+                    priceDisplay = `${this.formatPrice(pricePerKg)} ₽/кг`;  // <-- Проблема с this!
                 } else {
                     priceDisplay = hasDiscount ?
-                        `<span style="color: #10b981; font-weight: 500;">${this.formatPrice(discountedPrice)} ₽</span>` :
-                        `${this.formatPrice(product.price)} ₽`;
+                        `<span style="color: #10b981; font-weight: 500;">${this.formatPrice(discountedPrice)} ₽</span>` :  // <-- Проблема с this!
+                        `${this.formatPrice(product.price)} ₽`;  // <-- Проблема с this!
                 }
 
                 // Формируем остаток для отображения
@@ -398,7 +398,6 @@ class AdminPanel {
             }
         }
     }
-
     async loadOrders() {
         try {
             console.log('📥 Загрузка заказов...');
