@@ -1202,19 +1202,26 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         # Безопасное форматирование товаров
         items_text = "📦 *СОСТАВ ЗАКАЗА:*\n"
+        items_total = 0.0
+
         for item in items:
             name = item.get('name', 'Товар')
             quantity = item.get('quantity', 1)
-            price = item.get('price', 0)
 
             # Безопасное имя (экранируем спецсимволы Markdown)
-            safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`').replace('[', '\\[').replace(
-                ']', '\\]')
+            safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
 
             if item.get('is_weight') and item.get('weight'):
-                items_text += f"• *{safe_name}* ({quantity} шт, {item['weight']} кг) - *{price} ₽*\n"
+                weight = float(item.get('weight', 0))
+                price_per_kg = float(item.get('price_per_kg', item.get('price', 0)))
+                item_total = price_per_kg * weight
+                items_total += item_total
+                items_text += f"• *{safe_name}* - {weight} кг × {price_per_kg} ₽/кг = *{item_total:.2f} ₽*\n"
             else:
-                items_text += f"• *{safe_name}* × {quantity} шт - *{price} ₽*\n"
+                price = float(item.get('price', 0))
+                item_total = price * quantity
+                items_total += item_total
+                items_text += f"• *{safe_name}* × {quantity} шт - *{item_total:.2f} ₽*\n"
 
         # Добавляем информацию о курьере если есть
         courier_info = ""
@@ -1235,15 +1242,17 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         if discount_amount > 0:
             discount_info = f"\n🎁 *СКИДКА:* -{discount_amount} ₽\n"
 
-        # Формируем сообщение с ПРАВИЛЬНОЙ суммой
+        correct_total_amount = order_data['total_with_delivery']
+
+        # Формируем сообщение
         message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
 
-{status_text}{extra_info}
+        {status_text}{extra_info}
 
-{items_text}
-{discount_info}━━━━━━━━━━━━━━━━━━━━
-💰 *ИТОГО К ОПЛАТЕ: {correct_total_amount} ₽*
-📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
+        {items_text}
+        {discount_info}━━━━━━━━━━━━━━━━━━━━
+        💰 *ИТОГО К ОПЛАТЕ: {correct_total_amount:.2f} ₽*
+        📦 *ТИП ДОСТАВКИ:* {delivery_type.upper() if delivery_type else 'НЕ УКАЗАН'}{courier_info}
 
 ⏳ *Следующее обновление будет при изменении статуса*"""
 
@@ -2436,23 +2445,31 @@ def api_create_order():
             # Рассчитываем сумму товаров
             order_total = 0.0
             for item in data['items']:
-                price = float(item.get('price', 0))
-                quantity = float(item.get('quantity', 1))
-
-                # Для весовых товаров используем вес
+                # Для весовых товаров используем price_per_kg
                 if item.get('is_weight'):
                     weight = float(item.get('weight', 0))
-                    order_total += price * weight
+                    price_per_kg = float(item.get('price_per_kg', item.get('price', 0)))
+                    item_total = price_per_kg * weight
+                    print(f"📊 Весовой товар: {weight} кг × {price_per_kg} ₽/кг = {item_total} ₽")
+                    order_total += item_total
                 else:
-                    order_total += price * quantity
+                    # Для штучных товаров
+                    price = float(item.get('price', 0))
+                    quantity = float(item.get('quantity', 1))
+                    item_total = price * quantity
+                    print(f"📊 Штучный товар: {quantity} шт × {price} ₽ = {item_total} ₽")
+                    order_total += item_total
+
+            print(f"💰 Сумма товаров: {order_total} руб")
 
             # Применяем скидку
             if discount_amount > 0:
                 order_total = max(0, order_total - discount_amount)
                 print(f"💰 Применена скидка по промокоду: {discount_amount} руб")
                 print(f"💰 Сумма после скидки: {order_total} руб")
-        except (ValueError, TypeError):
-            print("⚠️ Ошибка расчета суммы товаров")
+
+        except (ValueError, TypeError) as e:
+            print(f"⚠️ Ошибка расчета суммы товаров: {e}")
             order_total = 0.0
 
         # ========== РАСЧЕТ ДОСТАВКИ ==========
