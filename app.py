@@ -4035,6 +4035,23 @@ def create_promo_code():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# Маршрут для удаления промокода (DELETE)
+@app.route('/api/admin/promo-codes/<promo_id>', methods=['DELETE'])
+def delete_promo_code(promo_id):
+    try:
+        from bson.objectid import ObjectId
+
+        result = collection_promo_codes.delete_one({"_id": ObjectId(promo_id)})
+
+        if result.deleted_count > 0:
+            return jsonify({"success": True, "message": "Промокод удален"}), 200
+        else:
+            return jsonify({"success": False, "error": "Промокод не найден"}), 404
+
+    except Exception as e:
+        print(f"❌ Ошибка удаления промокода: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/admin/promo-codes', methods=['GET'])
 def get_promo_codes_admin():
     """Получить все промокоды для админки"""
