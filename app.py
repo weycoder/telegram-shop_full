@@ -38,23 +38,8 @@ UPLOAD_PATH = app.config['UPLOAD_FOLDER']
 if not os.path.exists(UPLOAD_PATH):
     os.makedirs(UPLOAD_PATH)
     print(f"📁 Создана папка для загрузок: {UPLOAD_PATH}")
-    
+
 # ========== ХЕЛПЕР ДЛЯ БЕЗОПАСНЫХ ЗАПРОСОВ ==========
-
-def execute_safe_query(query, params=()):
-    """Безопасное выполнение SQL запроса"""
-    db = get_db()
-    try:
-        cursor = db.execute(query, params)
-        result = cursor.fetchall()
-        return [dict(row) for row in result]
-    except Exception as e:
-        print(f"❌ SQL Error: {e}")
-        return []
-    finally:
-        db.close()
-
-
 # app.py - исправленный декоратор
 def rate_limit(max_requests=30, window=60):
     def decorator(f):
@@ -1037,35 +1022,6 @@ def init_security():
 # Вызовите после init_db()
 init_security()
 
-
-# ========== НОВЫЕ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ ==========
-@app.before_request
-def security_middleware():
-    """Проверки безопасности перед каждым запросом"""
-    # Блокировка опасных User-Agent
-    user_agent = request.headers.get('User-Agent', '')
-    if any(x in user_agent.lower() for x in ['sqlmap', 'nikto', 'hydra', 'metasploit']):
-        return jsonify({'success': False, 'error': 'Access denied'}), 403
-
-    # Защита от базовых атак
-    path = request.path.lower()
-    if any(x in path for x in ['/php', '/admin/', '/wp-', '/cgi-bin', '/.git', '/.env']):
-        return jsonify({'success': False, 'error': 'Not found'}), 404
-
-    # Логирование запросов к админке
-    if '/api/admin/' in request.path:
-        db = get_db()
-        try:
-            db.execute('''
-                       INSERT INTO security_logs (ip_address, endpoint, method, user_agent)
-                       VALUES (?, ?, ?, ?)
-                       ''', (request.remote_addr, request.path, request.method, user_agent))
-            db.commit()
-        except:
-            pass
-        finally:
-            db.close()
-
 @app.route('/api/bot/get-orders/<int:telegram_id>', methods=['GET'])
 def api_bot_get_orders(telegram_id):
     """API для получения заказов пользователя (для бота)"""
@@ -1476,10 +1432,6 @@ def api_send_chat_message():
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
-
-@app.route('/api/test-admin', methods=['GET'])
-def test_admin():
-    return jsonify({'message': 'Admin route works!'})
 
 
 @app.route('/api/admin/couriers', methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -2321,7 +2273,7 @@ def check_product_availability(product_id):
         if db:
             db.close()
         return jsonify({'available': False, 'error': str(e)})
-    
+
 
 
 @app.route('/api/categories')
@@ -4484,7 +4436,7 @@ def admin_products():
                     (data.get('name', ''),
                      data.get('description', ''),
                      data.get('price', 0),
-                     data.get('image_url', ''),  
+                     data.get('image_url', ''),
                      data.get('category', ''),
                      data.get('stock', 0),
                      'piece',
@@ -4673,7 +4625,7 @@ def api_admin_orders():
             db.close()
 
 @app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
-def api_admin_manage_categories():
+def admin_manage_categories():
     db = get_db()
     try:
         if request.method == 'GET':
@@ -5043,7 +4995,97 @@ def admin_promo_code_status_api(id):
     finally:
         db.close()
 
-app.route('/api/admin/categories/tree/<int:id>', methods=['GET', 'PUT', 'DELETE'])
+# ========== API ДЛЯ ДЕРЕВА КАТЕГОРИЙ ==========
+
+@app.route('/api/admin/categories/tree', methods=['GET', 'POST'])
+def admin_categories_tree_api():
+    """Управление деревом категорий"""
+    db = get_db()
+    try:
+        if request.method == 'GET':
+            # Получить дерево категорий
+            categories = db.execute('''
+                SELECT pc.*,
+                       d.name as discount_name
+                FROM product_categories pc
+                LEFT JOIN discounts d ON pc.discount_id = d.id
+                ORDER BY pc.sort_order, pc.name
+            ''').fetchall()
+
+            # Строим дерево
+            categories_dict = {}
+            root_categories = []
+
+            for cat in categories:
+                cat_dict = dict(cat)
+                cat_dict['children'] = []
+                # Получаем количество товаров в категории
+                product_count = db.execute(
+                    'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
+                    (cat_dict['name'], cat_dict['id'])
+                ).fetchone()[0]
+                cat_dict['product_count'] = product_count
+                cat_dict['has_products'] = product_count > 0
+                categories_dict[cat_dict['id']] = cat_dict
+
+            for cat_id, cat in categories_dict.items():
+                if cat['parent_id']:
+                    if cat['parent_id'] in categories_dict:
+                        categories_dict[cat['parent_id']]['children'].append(cat)
+                else:
+                    root_categories.append(cat)
+
+            return jsonify(root_categories)
+
+        elif request.method == 'POST':
+            # Создать новую категорию
+            data = request.json
+
+            # Валидация
+            if not data.get('name'):
+                return jsonify({'success': False, 'error': 'Введите название категории'}), 400
+
+            # Проверяем уникальность имени
+            existing = db.execute(
+                'SELECT id FROM product_categories WHERE name = ?',
+                (data['name'],)
+            ).fetchone()
+
+            if existing:
+                return jsonify({'success': False, 'error': 'Категория с таким именем уже существует'}), 400
+
+            # Создаем категорию
+            cursor = db.execute('''
+                INSERT INTO product_categories (
+                    name, parent_id, discount_id, sort_order,
+                    description, icon, color,
+                    seo_title, seo_description, seo_keywords
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                data.get('name'),
+                data.get('parent_id'),
+                data.get('discount_id'),
+                data.get('sort_order', 0),
+                data.get('description'),
+                data.get('icon'),
+                data.get('color', '#667eea'),
+                data.get('seo_title'),
+                data.get('seo_description'),
+                data.get('seo_keywords')
+            ))
+
+            category_id = cursor.lastrowid
+            db.commit()
+
+            return jsonify({'success': True, 'id': category_id})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/categories/tree/<int:id>', methods=['GET', 'PUT', 'DELETE'])
 def admin_category_tree_detail_api(id):
     """Управление конкретной категорией в дереве"""
     db = get_db()
@@ -5269,614 +5311,6 @@ def apply_discounts():
         print(f"❌ Ошибка расчета скидок: {e}")
         return jsonify({'error': str(e)}), 500
 
-
-
-# ========== ДОБАВЬТЕ ЭТО ПОСЛЕ СУЩЕСТВУЮЩИХ ФУНКЦИЙ, НО ПЕРЕД if __name__ == '__main__': ==========
-
-# Дублирование существующих функций с правильными маршрутами для admin.js
-
-@app.route('/api/admin/dashboard', methods=['GET'])
-def api_admin_dashboard_route():
-    """API для дашборда админки - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        stats = db.execute('''
-                           SELECT (SELECT COUNT(*) FROM orders)                          as total_orders,
-                                  COALESCE(SUM(total_price), 0)                          as total_revenue,
-                                  (SELECT COUNT(*) FROM orders WHERE status = 'pending') as pending_orders,
-                                  (SELECT COUNT(*) FROM products)                        as total_products,
-                                  (SELECT COUNT(DISTINCT user_id) FROM orders)           as total_customers
-                           FROM orders
-                           ''').fetchone()
-
-        recent_orders = db.execute('SELECT * FROM orders ORDER BY created_at DESC LIMIT 10').fetchall()
-
-        result = {
-            'total_orders': stats['total_orders'] if stats else 0,
-            'total_revenue': stats['total_revenue'] if stats else 0,
-            'pending_orders': stats['pending_orders'] if stats else 0,
-            'total_products': stats['total_products'] if stats else 0,
-            'total_customers': stats['total_customers'] if stats else 0,
-            'recent_orders': [dict(row) for row in recent_orders]
-        }
-
-        db.close()
-        return jsonify(result)
-    except Exception as e:
-        db.close()
-        return jsonify({
-            'total_orders': 0, 'total_revenue': 0, 'pending_orders': 0,
-            'total_products': 0, 'total_customers': 0, 'recent_orders': []
-        })
-
-@app.route('/api/admin/orders', methods=['GET'])
-def api_admin_orders_route():
-    """API для админки - получение заказов - ДЛЯ admin.js"""
-    try:
-        db = get_db()
-
-        orders = db.execute('''
-            SELECT o.*,
-                   a.status    as assignment_status,
-                   c.full_name as courier_name,
-                   c.phone     as courier_phone,
-                   (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
-            FROM orders o
-            LEFT JOIN order_assignments a ON o.id = a.order_id
-            LEFT JOIN couriers c ON a.courier_id = c.id
-            ORDER BY o.created_at DESC LIMIT 100
-        ''').fetchall()
-
-        if not orders:
-            return jsonify([])
-
-        orders_list = []
-        for order in orders:
-            order_dict = dict(order)
-
-            # Парсим items
-            try:
-                if order_dict.get('items'):
-                    order_dict['items'] = json.loads(order_dict['items'])
-                else:
-                    order_dict['items'] = []
-            except:
-                order_dict['items'] = []
-
-            # Парсим адрес доставки
-            if order_dict.get('delivery_address'):
-                try:
-                    order_dict['delivery_address'] = json.loads(order_dict['delivery_address'])
-                except:
-                    order_dict['delivery_address'] = {}
-
-            # Форматируем дату
-            if order_dict.get('created_at'):
-                try:
-                    dt = datetime.strptime(order_dict['created_at'], '%Y-%m-%d %H:%M:%S')
-                    order_dict['created_at_formatted'] = dt.strftime('%d.%m.%Y %H:%M')
-                except:
-                    order_dict['created_at_formatted'] = order_dict['created_at'][:16]
-
-            orders_list.append(order_dict)
-
-        return jsonify(orders_list)
-
-    except Exception as e:
-        print(f"❌ Ошибка получения заказов для админки: {e}")
-        return jsonify([])
-    finally:
-        if 'db' in locals():
-            db.close()
-
-@app.route('/api/admin/products/list', methods=['GET'])
-def api_admin_products_list():
-    """API для получения товаров для админки - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        products = db.execute('''
-                              SELECT p.*,
-                                     pc.name as category_name,
-                                     CASE
-                                         WHEN p.product_type = 'weight' AND p.stock_weight > 0 THEN p.stock_weight
-                                         ELSE p.stock
-                                         END as display_stock,
-                                     CASE
-                                         WHEN p.product_type = 'weight' AND p.price_per_kg > 0 THEN p.price_per_kg
-                                         ELSE p.price
-                                         END as display_price
-                              FROM products p
-                                       LEFT JOIN product_categories pc ON p.category_id = pc.id
-                              ORDER BY p.created_at DESC
-                              ''').fetchall()
-
-        return jsonify([dict(product) for product in products])
-    except Exception as e:
-        print(f"❌ Ошибка получения товаров для админки: {e}")
-        return jsonify([])
-    finally:
-        db.close()
-
-@app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
-def api_admin_categories_manage():
-    """API для управления категориями - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        if request.method == 'GET':
-            categories = db.execute(
-                'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category').fetchall()
-            return jsonify([row['category'] for row in categories])
-
-        elif request.method == 'POST':
-            data = request.get_json()
-            new_category = data.get('name', '').strip()
-
-            if not new_category:
-                return jsonify({'success': False, 'error': 'Название категории не может быть пустым'}), 400
-
-            existing = db.execute('SELECT COUNT(*) as count FROM products WHERE LOWER(category) = LOWER(?)',
-                                  (new_category,)).fetchone()
-            if existing['count'] > 0:
-                return jsonify({'success': False, 'error': 'Такая категория уже существует'}), 400
-
-            # Создаем товар-заглушку для категории
-            db.execute(
-                'INSERT INTO products (name, description, price, image_url, category, stock) VALUES (?, ?, ?, ?, ?, ?)',
-                (f'Товар категории {new_category}', f'Автоматически созданный товар', 1000,
-                 'https://via.placeholder.com/300x200', new_category, 10))
-            db.commit()
-            return jsonify({'success': True, 'message': f'Категория "{new_category}" создана'})
-
-        elif request.method == 'DELETE':
-            category_name = request.args.get('name', '').strip()
-            if not category_name:
-                return jsonify({'success': False, 'error': 'Не указана категория'}), 400
-
-            db.execute('UPDATE products SET category = "" WHERE LOWER(category) = LOWER(?)', (category_name,))
-            db.commit()
-            return jsonify({'success': True, 'message': f'Категория "{category_name}" удалена'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-@app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
-def api_admin_update_order_status(order_id):
-    """API для изменения статуса заказа - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        data = request.get_json()
-        new_status = data.get('status')
-
-        if new_status not in ['pending', 'processing', 'delivering', 'completed', 'cancelled']:
-            db.close()
-            return jsonify({'error': 'Некорректный статус'}), 400
-
-        # Обновляем статус заказа
-        db.execute('UPDATE orders SET status = ? WHERE id = ?',
-                   (new_status, order_id))
-        db.commit()
-        db.close()
-
-        print(f"✅ Статус заказа #{order_id} изменен на '{new_status}'")
-
-        return jsonify({'success': True, 'status': new_status})
-
-    except Exception as e:
-        if db:
-            db.close()
-        print(f"❌ Ошибка обновления статуса заказа #{order_id}: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/admin/orders/<int:order_id>/cancel', methods=['PUT'])
-def api_admin_cancel_order(order_id):
-    """API для отмены заказа - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        # Получаем текущий статус
-        order = db.execute('SELECT status FROM orders WHERE id = ?', (order_id,)).fetchone()
-        if not order:
-            db.close()
-            return jsonify({'error': 'Заказ не найден'}), 404
-
-        if order['status'] == 'completed':
-            db.close()
-            return jsonify({'error': 'Нельзя отменить завершенный заказ'}), 400
-
-        # Обновляем статус
-        db.execute('UPDATE orders SET status = "cancelled" WHERE id = ?',
-                   (order_id,))
-        db.commit()
-        db.close()
-
-        print(f"✅ Заказ #{order_id} отменен")
-
-        return jsonify({'success': True})
-
-    except Exception as e:
-        if db:
-            db.close()
-        print(f"❌ Ошибка отмены заказа #{order_id}: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/admin/products/update', methods=['PUT'])
-def api_admin_update_product():
-    """API для обновления товара - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        product_id = request.args.get('id')
-        data = request.json
-
-        if not product_id:
-            return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
-
-        # Проверяем тип товара
-        product_type = data.get('product_type', 'piece')
-
-        if product_type == 'weight':
-            # Для весовых товаров
-            db.execute('''
-                       UPDATE products
-                       SET name           = ?,
-                           description    = ?,
-                           price          = ?,
-                           image_url      = ?,
-                           category       = ?,
-                           product_type   = ?,
-                           unit           = ?,
-                           weight_unit    = ?,
-                           price_per_kg   = ?,
-                           min_weight     = ?,
-                           step_weight    = ?,
-                           stock          = ?,
-                           stock_weight   = ?
-                       WHERE id = ?
-                       ''', (
-                           data.get('name', ''),
-                           data.get('description', ''),
-                           data.get('price', 0),
-                           data.get('image_url', ''),
-                           data.get('category', ''),
-                           'weight',
-                           data.get('unit', 'кг'),
-                           data.get('weight_unit', 'кг'),
-                           data.get('price_per_kg', 0),
-                           data.get('min_weight', 0.1),
-                           data.get('step_weight', 0.1),
-                           data.get('stock', 0),
-                           data.get('stock_weight', 0),
-                           product_id
-                       ))
-        else:
-            # Для штучных товаров
-            db.execute('''
-                       UPDATE products
-                       SET name         = ?,
-                           description  = ?,
-                           price        = ?,
-                           image_url    = ?,
-                           category     = ?,
-                           product_type = ?,
-                           unit         = ?,
-                           stock        = ?
-                       WHERE id = ?
-                       ''', (
-                           data.get('name', ''),
-                           data.get('description', ''),
-                           data.get('price', 0),
-                           data.get('image_url', ''),
-                           data.get('category', ''),
-                           'piece',
-                           data.get('unit', 'шт'),
-                           data.get('stock', 0),
-                           product_id
-                       ))
-
-        db.commit()
-        return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-@app.route('/api/admin/products/create', methods=['POST'])
-def api_admin_create_product():
-    """API для создания товара - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        data = request.json
-
-        # Проверяем обязательные поля
-        if not data.get('name') or data.get('price') is None:
-            return jsonify({'success': False, 'error': 'Заполните обязательные поля'}), 400
-
-        product_type = data.get('product_type', 'piece')
-
-        if product_type == 'weight':
-            # Для весовых товаров
-            cursor = db.execute('''
-                                INSERT INTO products (name, description, price, image_url, category,
-                                                      product_type, unit, weight_unit, price_per_kg,
-                                                      min_weight, step_weight, stock, stock_weight)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    data.get('name', ''),
-                                    data.get('description', ''),
-                                    data.get('price', 0),
-                                    data.get('image_url', ''),
-                                    data.get('category', ''),
-                                    'weight',
-                                    data.get('unit', 'кг'),
-                                    data.get('weight_unit', 'кг'),
-                                    data.get('price_per_kg', 0),
-                                    data.get('min_weight', 0.1),
-                                    data.get('step_weight', 0.1),
-                                    data.get('stock', 0),
-                                    data.get('stock_weight', 0)
-                                ))
-        else:
-            # Для штучных товаров
-            cursor = db.execute('''
-                                INSERT INTO products (name, description, price, image_url, category,
-                                                      product_type, unit, stock)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    data.get('name', ''),
-                                    data.get('description', ''),
-                                    data.get('price', 0),
-                                    data.get('image_url', ''),
-                                    data.get('category', ''),
-                                    'piece',
-                                    data.get('unit', 'шт'),
-                                    data.get('stock', 0)
-                                ))
-
-        product_id = cursor.lastrowid
-        db.commit()
-
-        return jsonify({'success': True, 'id': product_id})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-@app.route('/api/admin/categories/tree', methods=['GET', 'POST'])
-def api_admin_categories_tree():
-    """API для дерева категорий - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        if request.method == 'GET':
-            # Получить дерево категорий
-            categories = db.execute('''
-                                    SELECT pc.*, d.name as discount_name
-                                    FROM product_categories pc
-                                             LEFT JOIN discounts d ON pc.discount_id = d.id
-                                    ORDER BY pc.sort_order, pc.name
-                                    ''').fetchall()
-
-            # Строим дерево
-            categories_dict = {}
-            root_categories = []
-
-            for cat in categories:
-                cat_dict = dict(cat)
-                cat_dict['children'] = []
-                categories_dict[cat_dict['id']] = cat_dict
-
-            for cat_id, cat in categories_dict.items():
-                if cat['parent_id']:
-                    if cat['parent_id'] in categories_dict:
-                        categories_dict[cat['parent_id']]['children'].append(cat)
-                else:
-                    root_categories.append(cat)
-
-            return jsonify(root_categories)
-
-        elif request.method == 'POST':
-            # Создать категорию
-            data = request.json
-
-            if not data.get('name'):
-                return jsonify({'success': False, 'error': 'Введите название категории'}), 400
-
-            cursor = db.execute('''
-                                INSERT INTO product_categories (name, parent_id, discount_id, sort_order)
-                                VALUES (?, ?, ?, ?)
-                                ''', (
-                                    data['name'],
-                                    data.get('parent_id'),
-                                    data.get('discount_id'),
-                                    data.get('sort_order', 0)
-                                ))
-
-            db.commit()
-            return jsonify({'success': True, 'id': cursor.lastrowid})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-@app.route('/api/admin/discounts', methods=['GET', 'POST'])
-def api_admin_discounts():
-    """API для скидок - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        if request.method == 'GET':
-            # Получить все скидки
-            discounts = db.execute('''
-                                   SELECT d.*,
-                                          (SELECT COUNT(*) FROM orders WHERE discount_id = d.id) as used_count
-                                   FROM discounts d
-                                   ORDER BY d.created_at DESC
-                                   ''').fetchall()
-
-            return jsonify([dict(discount) for discount in discounts])
-
-        elif request.method == 'POST':
-            # Создать новую скидку
-            data = request.json
-
-            # Валидация
-            if not data.get('name'):
-                return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
-
-            if not data.get('discount_type'):
-                return jsonify({'success': False, 'error': 'Выберите тип скидки'}), 400
-
-            if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
-                return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
-
-            if not data.get('apply_to'):
-                return jsonify({'success': False, 'error': 'Выберите область применения'}), 400
-
-            # Вставляем скидку
-            cursor = db.execute('''
-                                INSERT INTO discounts (name, discount_type, value, min_order_amount,
-                                                       apply_to, target_category, target_product_id,
-                                                       start_date, end_date, is_active)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    data.get('name'),
-                                    data.get('discount_type'),
-                                    data.get('value', 0),
-                                    data.get('min_order_amount', 0),
-                                    data.get('apply_to', 'all'),
-                                    data.get('target_category'),
-                                    data.get('target_product_id'),
-                                    data.get('start_date'),
-                                    data.get('end_date'),
-                                    data.get('is_active', True)
-                                ))
-
-            discount_id = cursor.lastrowid
-            db.commit()
-
-            return jsonify({'success': True, 'id': discount_id})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-@app.route('/api/admin/discounts/<int:id>', methods=['GET', 'PUT', 'DELETE'])
-def api_admin_discount_detail(id):
-    """API для управления скидкой - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        if request.method == 'GET':
-            # Получить скидку по ID
-            discount = db.execute('SELECT * FROM discounts WHERE id = ?', (id,)).fetchone()
-
-            if not discount:
-                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
-
-            discount_dict = dict(discount)
-
-            # Получаем использования скидки
-            used_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
-            discount_dict['used_count'] = used_count
-
-            return jsonify(discount_dict)
-
-        elif request.method == 'PUT':
-            # Обновить скидку
-            data = request.json
-
-            # Проверяем существование скидки
-            discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
-            if not discount:
-                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
-
-            # Валидация
-            if not data.get('name'):
-                return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
-
-            if not data.get('discount_type'):
-                return jsonify({'success': False, 'error': 'Выберите тип скидки'}), 400
-
-            if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
-                return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
-
-            if not data.get('apply_to'):
-                return jsonify({'success': False, 'error': 'Выберите область применения'}), 400
-
-            # Обновляем скидку
-            db.execute('''
-                UPDATE discounts
-                SET name = ?, discount_type = ?, value = ?, min_order_amount = ?,
-                    apply_to = ?, target_category = ?, target_product_id = ?,
-                    start_date = ?, end_date = ?, is_active = ?
-                WHERE id = ?
-            ''', (
-                data.get('name'),
-                data.get('discount_type'),
-                data.get('value', 0),
-                data.get('min_order_amount', 0),
-                data.get('apply_to', 'all'),
-                data.get('target_category'),
-                data.get('target_product_id'),
-                data.get('start_date'),
-                data.get('end_date'),
-                data.get('is_active', True),
-                id
-            ))
-
-            db.commit()
-            return jsonify({'success': True})
-
-        elif request.method == 'DELETE':
-            # Удалить скидку
-            discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
-            if not discount:
-                return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
-
-            # Проверяем, используется ли скидка в заказах
-            usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
-            if usage_count > 0:
-                return jsonify({'success': False, 'error': 'Нельзя удалить скидку, которая уже использовалась в заказах'}), 400
-
-            # Удаляем скидку
-            db.execute('DELETE FROM discounts WHERE id = ?', (id,))
-            db.commit()
-
-            return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
-
-@app.route('/api/admin/promo-codes', methods=['GET'])
-def api_admin_promo_codes():
-    """API для промокодов - ДЛЯ admin.js"""
-    db = get_db()
-    try:
-        promo_codes = db.execute('SELECT * FROM promo_codes ORDER BY created_at DESC').fetchall()
-        result = [dict(pc) for pc in promo_codes]
-        db.close()
-        return jsonify(result)
-    except Exception as e:
-        db.close()
-        print(f"❌ Ошибка получения промокодов: {e}")
-        return jsonify([])
-
-@app.route('/api/admin/test-admin', methods=['GET'])
-def api_test_admin():
-    """Тестовый маршрут для админки"""
-    return jsonify({'message': 'Admin API работает!', 'status': 'ok'})
-
-# ========== КОНЕЦ ДОБАВЛЕННЫХ МАРШРУТОВ ==========
-
-
-
-
-
-
-
-
 @app.route('/api/security/logs', methods=['GET'])
 def get_security_logs():
     """Получить логи безопасности (только для админа)"""
@@ -5903,7 +5337,6 @@ def clear_failed_logins():
         return jsonify({'success': True, 'message': 'Cleared old failed login attempts'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 # ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
 if __name__ == '__main__':
