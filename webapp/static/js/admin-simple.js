@@ -128,10 +128,6 @@ class AdminPanel {
         }, 5000);
     }
 
-    formatPrice(price) {
-        return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
-    }
-
     logout() {
         if (confirm('Вы уверены, что хотите выйти?')) {
             window.location.href = '/';
@@ -265,7 +261,7 @@ class AdminPanel {
     }
 
 
-    renderProducts(products) {
+    function renderProducts(products) {
         try {
             console.log('📦 Рендеринг товаров...');
 
