@@ -3524,6 +3524,7 @@ def assign_courier():
 
 # ========== API ДЛЯ АДМИНА ==========
 @app.route('/api/admin/dashboard', methods=['GET'])
+@admin_required  # <-- ДОБАВЬ ЭТО
 def admin_dashboard():
     db = get_db()
     try:
@@ -4445,6 +4446,7 @@ def get_products_with_discounts():
 
 
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@admin_required
 def admin_products():
     db = get_db()
     try:
@@ -4599,12 +4601,66 @@ def admin_products():
     finally:
         db.close()
 
+
 @app.route('/api/admin/orders', methods=['GET'])
-def admin_orders():
-    db = get_db()
-    orders = db.execute('SELECT * FROM orders ORDER BY created_at DESC').fetchall()
-    db.close()
-    return jsonify([dict(order) for order in orders])
+@admin_required  # <-- ДОБАВЬ ЭТО
+@rate_limit(max_requests=30)
+def api_admin_orders():
+    """API для админки - получение заказов"""
+    try:
+        db = get_db()
+
+        # Получаем все заказы с информацией о курьере
+        orders = db.execute('''
+                            SELECT o.*,
+                                   a.status    as assignment_status,
+                                   c.full_name as courier_name,
+                                   c.phone     as courier_phone
+                            FROM orders o
+                                     LEFT JOIN order_assignments a ON o.id = a.order_id
+                                     LEFT JOIN couriers c ON a.courier_id = c.id
+                            ORDER BY o.created_at DESC LIMIT 100
+                            ''').fetchall()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+
+            # Парсим items
+            try:
+                order_dict['items'] = json.loads(order_dict['items']) if order_dict.get('items') else []
+            except:
+                order_dict['items'] = []
+
+            # Парсим адрес доставки
+            if order_dict.get('delivery_address'):
+                try:
+                    order_dict['delivery_address'] = json.loads(order_dict['delivery_address'])
+                except:
+                    order_dict['delivery_address'] = {}
+
+            # Добавляем поле для отображения
+            order_dict['total_with_delivery'] = float(order_dict.get('total_price', 0)) + float(
+                order_dict.get('delivery_cost', 0))
+
+            # Форматируем дату
+            if order_dict.get('created_at'):
+                try:
+                    dt = datetime.strptime(order_dict['created_at'], '%Y-%m-%d %H:%M:%S')
+                    order_dict['created_at_formatted'] = dt.strftime('%d.%m.%Y %H:%M')
+                except:
+                    order_dict['created_at_formatted'] = order_dict['created_at'][:16]
+
+            orders_list.append(order_dict)
+
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"❌ Ошибка получения заказов для админки: {e}")
+        return jsonify([]), 500
+    finally:
+        if 'db' in locals():
+            db.close()
 
 
 @app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
