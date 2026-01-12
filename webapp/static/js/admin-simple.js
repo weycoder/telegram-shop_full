@@ -1890,7 +1890,7 @@ class AdminPanel {
 
     async loadPromoCodes() {
         try {
-            const response = await fetch('/api/promo-codes');
+            const response = await fetch('/api/admin/promo-codes');
             const data = await response.json();
             this.promo_codes = Array.isArray(data) ? data : [];
             this.renderPromoCodes();

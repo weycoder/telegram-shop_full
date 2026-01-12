@@ -40,15 +40,6 @@ if not os.path.exists(UPLOAD_PATH):
     os.makedirs(UPLOAD_PATH)
     print(f"📁 Создана папка для загрузок: {UPLOAD_PATH}")
 
-
-def validate_admin_token():
-    """Проверка токена администратора"""
-    token = request.headers.get('X-Admin-Token')
-    if not token:
-        return False
-    return secrets.compare_digest(token, ADMIN_TOKEN)
-
-
 # app.py - исправленный декоратор
 def rate_limit(max_requests=30, window=60):
     def decorator(f):
@@ -82,18 +73,6 @@ def rate_limit(max_requests=30, window=60):
         return decorated_function
 
     return decorator
-
-
-def admin_required(f):
-    """Декоратор для проверки прав администратора"""
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not validate_admin_token():
-            return jsonify({'success': False, 'error': 'Admin access required'}), 403
-        return f(*args, **kwargs)
-
-    return decorated_function
 
 
 def sanitize_input(data):
@@ -1489,7 +1468,6 @@ def api_send_chat_message():
 
 
 @app.route('/api/admin/couriers', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@admin_required
 @rate_limit(max_requests=30)
 @validate_json_request
 def api_admin_couriers():
@@ -3236,7 +3214,6 @@ def update_delivery_status():
 # ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
 
 @app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
-@admin_required
 @rate_limit(max_requests=30)
 def admin_get_order_details(order_id):
     """Получить детали заказа для админки"""
@@ -3524,7 +3501,6 @@ def assign_courier():
 
 # ========== API ДЛЯ АДМИНА ==========
 @app.route('/api/admin/dashboard', methods=['GET'])
-@admin_required  # <-- ДОБАВЬ ЭТО
 def admin_dashboard():
     db = get_db()
     try:
@@ -4446,7 +4422,6 @@ def get_products_with_discounts():
 
 
 @app.route('/api/admin/products', methods=['GET', 'POST', 'PUT', 'DELETE'])
-@admin_required
 def admin_products():
     db = get_db()
     try:
@@ -4603,7 +4578,6 @@ def admin_products():
 
 
 @app.route('/api/admin/orders', methods=['GET'])
-@admin_required  # <-- ДОБАВЬ ЭТО
 @rate_limit(max_requests=30)
 def api_admin_orders():
     """API для админки - получение заказов"""
@@ -5350,7 +5324,6 @@ def apply_discounts():
         print(f"❌ Ошибка расчета скидок: {e}")
         return jsonify({'error': str(e)}), 500
 @app.route('/api/security/logs', methods=['GET'])
-@admin_required
 def get_security_logs():
     """Получить логи безопасности (только для админа)"""
     try:
@@ -5366,7 +5339,6 @@ def get_security_logs():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/security/clear-failed-logins', methods=['POST'])
-@admin_required
 def clear_failed_logins():
     """Очистить записи о неудачных попытках входа"""
     try:
