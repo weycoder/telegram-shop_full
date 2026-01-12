@@ -4426,6 +4426,25 @@ def admin_products():
     db = get_db()
     try:
         if request.method == 'GET':
+            # Проблема: нужно добавить поддержку весовых товаров
+            products = db.execute('''
+                                  SELECT p.*,
+                                         pc.name as category_name,
+                                         CASE
+                                             WHEN p.product_type = 'weight' AND p.stock_weight > 0 THEN p.stock_weight
+                                             ELSE p.stock
+                                             END as display_stock,
+                                         CASE
+                                             WHEN p.product_type = 'weight' AND p.price_per_kg > 0 THEN p.price_per_kg
+                                             ELSE p.price
+                                             END as display_price
+                                  FROM products p
+                                           LEFT JOIN product_categories pc ON p.category_id = pc.id
+                                  ORDER BY p.created_at DESC
+                                  ''').fetchall()
+
+            return jsonify([dict(product) for product in products])
+        if request.method == 'GET':
             products = db.execute('SELECT * FROM products ORDER BY created_at DESC').fetchall()
             return jsonify([dict(product) for product in products])
 
@@ -4576,7 +4595,6 @@ def admin_products():
     finally:
         db.close()
 
-
 @app.route('/api/admin/orders', methods=['GET'])
 @rate_limit(max_requests=30)
 def api_admin_orders():
@@ -4586,15 +4604,19 @@ def api_admin_orders():
 
         # Получаем все заказы с информацией о курьере
         orders = db.execute('''
-                            SELECT o.*,
-                                   a.status    as assignment_status,
-                                   c.full_name as courier_name,
-                                   c.phone     as courier_phone
-                            FROM orders o
-                                     LEFT JOIN order_assignments a ON o.id = a.order_id
-                                     LEFT JOIN couriers c ON a.courier_id = c.id
-                            ORDER BY o.created_at DESC LIMIT 100
-                            ''').fetchall()
+            SELECT o.*,
+                   a.status    as assignment_status,
+                   c.full_name as courier_name,
+                   c.phone     as courier_phone,
+                   (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
+            FROM orders o
+            LEFT JOIN order_assignments a ON o.id = a.order_id
+            LEFT JOIN couriers c ON a.courier_id = c.id
+            ORDER BY o.created_at DESC LIMIT 100
+        ''').fetchall()
+
+        if not orders:
+            return jsonify([])  # Возвращаем пустой массив вместо объекта с ошибкой
 
         orders_list = []
         for order in orders:
@@ -4602,7 +4624,10 @@ def api_admin_orders():
 
             # Парсим items
             try:
-                order_dict['items'] = json.loads(order_dict['items']) if order_dict.get('items') else []
+                if order_dict.get('items'):
+                    order_dict['items'] = json.loads(order_dict['items'])
+                else:
+                    order_dict['items'] = []
             except:
                 order_dict['items'] = []
 
@@ -4612,10 +4637,6 @@ def api_admin_orders():
                     order_dict['delivery_address'] = json.loads(order_dict['delivery_address'])
                 except:
                     order_dict['delivery_address'] = {}
-
-            # Добавляем поле для отображения
-            order_dict['total_with_delivery'] = float(order_dict.get('total_price', 0)) + float(
-                order_dict.get('delivery_cost', 0))
 
             # Форматируем дату
             if order_dict.get('created_at'):
@@ -4627,15 +4648,14 @@ def api_admin_orders():
 
             orders_list.append(order_dict)
 
-        return jsonify(orders_list)
+        return jsonify(orders_list)  # Возвращаем массив
 
     except Exception as e:
         print(f"❌ Ошибка получения заказов для админки: {e}")
-        return jsonify([]), 500
+        return jsonify([])  # Возвращаем пустой массив при ошибке
     finally:
         if 'db' in locals():
             db.close()
-
 
 @app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
 def admin_manage_categories():
