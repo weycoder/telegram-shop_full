@@ -4,7 +4,7 @@ import json
 import uuid
 import requests
 import secrets
-import time 
+import time
 import telebot
 import telegram
 from flask import Flask, render_template, jsonify, request, send_from_directory
@@ -885,17 +885,6 @@ def init_db():
 
         # ========== ДОБАВЛЯЕМ ТЕСТОВЫЕ ДАННЫЕ ==========
 
-        # 1. Курьеры
-        if cursor.execute("SELECT COUNT(*) FROM couriers").fetchone()[0] == 0:
-            cursor.executemany('''
-                               INSERT INTO couriers (username, password, full_name, phone, vehicle_type)
-                               VALUES (?, ?, ?, ?, ?)
-                               ''', [
-                                   ('courier1', '123456', 'Иван Курьеров', '+79991112233', 'car'),
-                                   ('courier2', '123456', 'Петр Доставкин', '+79992223344', 'bike'),
-                                   ('courier3', '123456', 'Сергей Экспрессов', '+79993334455', 'car')
-                               ])
-
         # 2. Категории
         if cursor.execute("SELECT COUNT(*) FROM product_categories").fetchone()[0] == 0:
             test_categories = [
@@ -925,50 +914,6 @@ def init_db():
                                                                icon, color, seo_title, seo_description, seo_keywords)
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                ''', test_categories)
-
-        # 3. Скидки
-        if cursor.execute("SELECT COUNT(*) FROM discounts").fetchone()[0] == 0:
-            test_discounts = [
-                # name, discount_type, value, min_order_amount, apply_to, target_category, target_product_id, start_date, end_date, is_active
-                ('Летняя распродажа', 'percentage', 15.00, 1000.00, 'all', None, None,
-                 '2025-06-01 00:00:00', '2025-08-31 23:59:59', 1),
-                ('Скидка на телефоны', 'percentage', 10.00, 0.00, 'category', 'Телефоны', None,
-                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1),
-                ('Фиксированная скидка', 'fixed', 5000.00, 20000.00, 'all', None, None,
-                 None, None, 1),
-                ('Бесплатная доставка', 'free_delivery', 0.00, 1000.00, 'all', None, None,
-                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1),
-                ('Скидка на аксессуары', 'percentage', 20.00, 0.00, 'category', 'Аксессуары', None,
-                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1)
-            ]
-            cursor.executemany('''
-                               INSERT INTO discounts (name, discount_type, value, min_order_amount, apply_to,
-                                                      target_category, target_product_id, start_date, end_date,
-                                                      is_active)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                               ''', test_discounts)
-
-        # 4. Промокоды
-        if cursor.execute("SELECT COUNT(*) FROM promo_codes").fetchone()[0] == 0:
-            test_promo_codes = [
-                # code, discount_type, value, usage_limit, used_count, min_order_amount, start_date, end_date, is_active, one_per_customer, exclude_sale_items
-                ('SUMMER2025', 'percentage', 20.00, 100, 0, 0.00,
-                 '2025-06-01 00:00:00', '2025-08-31 23:59:59', 1, 0, 0),
-                ('WELCOME10', 'percentage', 10.00, 1000, 0, 0.00,
-                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1, 1, 0),
-                ('FREESHIP', 'free_delivery', 0.00, 500, 0, 0.00,
-                 None, None, 1, 0, 0),
-                ('SALE5000', 'fixed', 5000.00, 200, 0, 50000.00,
-                 '2025-01-01 00:00:00', '2025-12-31 23:59:59', 1, 0, 1),
-                ('NEWYEAR2025', 'percentage', 25.00, 50, 0, 5000.00,
-                 '2024-12-20 00:00:00', '2025-01-10 23:59:59', 1, 1, 0)
-            ]
-            cursor.executemany('''
-                               INSERT INTO promo_codes (code, discount_type, value, usage_limit, used_count,
-                                                        min_order_amount, start_date, end_date, is_active,
-                                                        one_per_customer, exclude_sale_items)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                               ''', test_promo_codes)
 
         # 5. Товары (штучные и весовые)
         if cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
@@ -1004,7 +949,7 @@ def init_db():
         # 6. Точки самовывоза
         if cursor.execute("SELECT COUNT(*) FROM pickup_points").fetchone()[0] == 0:
             pickup_points = [
-                ('Смофф Щербинка', 'ул. Любучанский переулок 1к3 ', '09:00-22:00', '+7 (929) 544-95-88', None, None)
+                ('Смоф Щербинка', 'ул. Любучанский переулок 1к3 ', '09:00-22:00', '+7 (929) 544-95-88', None, None)
             ]
             cursor.executemany('''
                                INSERT INTO pickup_points (name, address, working_hours, phone, latitude, longitude)

@@ -1838,7 +1838,7 @@ async def courier_take_order(user, query, order_id):
                             f"4. Подтвердите доставку с фото",
                             parse_mode='Markdown',
                             reply_markup=InlineKeyboardMarkup([[
-                                InlineKeyboardButton("🚀 КУРЬЕР ПАНЕЛЬ", callback_data="courier_panel"),
+                                InlineKeyboardButton("🚀 КУРЬЕР ПАНЕЛЬ", url="https://telegram-shop-full.onrender.com/courier"),
                                 InlineKeyboardButton("📦 Детали заказа", callback_data=f"courier_details_{order_id}")
                             ]])
                         )
