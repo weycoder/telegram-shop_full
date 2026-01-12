@@ -206,8 +206,6 @@ class AdminPanel {
         }, 50);
     }
 
-
-
     refreshCurrentPage() {
         if (this.currentPage === 'dashboard') {
             this.loadDashboardData();
@@ -239,8 +237,7 @@ class AdminPanel {
             this.showLoading(true);
             console.log('📥 Загрузка товаров...');
 
-            const response = await fetch('/api/admin/products');
-
+            const response = await fetch('/api/admin/products/list');
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
