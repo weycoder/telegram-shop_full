@@ -22,6 +22,8 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['DATABASE'] = 'shop.db'
 app.config['UPLOAD_FOLDER'] = 'webapp/static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', secrets.token_hex(32))
+API_KEY = os.environ.get('API_KEY', secrets.token_hex(32))
 
 # ========== КОНФИГУРАЦИЯ ДЛЯ TELEGRAM БОТА ==========
 TELEGRAM_BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -35,6 +37,88 @@ if not os.path.exists(UPLOAD_PATH):
     os.makedirs(UPLOAD_PATH)
     print(f"📁 Создана папка для загрузок: {UPLOAD_PATH}")
 
+
+def validate_admin_token():
+    """Проверка токена администратора"""
+    token = request.headers.get('X-Admin-Token')
+    if not token:
+        return False
+    return secrets.compare_digest(token, ADMIN_TOKEN)
+
+
+def rate_limit(max_per_minute=60):
+    """Декоратор для ограничения запросов"""
+
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            ip = request.remote_addr
+
+            # Проверка блокировки
+            if ip in _ip_blocks and _ip_blocks[ip] > time.time():
+                return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+
+            current_time = time.time()
+
+            # Очистка старых запросов
+            _request_counts[ip] = [t for t in _request_counts[ip]
+                                   if current_time - t < 60]
+
+            # Проверка лимита
+            if len(_request_counts[ip]) >= max_per_minute:
+                _ip_blocks[ip] = current_time + 300  # Блокировка на 5 минут
+                return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+
+            _request_counts[ip].append(current_time)
+            return f(*args, **kwargs)
+
+        return decorated_function
+
+    return decorator
+
+
+def admin_required(f):
+    """Декоратор для проверки прав администратора"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not validate_admin_token():
+            return jsonify({'success': False, 'error': 'Admin access required'}), 403
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def sanitize_input(data):
+    """Очистка входных данных от опасных символов"""
+    if isinstance(data, str):
+        # Удаляем опасные SQL символы
+        data = data.replace("'", "''").replace('"', '""')
+        # Удаляем опасные HTML/JS символы
+        data = data.replace('<', '&lt;').replace('>', '&gt;')
+        data = data.replace('&', '&amp;')
+    elif isinstance(data, dict):
+        return {k: sanitize_input(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_input(item) for item in data]
+    return data
+
+
+def validate_json_request(f):
+    """Валидация JSON запросов"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.method in ['POST', 'PUT', 'PATCH']:
+            if not request.is_json:
+                return jsonify({'success': False, 'error': 'Content-Type must be application/json'}), 400
+            try:
+                request.get_json()
+            except:
+                return jsonify({'success': False, 'error': 'Invalid JSON'}), 400
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -884,30 +968,12 @@ def init_db():
             test_products = [
                 # ШТУЧНЫЕ ТОВАРЫ
                 # name, description, price, image_url, category, stock, product_type, unit, weight_unit, price_per_kg, min_weight, max_weight, step_weight, stock_weight
-                ('iPhone 15 Pro', 'Новый Apple смартфон с камерой 48 Мп', 99999,
-                 'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/iphone-15-pro-finish-select-202309-6-7inch?wid=5120&hei=2880&fmt=webp&qlt=70&.v=1693009279096',
-                 'Телефоны', 10, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
-                ('Samsung Galaxy S23', 'Флагман Samsung с камерой 200 Мп', 89999,
-                 'https://images.samsung.com/is/image/samsung/p6pim/ru/2302/gallery/ru-galaxy-s23-s911-sm-s911bzadeub-534866168',
-                 'Телефоны', 15, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
                 ('Наушники Sony WH-1000XM5', 'Беспровные с шумоподавлением, 30 часов работы', 34999,
                  'https://sony.scene7.com/is/image/sonyglobalsolutions/WH-1000XM5-B_primary-image',
                  'Аксессуары', 20, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
                 ('MacBook Air M2', 'Ультратонкий ноутбук Apple, 13.6 дюймов', 129999,
                  'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/macbook-air-midnight-select-20220606',
                  'Ноутбуки', 8, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
-                ('Клавиатура Logitech', 'Игровая клавиатура с RGB подсветкой', 8999,
-                 'https://resource.logitechg.com/w_386,ar_1.0,c_limit,f_auto,q_auto,dpr_2.0/d_transparent.gif/content/dam/gaming/en/products/pro-x/pro-x-keyboard-gallery-1.png',
-                 'Аксессуары', 30, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
-                ('Мышь Razer DeathAdder', 'Игровая мышь, 20000 DPI, 8 кнопок', 6999,
-                 'https://assets2.razerzone.com/images/og-image/razer-deathadder-v3-pro-og-1200x630.jpg',
-                 'Аксессуары', 25, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
-                ('Монитор Samsung 27"', 'Игровой монитор 144 Гц, 4K', 45999,
-                 'https://images.samsung.com/is/image/samsung/p6pim/ru/ls27bg402eixci/gallery/ru-odyssey-g4-gaming-ls27bg402eixci-533006960',
-                 'Мониторы', 12, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
-                ('Ноутбук ASUS ROG', 'Игровой ноутбук, RTX 4060, 16 ГБ ОЗУ', 149999,
-                 'https://dlcdnwebimgs.asus.com/gain/CFCAFBB1-3CF8-4036-B9F0-79D36C0725E8/w1000/h732',
-                 'Ноутбуки', 7, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
 
                 # ВЕСОВЫЕ ТОВАРЫ
                 ('Яблоки Голден', 'Сладкие желтые яблоки', 0,
@@ -918,28 +984,7 @@ def init_db():
                  'Фрукты', 0, 'weight', 'кг', 'кг', 129.90, 0.1, 3.0, 0.1, 30.0),
                 ('Помидоры', 'Свежие красные помидоры', 0,
                  'https://cdn.pixabay.com/photo/2014/04/10/11/24/tomatoes-320860_1280.jpg',
-                 'Овощи', 0, 'weight', 'кг', 'кг', 189.90, 0.1, 5.0, 0.1, 40.0),
-                ('Картофель', 'Молодой картофель', 0,
-                 'https://cdn.pixabay.com/photo/2014/08/06/20/32/potatoes-411975_1280.jpg',
-                 'Овощи', 0, 'weight', 'кг', 'кг', 79.90, 0.5, 10.0, 0.5, 100.0),
-                ('Куриное филе', 'Свежее куриное филе', 0,
-                 'https://cdn.pixabay.com/photo/2018/04/13/17/14/vegetable-skewer-3317060_1280.jpg',
-                 'Мясо', 0, 'weight', 'кг', 'кг', 449.90, 0.1, 3.0, 0.1, 25.0),
-                ('Говядина', 'Говядина вырезка', 0,
-                 'https://cdn.pixabay.com/photo/2018/02/25/21/21/meat-3181738_1280.jpg',
-                 'Мясо', 0, 'weight', 'кг', 'кг', 899.90, 0.1, 2.0, 0.1, 15.0),
-                ('Клубника', 'Свежая клубника', 0,
-                 'https://cdn.pixabay.com/photo/2017/11/18/17/09/strawberry-2960533_1280.jpg',
-                 'Фрукты', 0, 'weight', 'кг', 'кг', 399.90, 0.1, 2.0, 0.05, 10.0),
-                ('Виноград', 'Виноград зеленый без косточек', 0,
-                 'https://cdn.pixabay.com/photo/2016/07/22/09/59/grapes-1534304_1280.jpg',
-                 'Фрукты', 0, 'weight', 'кг', 'кг', 299.90, 0.1, 2.0, 0.1, 20.0),
-                ('Морковь', 'Свежая морковь', 0,
-                 'https://cdn.pixabay.com/photo/2017/06/09/17/51/carrots-2387394_1280.jpg',
-                 'Овощи', 0, 'weight', 'кг', 'кг', 89.90, 0.1, 5.0, 0.1, 60.0),
-                ('Лук репчатый', 'Репчатый лук', 0,
-                 'https://cdn.pixabay.com/photo/2016/10/07/14/11/onion-1721872_1280.jpg',
-                 'Овощи', 0, 'weight', 'кг', 'кг', 69.90, 0.1, 5.0, 0.1, 80.0)
+                 'Овощи', 0, 'weight', 'кг', 'кг', 189.90, 0.1, 5.0, 0.1, 40.0)
             ]
 
             cursor.executemany('''
@@ -952,9 +997,7 @@ def init_db():
         # 6. Точки самовывоза
         if cursor.execute("SELECT COUNT(*) FROM pickup_points").fetchone()[0] == 0:
             pickup_points = [
-                ('Магазин на Ленина', 'ул. Ленина, 15', '09:00-21:00', '+7 (999) 123-45-67', None, None),
-                ('ТЦ Центральный', 'пр. Мира, 42, 2 этаж', '10:00-22:00', '+7 (999) 765-43-21', None, None),
-                ('Склад на Заводской', 'ул. Заводская, 7', '08:00-20:00', '+7 (999) 555-55-55', None, None)
+                ('Смофф Щербинка', 'ул. Любучанский переулок 1к3 ', '09:00-22:00', '+7 (929) 544-95-88', None, None)
             ]
             cursor.executemany('''
                                INSERT INTO pickup_points (name, address, working_hours, phone, latitude, longitude)
@@ -982,20 +1025,103 @@ def init_db():
 
         db.commit()
         db.close()
-        print("✅ База данных инициализирована с полной поддержкой весовых товаров!")
-        print("📊 Создано:")
-        print("   - 3 курьера")
-        print("   - 9 категорий товаров")
-        print("   - 5 скидок")
-        print("   - 5 промокодов")
-        print("   - 10 штучных товаров")
-        print("   - 10 весовых товаров")
-        print("   - 3 точки самовывоза")
 
 init_db()
 
 
+def init_security():
+    """Инициализация таблиц безопасности"""
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('''
+                   CREATE TABLE IF NOT EXISTS security_logs
+                   (
+                       id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       ip_address
+                       TEXT
+                       NOT
+                       NULL,
+                       endpoint
+                       TEXT
+                       NOT
+                       NULL,
+                       method
+                       TEXT
+                       NOT
+                       NULL,
+                       user_agent
+                       TEXT,
+                       created_at
+                       TIMESTAMP
+                       DEFAULT
+                       CURRENT_TIMESTAMP
+                   )
+                   ''')
+
+    cursor.execute('''
+                   CREATE TABLE IF NOT EXISTS failed_logins
+                   (
+                       id
+                       INTEGER
+                       PRIMARY
+                       KEY
+                       AUTOINCREMENT,
+                       username
+                       TEXT,
+                       ip_address
+                       TEXT
+                       NOT
+                       NULL,
+                       attempt_time
+                       TIMESTAMP
+                       DEFAULT
+                       CURRENT_TIMESTAMP
+                   )
+                   ''')
+
+    db.commit()
+    db.close()
+    print("✅ Таблицы безопасности созданы")
+
+
+# Вызовите после init_db()
+init_security()
+
+
 # ========== НОВЫЕ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ ==========
+@app.before_request
+def security_middleware():
+    """Проверки безопасности перед каждым запросом"""
+    # Блокировка опасных User-Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if any(x in user_agent.lower() for x in ['sqlmap', 'nikto', 'hydra', 'metasploit']):
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+    # Защита от базовых атак
+    path = request.path.lower()
+    if any(x in path for x in ['/php', '/admin/', '/wp-', '/cgi-bin', '/.git', '/.env']):
+        return jsonify({'success': False, 'error': 'Not found'}), 404
+
+    # Логирование запросов к админке
+    if '/api/admin/' in request.path:
+        db = get_db()
+        try:
+            db.execute('''
+                       INSERT INTO security_logs (ip_address, endpoint, method, user_agent)
+                       VALUES (?, ?, ?, ?)
+                       ''', (request.remote_addr, request.path, request.method, user_agent))
+            db.commit()
+        except:
+            pass
+        finally:
+            db.close()
+
+
 
 
 @app.route('/api/bot/get-orders/<int:telegram_id>', methods=['GET'])
@@ -1411,6 +1537,9 @@ def api_send_chat_message():
 
 
 @app.route('/api/admin/couriers', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@admin_required
+@rate_limit(max_per_minute=30)
+@validate_json_request
 def api_admin_couriers():
     """Управление курьерами - получение списка, создание, обновление, удаление"""
     db = get_db()
@@ -2326,21 +2455,10 @@ def get_categories_tree():
 
 
 @app.route('/api/create-order', methods=['POST'])
+@rate_limit(max_per_minute=20)
+@validate_json_request
 def api_create_order():
     data = request.json
-
-    print("=" * 50)
-    print("📦 ПОЛУЧЕН ЗАПРОС НА СОЗДАНИЕ ЗАКАЗА")
-    print("=" * 50)
-    print(f"📋 user_id: {data.get('user_id', 'НЕТ!')}")
-    print(f"👤 username: {data.get('username', 'НЕТ!')}")
-    print(f"📦 items: {len(data.get('items', []))} товаров")
-    print(f"💰 total: {data.get('total', 0)} руб. (тип: {type(data.get('total'))})")
-    print(f"🚚 delivery_type: {data.get('delivery_type')}")
-    print(f"💵 cash_payment: {data.get('cash_payment', {})}")
-    print(f"💳 payment_method: {data.get('payment_method', 'cash')}")
-    print("=" * 50)
-
     db = get_db()
     order_id = None  # Объявляем переменную заранее
 
@@ -2884,11 +3002,25 @@ def courier_take_order():
 
 # ========== API ДЛЯ КУРЬЕРОВ ==========
 @app.route('/api/courier/login', methods=['POST'])
+@rate_limit(max_per_minute=10)
+@validate_json_request
 def courier_login():
     try:
         data = request.json
         username = data.get('username')
         password = data.get('password')
+
+        ip = request.remote_addr
+        db = get_db()
+        failed_attempts = db.execute('''
+                                     SELECT COUNT(*)
+                                     FROM failed_logins
+                                     WHERE ip_address = ?
+                                       AND attempt_time > datetime('now', '-5 minutes')
+                                     ''', (ip,)).fetchone()[0]
+
+        if failed_attempts > 5:
+            return jsonify({'success': False, 'error': 'Too many failed attempts. Try again later.'}), 429
 
         if not username or not password:
             return jsonify({'success': False, 'error': 'Введите логин и пароль'}), 400
@@ -2902,6 +3034,11 @@ def courier_login():
 
         if courier['password'] != password:
             return jsonify({'success': False, 'error': 'Неверный пароль'}), 401
+
+        if not courier or courier['password'] != password:
+            db.execute('INSERT INTO failed_logins (username, ip_address) VALUES (?, ?)',
+                       (username, ip))
+            db.commit()
 
         courier_data = dict(courier)
         courier_data.pop('password', None)
@@ -3148,6 +3285,8 @@ def update_delivery_status():
 # ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
 
 @app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
+@admin_required
+@rate_limit(max_per_minute=60)
 def admin_get_order_details(order_id):
     """Получить детали заказа для админки"""
     db = get_db()
@@ -3187,6 +3326,7 @@ def admin_get_order_details(order_id):
 
 
 @app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
+
 def admin_update_order_status(order_id):
     """Изменить статус заказа в админке - БЕЗ УВЕДОМЛЕНИЙ"""
     db = get_db()
@@ -5202,8 +5342,61 @@ def apply_discounts():
     except Exception as e:
         print(f"❌ Ошибка расчета скидок: {e}")
         return jsonify({'error': str(e)}), 500
+@app.route('/api/security/logs', methods=['GET'])
+@admin_required
+def get_security_logs():
+    """Получить логи безопасности (только для админа)"""
+    try:
+        db = get_db()
+        logs = db.execute('''
+            SELECT * FROM security_logs 
+            ORDER BY created_at DESC 
+            LIMIT 100
+        ''').fetchall()
+        db.close()
+        return jsonify([dict(log) for log in logs])
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-# ========== ЗАПУСК ==========
+@app.route('/api/security/clear-failed-logins', methods=['POST'])
+@admin_required
+def clear_failed_logins():
+    """Очистить записи о неудачных попытках входа"""
+    try:
+        db = get_db()
+        db.execute('DELETE FROM failed_logins WHERE attempt_time < datetime("now", "-1 hour")')
+        db.commit()
+        db.close()
+        return jsonify({'success': True, 'message': 'Cleared old failed login attempts'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========== ХЕЛПЕР ДЛЯ БЕЗОПАСНЫХ ЗАПРОСОВ ==========
+
+def execute_safe_query(query, params=()):
+    """Безопасное выполнение SQL запроса"""
+    db = get_db()
+    try:
+        cursor = db.execute(query, params)
+        result = cursor.fetchall()
+        return [dict(row) for row in result]
+    except Exception as e:
+        print(f"❌ SQL Error: {e}")
+        return []
+    finally:
+        db.close()
+
+
+# ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
 if __name__ == '__main__':
+    # Настройки безопасности
+    app.config.update(
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        PERMANENT_SESSION_LIFETIME=1800,
+        MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB максимум
+    )
+
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)  # debug=False для продакшена

@@ -2778,6 +2778,40 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
+async def delete_courier_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для удаления курьера /delete_courier <id>"""
+    user = update.effective_user
+
+    if not await check_admin(user.id):
+        await update.message.reply_text("❌ Только администратор может использовать эту команду")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "📝 Использование: /delete_courier <id>\n"
+            "Пример: /delete_courier 1"
+        )
+        return
+
+    courier_id = context.args[0]
+
+    try:
+        response = requests.delete(f"{API_BASE_URL}/api/admin/couriers/{courier_id}", timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                await update.message.reply_text(f"✅ Курьер #{courier_id} удален")
+            else:
+                await update.message.reply_text(f"❌ Ошибка: {data.get('error', 'Не удалось удалить курьера')}")
+        else:
+            await update.message.reply_text(f"❌ Ошибка сервера: {response.status_code}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+
+
+
 # ========== ЗАПУСК БОТА ==========
 
 async def main_async():
@@ -2805,6 +2839,7 @@ async def main_async():
     application.add_handler(CommandHandler("admin", admin_panel))
     application.add_handler(CommandHandler("courier", courier_panel_command))
     application.add_handler(CommandHandler("chat", chat_command))
+    application.add_handler(CommandHandler("dc", delete_courier_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     application.add_handler(CommandHandler("myorders", my_orders))
     application.add_handler(CallbackQueryHandler(button_handler))

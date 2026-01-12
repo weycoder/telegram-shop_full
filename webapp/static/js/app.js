@@ -3687,7 +3687,182 @@ async editOrder(orderId) {
         `;
         document.body.appendChild(errorDiv);
     }
+
+
+    // ========== ДОПОЛНИТЕЛЬНАЯ ЗАЩИТА НА КЛИЕНТСКОЙ СТОРОНЕ ==========
+
+    // 1. Защита от повторной отправки форм
+    function setupFormProtection() {
+        const forms = document.querySelectorAll('form, button[type="submit"], .btn-primary');
+        forms.forEach(form => {
+            form.addEventListener('click', function(e) {
+                const btn = e.target.closest('button');
+                if (btn && (btn.type === 'submit' || btn.classList.contains('btn-primary'))) {
+                    // Блокируем повторные нажатия на 3 секунды
+                    if (btn.dataset.processing === 'true') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+
+                    btn.dataset.processing = 'true';
+                    btn.disabled = true;
+
+                    // Восстанавливаем через 3 секунды
+                    setTimeout(() => {
+                        btn.dataset.processing = 'false';
+                        btn.disabled = false;
+                    }, 3000);
+                }
+            });
+        });
+    }
+
+    // 2. Защита от XSS в отображаемых данных
+    function sanitizeHTML(text) {
+        if (!text) return '';
+
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 3. Безопасное обновление контента
+    TelegramShop.prototype.safeUpdateHTML = function(elementId, content) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+
+        // Используем textContent вместо innerHTML где возможно
+        if (content && typeof content === 'string' && !content.includes('<')) {
+            element.textContent = content;
+        } else {
+            // Для HTML контента используем sanitize
+            element.innerHTML = sanitizeHTML(content);
+        }
+    };
+
+    // 4. Защита localStorage
+    TelegramShop.prototype.secureStorage = {
+        set: function(key, value) {
+            try {
+                const encrypted = btoa(encodeURIComponent(JSON.stringify(value)));
+                localStorage.setItem(key, encrypted);
+                return true;
+            } catch (e) {
+                console.error('Storage error:', e);
+                return false;
+            }
+        },
+
+        get: function(key) {
+            try {
+                const encrypted = localStorage.getItem(key);
+                if (!encrypted) return null;
+
+                const decrypted = JSON.parse(decodeURIComponent(atob(encrypted)));
+                return decrypted;
+            } catch (e) {
+                console.error('Storage read error:', e);
+                return null;
+            }
+        },
+
+        remove: function(key) {
+            try {
+                localStorage.removeItem(key);
+                return true;
+            } catch (e) {
+                console.error('Storage remove error:', e);
+                return false;
+            }
+        }
+    };
+
+    // 5. Проверка целостности данных
+    TelegramShop.prototype.validateCartData = function(cart) {
+        if (!Array.isArray(cart)) return false;
+
+        return cart.every(item => {
+            return typeof item === 'object' &&
+                   'id' in item &&
+                   'name' in item &&
+                   'price' in item &&
+                   'quantity' in item &&
+                   Number.isFinite(item.price) &&
+                   Number.isInteger(item.quantity) &&
+                   item.quantity > 0 &&
+                   item.quantity <= 100; // Максимум 100 штук одного товара
+        });
+    };
+
+    // 6. Обработка ошибок сети
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+        return originalFetch(url, options)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response;
+            })
+            .catch(error => {
+                console.error('Network error:', error);
+
+                // Показываем пользователю понятное сообщение
+                if (window.shop && window.shop.showNotification) {
+                    if (error.message.includes('Failed to fetch')) {
+                        window.shop.showNotification('❌ Ошибка соединения с сервером', 'error');
+                    } else if (error.message.includes('429')) {
+                        window.shop.showNotification('⚠️ Слишком много запросов. Подождите немного.', 'warning');
+                    } else if (error.message.includes('403')) {
+                        window.shop.showNotification('⛔ Доступ запрещен', 'error');
+                    }
+                }
+
+                throw error;
+            });
+    };
+
+    // 7. Инициализация защиты при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        // Запускаем защиту от повторной отправки
+        setTimeout(setupFormProtection, 1000);
+
+        // Защита от копирования важных данных (опционально)
+        document.addEventListener('copy', function(e) {
+            if (window.getSelection().toString().includes('token') ||
+                window.getSelection().toString().includes('password')) {
+                e.preventDefault();
+                if (window.shop && window.shop.showNotification) {
+                    window.shop.showNotification('⚠️ Копирование защищенных данных запрещено', 'warning');
+                }
+            }
+        });
+
+        // Логирование важных действий (только в dev режиме)
+        if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+            console.log('%c🔒 Режим безопасности активен', 'color: #4CAF50; font-weight: bold;');
+        }
+    });
+
+    // 8. Дополнительные проверки для телеграм веб-апп
+    if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.onEvent('viewportChanged', function(e) {
+            // Защита от изменения размера окна (может быть признаком атаки)
+            if (e.height < 100 || e.width < 100) {
+                console.warn('Подозрительное изменение размера окна');
+            }
+        });
+
+        // Проверка данных инициализации
+        if (!Telegram.WebApp.initData || Telegram.WebApp.initData.length < 10) {
+            console.warn('Недостаточно данных инициализации Telegram WebApp');
+        }
+    }
 }
+
+
+
 
 let shopInstance = null;
 const styleSheet = document.createElement('style');
