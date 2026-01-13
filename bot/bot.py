@@ -2274,6 +2274,99 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+
+    # Добавьте этот блок в функцию button_handler после других обработчиков callback_data:
+
+    # Обработка кнопки "Заказ готов" для самовывоза
+    elif data.startswith("order_ready_"):
+        order_id = data.replace("order_ready_", "")
+
+        try:
+            # Вызываем API для пометки заказа как готового
+            response = requests.post(
+                f"{API_BASE_URL}/api/admin/orders/{order_id}/ready-for-pickup",
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    await query.edit_message_text(
+                        f"✅ *Заказ #{order_id} помечен как готовый!*\n\n"
+                        f"Клиент получил уведомление, что заказ готов к выдаче.",
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup([
+                            [
+                                InlineKeyboardButton("✅ Заказ выдан", callback_data=f"order_completed_{order_id}"),
+                                InlineKeyboardButton("📋 Детали заказа", callback_data=f"admin_order_{order_id}")
+                            ],
+                            [
+                                InlineKeyboardButton("🏠 В панель", callback_data="admin_panel")
+                            ]
+                        ])
+                    )
+                else:
+                    await query.edit_message_text(
+                        f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}",
+                        parse_mode='Markdown'
+                    )
+            else:
+                await query.edit_message_text(
+                    f"❌ Ошибка сервера: {response.status_code}",
+                    parse_mode='Markdown'
+                )
+
+        except Exception as e:
+            logger.error(f"Ошибка пометки заказа как готового: {e}")
+            await query.edit_message_text(
+                "❌ Ошибка пометки заказа как готового",
+                parse_mode='Markdown'
+            )
+        return
+
+    # Обработка кнопки "Заказ выдан" для самовывоза
+    elif data.startswith("order_completed_"):
+        order_id = data.replace("order_completed_", "")
+
+        try:
+            # Помечаем заказ как завершенный
+            response = requests.put(
+                f"{API_BASE_URL}/api/admin/orders/{order_id}/status",
+                json={'status': 'completed'},
+                timeout=5
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    await query.edit_message_text(
+                        f"✅ *Заказ #{order_id} завершен!*\n\n"
+                        f"Заказ успешно выдан клиенту.",
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("📋 Детали заказа", callback_data=f"admin_order_{order_id}")],
+                            [InlineKeyboardButton("🏠 В панель", callback_data="admin_panel")]
+                        ])
+                    )
+                else:
+                    await query.edit_message_text(
+                        f"❌ Ошибка: {result.get('error', 'Неизвестная ошибка')}",
+                        parse_mode='Markdown'
+                    )
+            else:
+                await query.edit_message_text(
+                    f"❌ Ошибка сервера: {response.status_code}",
+                    parse_mode='Markdown'
+                )
+
+        except Exception as e:
+            logger.error(f"Ошибка завершения заказа: {e}")
+            await query.edit_message_text(
+                "❌ Ошибка завершения заказа",
+                parse_mode='Markdown'
+            )
+        return
+
     elif data.startswith("track_"):
         order_id = data.replace("track_", "")
 
@@ -2809,10 +2902,7 @@ async def delete_courier_command(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
-
-
-
-# ========== ЗАПУСК БОТА ==========
+ # ========== ЗАПУСК БОТА ==========
 
 async def main_async():
     """Асинхронная функция запуска бота"""
