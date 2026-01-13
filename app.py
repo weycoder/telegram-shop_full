@@ -2842,17 +2842,25 @@ def send_admin_order_notification(order_id):
         order_data = dict(order)
         db.close()
 
-        # Разбираем ID админов
+        # Получаем ID админов
         admin_ids = []
-        for admin_id in ADMIN_TELEGRAM_IDS.split(','):
-            admin_id = admin_id.strip()
-            if admin_id and admin_id.isdigit():
-                admin_ids.append(int(admin_id))
-
-        print(f"   Найдено админов: {admin_ids}")
+        if ADMIN_TELEGRAM_IDS:
+            try:
+                if isinstance(ADMIN_TELEGRAM_IDS, str):
+                    for admin_id in ADMIN_TELEGRAM_IDS.split(','):
+                        admin_id = admin_id.strip()
+                        if admin_id and admin_id.isdigit():
+                            admin_ids.append(int(admin_id))
+                elif isinstance(ADMIN_TELEGRAM_IDS, (int, float)):
+                    admin_ids.append(int(ADMIN_TELEGRAM_IDS))
+                elif isinstance(ADMIN_TELEGRAM_IDS, list):
+                    admin_ids = [int(id) for id in ADMIN_TELEGRAM_IDS if str(id).isdigit()]
+            except Exception as e:
+                print(f"⚠️ Ошибка обработки ADMIN_IDS: {e}")
+                return False
 
         if not admin_ids:
-            print("❌ Нет валидных ID админов")
+            print("⚠️ Нет валидных ID админов")
             return False
 
         # Парсим товары
@@ -3064,14 +3072,9 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
                     {
                         "text": "🛒 ОТКРЫТЬ МАГАЗИН",
                         "web_app": {"url": webapp_url}
-                    }
-                ],
-                [
-                    {"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"},
-                    {"text": "💬 ЗАДАТЬ ВОПРОС", "callback_data": f"ask_question_{order_id}"}
-                ],
-                [
-                    {"text": "📍 КАК ДОБРАТЬСЯ", "callback_data": f"get_directions_{order_id}"}
+                    },
+                    {"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"}
+
                 ]
             ]
         }
@@ -3115,8 +3118,28 @@ def send_admin_pickup_notification(order_id):
             print("❌ BOT_TOKEN не установлен")
             return False
 
-        if not ADMIN_TELEGRAM_IDS:
-            print("⚠️ ADMIN_IDS не установлены, проверь переменные окружения")
+        # Получаем ID админов
+        admin_ids = []
+        if ADMIN_TELEGRAM_IDS:
+            try:
+                # Если ADMIN_TELEGRAM_IDS это строка (несколько ID через запятую)
+                if isinstance(ADMIN_TELEGRAM_IDS, str):
+                    for admin_id in ADMIN_TELEGRAM_IDS.split(','):
+                        admin_id = admin_id.strip()
+                        if admin_id and admin_id.isdigit():
+                            admin_ids.append(int(admin_id))
+                # Если это уже число (один ID)
+                elif isinstance(ADMIN_TELEGRAM_IDS, (int, float)):
+                    admin_ids.append(int(ADMIN_TELEGRAM_IDS))
+                # Если это список
+                elif isinstance(ADMIN_TELEGRAM_IDS, list):
+                    admin_ids = [int(id) for id in ADMIN_TELEGRAM_IDS if str(id).isdigit()]
+            except Exception as e:
+                print(f"⚠️ Ошибка обработки ADMIN_IDS: {e}")
+                return False
+
+        if not admin_ids:
+            print("⚠️ Нет валидных ID админов для отправки уведомлений")
             return False
 
         db = get_db()
@@ -3141,23 +3164,23 @@ def send_admin_pickup_notification(order_id):
         pickup_info = None
         if order_data.get('pickup_point'):
             try:
-                if order_data['pickup_point'].isdigit():
+                # Проверяем, является ли pickup_point числом (ID пункта выдачи)
+                pickup_point_value = order_data['pickup_point']
+                if isinstance(pickup_point_value, str) and pickup_point_value.isdigit():
                     pickup_info = db.execute(
                         'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
-                        (int(order_data['pickup_point']),)
+                        (int(pickup_point_value),)
+                    ).fetchone()
+                elif isinstance(pickup_point_value, (int, float)):
+                    pickup_info = db.execute(
+                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
+                        (int(pickup_point_value),)
                     ).fetchone()
             except Exception as e:
                 print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
                 pickup_info = None
 
         db.close()
-
-        # Разбираем ID админов
-        admin_ids = []
-        for admin_id in ADMIN_TELEGRAM_IDS.split(','):
-            admin_id = admin_id.strip()
-            if admin_id and admin_id.isdigit():
-                admin_ids.append(int(admin_id))
 
         # Парсим товары
         items_list = []
@@ -3180,6 +3203,7 @@ def send_admin_pickup_notification(order_id):
             if pickup_info['phone']:
                 pickup_text += f"   Телефон: {pickup_info['phone']}\n"
         elif order_data.get('pickup_point'):
+            # Если pickup_point это текст (название), а не ID
             pickup_text = f"📍 *Пункт выдачи:* {order_data['pickup_point']}\n"
 
         # Формируем сообщение для админа
