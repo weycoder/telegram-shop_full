@@ -6529,6 +6529,70 @@ def clear_failed_logins():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def handle_order_completed_callback_webhook(call):
+    """Обработка кнопки 'Заказ выдан' через вебхук"""
+    try:
+        order_id = int(call['data'].replace('order_completed_', ''))
+
+        # Обновляем статус заказа
+        db = get_db()
+        db.execute('UPDATE orders SET status = ? WHERE id = ?',
+                   ('completed', order_id))
+        db.commit()
+
+        # Получаем информацию о заказе для отправки уведомления клиенту
+        order = db.execute('''
+                           SELECT o.*, u.username
+                           FROM orders o
+                           LEFT JOIN telegram_users u ON o.user_id = u.telegram_id
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+        db.close()
+
+        if order:
+            telegram_id = order['user_id']
+            if telegram_id:
+                # Отправляем уведомление клиенту, что заказ выдан
+                BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+                if BOT_TOKEN:
+                    message = f"✅ *ЗАКАЗ #{order_id} ВЫДАН*\n\n" \
+                              f"Ваш заказ был успешно выдан. Спасибо за покупку!\n\n" \
+                              f"Если у вас есть вопросы, свяжитесь с нами."
+
+                    url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+                    requests.post(url, json={
+                        'chat_id': int(telegram_id),
+                        'text': message,
+                        'parse_mode': 'Markdown'
+                    }, timeout=5)
+
+        # Ответ админу
+        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        if BOT_TOKEN:
+            # Ответ на callback query
+            answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
+            requests.post(answer_url, json={
+                'callback_query_id': call['id'],
+                'text': f'✅ Заказ #{order_id} помечен как выданный.',
+                'show_alert': True
+            }, timeout=5)
+
+            # Обновляем сообщение админа
+            message = call['message']
+            edit_url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
+            requests.post(edit_url, json={
+                'chat_id': message['chat']['id'],
+                'message_id': message['message_id'],
+                'text': f"✅ *ЗАКАЗ #{order_id} ЗАВЕРШЕН*\n\nЗаказ был выдан клиенту.",
+                'parse_mode': 'Markdown'
+            }, timeout=5)
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        print(f"❌ Ошибка в handle_order_completed_callback_webhook: {e}")
+        return jsonify({'ok': False, 'error': str(e)})
+
 def handle_order_ready_callback_webhook(call):
     """Обработка кнопки 'Заказ готов' через вебхук"""
     try:
@@ -6554,69 +6618,26 @@ def handle_order_ready_callback_webhook(call):
                 'show_alert': True
             }, timeout=5)
 
-            # Обновляем сообщение админа
+            # Обновляем сообщение админа с новыми кнопками
             message = call['message']
-
-            # Получаем обновленную информацию о заказе
-            order = db.execute('''
-                               SELECT o.*,
-                                      (o.total_price + COALESCE(o.delivery_cost, 0) -
-                                       COALESCE(o.discount_amount, 0)) as total_amount
-                               FROM orders o
-                               WHERE o.id = ?
-                               ''', (order_id,)).fetchone()
-
-            db.close()
-
-            if order:
-                order_data = dict(order)
-
-                # Получаем информацию о пункте выдачи
-                pickup_display = order_data.get('pickup_point', '')
-                if order_data.get('pickup_point'):
-                    try:
-                        if str(order_data['pickup_point']).isdigit():
-                            pickup_info = db.execute(
-                                'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
-                                (int(order_data['pickup_point']),)
-                            ).fetchone()
-                            if pickup_info:
-                                pickup_display = f"{pickup_info['name']}\n   📍 Адрес: {pickup_info['address']}"
-                        elif '|' in order_data['pickup_point']:
-                            parts = order_data['pickup_point'].split('|')
-                            if len(parts) >= 2:
-                                pickup_display = f"{parts[1]}\n   📍 Адрес: {parts[2] if len(parts) > 2 else ''}"
-                    except Exception as e:
-                        print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
-
-                # Формируем обновленное сообщение
-                text = f"✅ *ЗАКАЗ #{order_id} ГОТОВ К ВЫДАЧЕ*\n\n"
-                text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
-                text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
-                text += f"📍 *Пункт выдачи:*\n{pickup_display}\n"
-                text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
-                text += f"⏰ *Готов:* {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-                text += f"\n📋 *Клиент получил уведомление о готовности.*"
-
-                edit_url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
-                requests.post(edit_url, json={
-                    'chat_id': message['chat']['id'],
-                    'message_id': message['message_id'],
-                    'text': text,
-                    'parse_mode': 'Markdown',
-                    'reply_markup': json.dumps({
-                        "inline_keyboard": [
-                            [
-                                {"text": "📋 ДЕТАЛИ ЗАКАЗА", "callback_data": f"admin_order_{order_id}"},
-                                {"text": "✅ ВЫДАН", "callback_data": f"order_completed_{order_id}"}
-                            ],
-                            [
-                                {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"},
-                                {"text": "💬 ЧАТ С КЛИЕНТОМ", "callback_data": f"chat_{order_id}"}
-                            ]
+            edit_url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
+            requests.post(edit_url, json={
+                'chat_id': message['chat']['id'],
+                'message_id': message['message_id'],
+                'text': f"✅ *ЗАКАЗ #{order_id} ГОТОВ К ВЫДАЧЕ*\n\nКлиент получил уведомление о готовности заказа.\n\nНажмите '✅ ВЫДАН' когда клиент заберет заказ.",
+                'parse_mode': 'Markdown',
+                'reply_markup': json.dumps({
+                    "inline_keyboard": [
+                        [
+                            {"text": "📋 ДЕТАЛИ ЗАКАЗА", "callback_data": f"admin_order_{order_id}"},
+                            {"text": "✅ ВЫДАН", "callback_data": f"order_completed_{order_id}"}
+                        ],
+                        [
+                            {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"}
                         ]
-                    })
-                }, timeout=5)
+                    ]
+                })
+            }, timeout=5)
 
         return jsonify({'ok': True})
 
@@ -6625,8 +6646,6 @@ def handle_order_ready_callback_webhook(call):
         return jsonify({'ok': False, 'error': str(e)})
 
 # ========== НАСТРОЙКА TELEGRAM WEBHOOK ==========
-
-
 @app.route('/api/telegram-webhook', methods=['POST'])
 def telegram_webhook():
     """Обработчик вебхуков от Telegram"""
@@ -6641,9 +6660,13 @@ def telegram_webhook():
 
             print(f"🔄 Processing callback: {call_data}")
 
-            # Обработка нажатия на кнопку "Заказ готов"
+            # Обработка нажатия на кнопку "Заказ готов" для самовывоза
             if call_data.startswith('order_ready_'):
                 return handle_order_ready_callback_webhook(call)
+
+            # Обработка нажатия на кнопку "Заказ выдан" для самовывоза
+            elif call_data.startswith('order_completed_'):
+                return handle_order_completed_callback_webhook(call)
 
         # Обработка обычных сообщений (если нужно)
         elif 'message' in data:
