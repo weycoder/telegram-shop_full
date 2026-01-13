@@ -527,8 +527,8 @@ class TelegramShop {
 
             // Добавляем как новый товар (весовые всегда новые позиции)
             const cartItem = {
-                id: cartItemId,
-                name: `${name} (${weight.toFixed(2)} ${product.unit || 'кг'})`,
+               id: cartItemId,
+                name: `${name} ${weight.toFixed(2)} кг`,
                 price: price, // Цена за весь вес
                 discounted_price: discountedPrice,
                 discount_info: discount,
@@ -931,16 +931,6 @@ class TelegramShop {
                             </button>
                         </div>
 
-                        ${item.is_weight ? `
-                            <div class="cart-item-weight">
-                                <i class="fas fa-weight-hanging"></i>
-                                ${item.weight.toFixed(2)} кг
-                                <button class="edit-weight-btn" onclick="shop.editWeight('${item.id}')">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                            </div>
-                        ` : ''}
-
                         <div class="cart-item-pricing">
                             ${hasDiscount ? `
                                 <div class="cart-price-discounted">
@@ -964,10 +954,9 @@ class TelegramShop {
                                     </button>
                                 </div>
                             ` : `
-                                <div class="quantity-display">
-                                    <span class="quantity">${item.quantity} шт. (${item.weight} кг)</span>
-                                    <button class="edit-weight-btn" onclick="shop.editWeight('${item.id}')">
-                                        <i class="fas fa-edit"></i>
+                                <div class="quantity-display weight-display">
+                                    <button class="edit-weight-btn" onclick="shop.editWeight('${item.id}')" title="Изменить вес">
+                                        <i class="fas fa-edit"></i> Изменить вес
                                     </button>
                                 </div>
                             `}
@@ -988,7 +977,6 @@ class TelegramShop {
         // Показываем кнопки
         this.showCartButtons();
     }
-
         // Выносим рендеринг в отдельный метод
     renderCartItems(cartItems, cartTotal) {
         console.log('🛒 Рендеринг корзины, товаров:', this.cart.length);
