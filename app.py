@@ -1434,7 +1434,7 @@ def admin_mark_order_ready(order_id):
 def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_name, is_admin=False):
     """Отправить уведомление о новом сообщении в Telegram"""
     try:
-        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
+        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         if not BOT_TOKEN or not telegram_id:
             return False
 
@@ -1883,7 +1883,7 @@ def api_get_chat_messages():
 def send_courier_order_notification(order_id):
     """Отправить уведомление всем курьерам о новом заказе"""
     try:
-        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
+        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         if not BOT_TOKEN:
             print("⚠️ BOT_TOKEN не установлен")
             return False
@@ -2135,7 +2135,7 @@ def send_order_ready_notification(order_id):
 
         db.close()
 
-        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         if not BOT_TOKEN:
             print("❌ BOT_TOKEN не установлен")
             return False
@@ -2940,7 +2940,7 @@ def api_create_order():
 def send_admin_order_notification(order_id):
     """Отправить уведомление админу о новом заказе - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
-        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
+        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         ADMIN_TELEGRAM_IDS = 7331765165
 
         print(f"📤 ОТПРАВКА УВЕДОМЛЕНИЯ АДМИНУ О ЗАКАЗЕ #{order_id}")
@@ -3105,7 +3105,7 @@ def handle_order_ready_callback(call):
         send_order_ready_notification(order_id)
 
         # Отправляем ответ админу
-        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
+        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         if BOT_TOKEN:
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
             data = {
@@ -6617,7 +6617,7 @@ def handle_order_completed_callback_webhook(call):
             telegram_id = order['user_id']
             if telegram_id:
                 # Отправляем уведомление клиенту, что заказ выдан
-                BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+                BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
                 if BOT_TOKEN:
                     message = f"✅ *ЗАКАЗ #{order_id} ВЫДАН*\n\n" \
                               f"Ваш заказ был успешно выдан. Спасибо за покупку!\n\n" \
@@ -6631,7 +6631,7 @@ def handle_order_completed_callback_webhook(call):
                     }, timeout=5)
 
         # Ответ админу
-        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         if BOT_TOKEN:
             # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
@@ -6672,7 +6672,7 @@ def handle_order_ready_callback_webhook(call):
         send_order_ready_notification(order_id)
 
         # Ответ админу
-        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         if BOT_TOKEN:
             # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
