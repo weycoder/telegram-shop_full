@@ -108,6 +108,30 @@ def validate_json_request(f):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+import atexit
+
+def setup_webhook_on_start():
+    """Настроить вебхук при запуске приложения"""
+    try:
+        import time
+        # Ждем немного чтобы приложение успело запуститься
+        time.sleep(3)
+        print("🔄 Настраиваю Telegram вебхук...")
+        if setup_telegram_webhook():
+            print("✅ Telegram вебхук успешно настроен")
+        else:
+            print("⚠️ Не удалось настроить Telegram вебхук")
+    except Exception as e:
+        print(f"❌ Ошибка настройки вебхука: {e}")
+
+# Запускаем настройку вебхука в отдельном потоке после запуска приложения
+import threading
+timer = threading.Timer(5.0, setup_webhook_on_start)
+timer.start()
+
+# Регистрируем очистку при выходе
+atexit.register(lambda: timer.cancel())
+
 
 print(f"🔍 Текущий BOT_TOKEN: {os.getenv('BOT_TOKEN')}")
 
@@ -3111,12 +3135,22 @@ def send_admin_pickup_notification(order_id):
                             pickup_display += f"\n   ⌚ Часы работы: {pickup_info['working_hours']}"
                         if pickup_info.get('phone'):
                             pickup_display += f"\n   📞 Телефон: {pickup_info['phone']}"
+                        # ИСПРАВЛЕНИЕ: Если это Row объект, получаем значения по ключу
+                        elif isinstance(pickup_info, sqlite3.Row):
+                            pickup_display = f"{pickup_info['name']}\n   📍 Адрес: {pickup_info['address']}"
+                            if pickup_info['working_hours']:
+                                pickup_display += f"\n   ⌚ Часы работы: {pickup_info['working_hours']}"
+                            if pickup_info['phone']:
+                                pickup_display += f"\n   📞 Телефон: {pickup_info['phone']}"
                 elif '|' in str(pickup_point_value):
                     parts = str(pickup_point_value).split('|')
                     if len(parts) >= 2:
                         pickup_display = f"{parts[1]}\n   📍 Адрес: {parts[2] if len(parts) > 2 else ''}"
             except Exception as e:
                 print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+                # Добавим более детальную информацию об ошибке
+                import traceback
+                traceback.print_exc()
 
         db.close()
 
@@ -6631,33 +6665,6 @@ def telegram_webhook():
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
-def setup_telegram_webhook():
-    try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
-        WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://telegram-shop-full.onrender.com/')
-
-        if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
-            return False
-
-        # Устанавливаем вебхук
-        webhook_url = f"{WEBHOOK_URL.rstrip('/')}/api/telegram-webhook"
-        print(f"🔄 Настройка вебхука: {webhook_url}")
-
-        url = f'https://api.telegram.org/bot{BOT_TOKEN}/setWebhook'
-        response = requests.post(url, json={'url': webhook_url})
-
-        if response.status_code == 200:
-            result = response.json()
-            print(f"✅ Вебхук настроен: {result}")
-            return True
-        else:
-            print(f"❌ Ошибка настройки вебхука: {response.text}")
-            return False
-
-    except Exception as e:
-        print(f"❌ Ошибка настройки вебхука: {e}")
-        return False
 
 # ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
 if __name__ == '__main__':

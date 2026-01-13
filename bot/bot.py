@@ -2855,7 +2855,6 @@ async def main_async():
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
-
     # Ожидаем остановки
     stop_event = asyncio.Event()
     await stop_event.wait()
