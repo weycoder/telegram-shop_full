@@ -3073,8 +3073,8 @@ async editOrder(orderId) {
                             <i class="fas fa-mobile-alt"></i>
                         </div>
                         <div class="payment-info">
-                            <h3>Перевод курьеру</h3>
-                            <p>Перевод на карту курьеру</p>
+                            <h3>Перевод по номеру</h3>
+                            <p>Перевод СБП по номеру</p>
                         </div>
                         <i class="fas fa-chevron-right"></i>
                     </button>

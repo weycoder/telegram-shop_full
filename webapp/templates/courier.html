@@ -1038,7 +1038,7 @@
                                 <p><strong>Итого к оплате:</strong> <strong style="font-size: 16px;">${formatPrice(totalWithDelivery)} ₽</strong></p>
                                 <p><strong>Тип доставки:</strong> ${order.delivery_type === 'courier' ? 'Курьер' : 'Самовывоз'}</p>
                                 <p><strong>Способ оплата:</strong> ${order.payment_method === 'cash' ? 'Наличные' :
-                                                                      order.payment_method === 'transfer' ? 'Перевод курьеру' :
+                                                                      order.payment_method === 'transfer' ? 'Перевод по номеру' :
                                                                       order.payment_method === 'terminal' ? 'Терминал' : order.payment_method}</p>
                                 <p><strong>Дата создания:</strong> ${new Date(order.created_at).toLocaleString('ru-RU')}</p>
                             </div>

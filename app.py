@@ -1346,7 +1346,7 @@ def admin_mark_order_ready(order_id):
 def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_name, is_admin=False):
     """Отправить уведомление о новом сообщении в Telegram"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
         if not BOT_TOKEN or not telegram_id:
             return False
 
@@ -1795,7 +1795,7 @@ def api_get_chat_messages():
 def send_courier_order_notification(order_id):
     """Отправить уведомление всем курьерам о новом заказе"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
         if not BOT_TOKEN:
             print("⚠️ BOT_TOKEN не установлен")
             return False
@@ -2810,8 +2810,8 @@ def api_create_order():
 def send_admin_order_notification(order_id):
     """Отправить уведомление админу о новом заказе - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
-        ADMIN_TELEGRAM_IDS = os.getenv('ADMIN_IDS', '')
+        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
+        ADMIN_TELEGRAM_IDS = 7331765165
 
         print(f"📤 ОТПРАВКА УВЕДОМЛЕНИЯ АДМИНУ О ЗАКАЗЕ #{order_id}")
 
@@ -2959,6 +2959,201 @@ def send_admin_order_notification(order_id):
         traceback.print_exc()
         return False
 
+def handle_order_ready_callback(call):
+    """Обработчик нажатия на кнопку 'Заказ готов'"""
+    try:
+        order_id = int(call.data.replace('order_ready_', ''))
+
+        # Обновляем статус заказа
+        db = get_db()
+        db.execute('UPDATE orders SET status = ? WHERE id = ?',
+                   ('ready_for_pickup', order_id))
+        db.commit()
+        db.close()
+
+        # Отправляем уведомление клиенту
+        send_order_ready_notification(order_id)
+
+        # Отправляем ответ админу
+        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
+        if BOT_TOKEN:
+            url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
+            data = {
+                'callback_query_id': call.id,
+                'text': f'✅ Заказ #{order_id} помечен как готовый. Клиент уведомлен!',
+                'show_alert': True
+            }
+            requests.post(url, json=data)
+
+            # Обновляем сообщение админа
+            url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
+            data = {
+                'chat_id': call.message.chat.id,
+                'message_id': call.message.message_id,
+                'text': f"✅ *ЗАКАЗ #{order_id} ГОТОВ*\n\nКлиент получил уведомление о готовности заказа.",
+                'parse_mode': 'Markdown'
+            }
+            requests.post(url, json=data)
+
+    except Exception as e:
+        print(f"❌ Ошибка обработки callback 'order_ready': {e}")
+
+def send_admin_pickup_notification(order_id):
+    """Отправить админу уведомление о заказе на самовывоз"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        ADMIN_TELEGRAM_IDS = 7331765165
+
+        print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
+
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        # Получаем ID админов
+        admin_ids = []
+        if ADMIN_TELEGRAM_IDS:
+            try:
+                # Если ADMIN_TELEGRAM_IDS это строка (несколько ID через запятую)
+                if isinstance(ADMIN_TELEGRAM_IDS, str):
+                    for admin_id in ADMIN_TELEGRAM_IDS.split(','):
+                        admin_id = admin_id.strip()
+                        if admin_id and admin_id.isdigit():
+                            admin_ids.append(int(admin_id))
+                # Если это уже число (один ID)
+                elif isinstance(ADMIN_TELEGRAM_IDS, (int, float)):
+                    admin_ids.append(int(ADMIN_TELEGRAM_IDS))
+                # Если это список
+                elif isinstance(ADMIN_TELEGRAM_IDS, list):
+                    admin_ids = [int(id) for id in ADMIN_TELEGRAM_IDS if str(id).isdigit()]
+            except Exception as e:
+                print(f"⚠️ Ошибка обработки ADMIN_IDS: {e}")
+                return False
+
+        if not admin_ids:
+            print("⚠️ Нет валидных ID админов для отправки уведомлений")
+            return False
+
+        db = get_db()
+
+        # Получаем информацию о заказе
+        order = db.execute('''
+                           SELECT o.*,
+                                  (o.total_price + COALESCE(o.delivery_cost, 0) -
+                                   COALESCE(o.discount_amount, 0)) as total_amount
+                           FROM orders o
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
+        if not order:
+            print(f"❌ Заказ #{order_id} не найден")
+            db.close()
+            return False
+
+        order_data = dict(order)
+
+        # Получаем информацию о пункте выдачи
+        pickup_display = order_data.get('pickup_point', '')
+        if order_data.get('pickup_point'):
+            try:
+                # Проверяем, является ли pickup_point числом (ID пункта выдачи)
+                pickup_point_value = order_data['pickup_point']
+                if str(pickup_point_value).isdigit():
+                    pickup_info = db.execute(
+                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
+                        (int(pickup_point_value),)
+                    ).fetchone()
+                    if pickup_info:
+                        pickup_display = f"{pickup_info['name']}\n   📍 Адрес: {pickup_info['address']}"
+                        if pickup_info.get('working_hours'):
+                            pickup_display += f"\n   ⌚ Часы работы: {pickup_info['working_hours']}"
+                        if pickup_info.get('phone'):
+                            pickup_display += f"\n   📞 Телефон: {pickup_info['phone']}"
+                elif '|' in str(pickup_point_value):
+                    parts = str(pickup_point_value).split('|')
+                    if len(parts) >= 2:
+                        pickup_display = f"{parts[1]}\n   📍 Адрес: {parts[2] if len(parts) > 2 else ''}"
+            except Exception as e:
+                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+
+        db.close()
+
+        # Парсим товары
+        items_list = []
+        items_count = 0
+        if order_data.get('items'):
+            try:
+                items_list = json.loads(order_data['items'])
+                items_count = sum(item.get('quantity', 1) for item in items_list)
+            except:
+                items_list = []
+
+        # Формируем сообщение для админа
+        text = f"🏪 *НОВЫЙ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*\n\n"
+        text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
+        text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
+        text += f"📍 *Пункт выдачи:*\n{pickup_display}\n"
+        text += f"📦 *Товаров:* {items_count} шт\n"
+        text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
+
+        if order_data.get('discount_amount', 0) > 0:
+            text += f"🎁 *Скидка:* {order_data.get('discount_amount', 0)} ₽\n"
+
+        if order_data.get('cash_received', 0) > 0:
+            text += f"💵 *Наличные:* {order_data.get('cash_received', 0)} ₽"
+            if order_data.get('cash_change', 0) > 0:
+                text += f" (сдача {order_data.get('cash_change', 0)} ₽)"
+            text += "\n"
+
+        text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
+        text += f"\n⚡ *Заказ готовится к выдаче!*"
+
+        # Кнопки для админа (добавил кнопку "ГОТОВ")
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "📋 ДЕТАЛИ ЗАКАЗА", "callback_data": f"admin_order_{order_id}"},
+                    {"text": "✅ ЗАКАЗ ГОТОВ", "callback_data": f"order_ready_{order_id}"}
+                ],
+                [
+                    {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"},
+                    {"text": "💬 ЧАТ С КЛИЕНТОМ", "callback_data": f"chat_{order_id}"}
+                ]
+            ]
+        }
+
+        # Отправляем всем админам
+        success_count = 0
+        for admin_id in admin_ids:
+            try:
+                url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+                data = {
+                    'chat_id': int(admin_id),
+                    'text': text,
+                    'parse_mode': 'Markdown',
+                    'reply_markup': json.dumps(keyboard)
+                }
+
+                print(f"   Отправка админу {admin_id}...")
+                response = requests.post(url, json=data, timeout=10)
+
+                if response.status_code == 200:
+                    print(f"   ✅ Уведомление отправлено админу {admin_id}")
+                    success_count += 1
+                else:
+                    print(f"   ❌ Ошибка отправки админу {admin_id}: {response.text}")
+
+            except Exception as e:
+                print(f"   ❌ Исключение при отправке админу {admin_id}: {e}")
+
+        print(f"📨 Итог: отправлено {success_count}/{len(admin_ids)} админам")
+        return success_count > 0
+
+    except Exception as e:
+        print(f"❌ Критическая ошибка в send_admin_pickup_notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, order_total, discount_amount, username,
                                    total_with_delivery):
@@ -3050,7 +3245,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
 
         # Формируем сообщение
         message = f"""🏪 *ВАШ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*
-
+        
 {items_text}
 {discount_info}
 ━━━━━━━━━━━━━━━━━━━━
@@ -3072,10 +3267,9 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
                     {
                         "text": "🛒 ОТКРЫТЬ МАГАЗИН",
                         "web_app": {"url": webapp_url}
-                    },
-                    {"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"}
+                    }],
 
-                ]
+                    [{"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"}]
             ]
         }
 
@@ -3106,42 +3300,147 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
         return False
 
 
-def send_admin_pickup_notification(order_id):
-    """Отправить админу уведомление о заказе на самовывоз"""
+def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, order_total, discount_amount, username,
+                                   total_with_delivery):
+    """Отправить специальное уведомление для заказа с самовывозом"""
     try:
-        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
-        ADMIN_TELEGRAM_IDS = 7331765165
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
-        print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
+        print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
+
+        if not telegram_id or telegram_id == 0:
+            print("❌ Неверный telegram_id клиента")
+            return False
 
         if not BOT_TOKEN:
             print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Получаем ID админов
-        admin_ids = []
-        if ADMIN_TELEGRAM_IDS:
-            try:
-                # Если ADMIN_TELEGRAM_IDS это строка (несколько ID через запятую)
-                if isinstance(ADMIN_TELEGRAM_IDS, str):
-                    for admin_id in ADMIN_TELEGRAM_IDS.split(','):
-                        admin_id = admin_id.strip()
-                        if admin_id and admin_id.isdigit():
-                            admin_ids.append(int(admin_id))
-                # Если это уже число (один ID)
-                elif isinstance(ADMIN_TELEGRAM_IDS, (int, float)):
-                    admin_ids.append(int(ADMIN_TELEGRAM_IDS))
-                # Если это список
-                elif isinstance(ADMIN_TELEGRAM_IDS, list):
-                    admin_ids = [int(id) for id in ADMIN_TELEGRAM_IDS if str(id).isdigit()]
-            except Exception as e:
-                print(f"⚠️ Ошибка обработки ADMIN_IDS: {e}")
-                return False
+        # Получаем информацию о пункте выдачи из базы данных
+        db = get_db()
+        pickup_info = None
+        pickup_display = pickup_point  # По умолчанию используем то, что пришло
 
-        if not admin_ids:
-            print("⚠️ Нет валидных ID админов для отправки уведомлений")
+        if pickup_point:
+            try:
+                # Если pickup_point это ID (число), получаем данные из базы
+                if str(pickup_point).isdigit():
+                    pickup_info = db.execute(
+                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
+                        (int(pickup_point),)
+                    ).fetchone()
+                    if pickup_info:
+                        # Форматируем для отображения
+                        pickup_display = f"{pickup_info['name']} - {pickup_info['address']}"
+                # Если это строка с форматом "id|name|address", парсим её
+                elif '|' in pickup_point:
+                    parts = pickup_point.split('|')
+                    if len(parts) >= 2:
+                        pickup_display = f"{parts[1]} - {parts[2] if len(parts) > 2 else ''}"
+            except Exception as e:
+                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+                pickup_info = None
+
+        db.close()
+
+        # Форматируем товары (правильно)
+        items_text = "📦 *Ваш заказ:*\n"
+        total_items_value = 0
+
+        for item in items:
+            name = item.get('name', 'Товар')
+            # Убираем лишние повторы в названии
+            if ' (' in name and ')' in name:
+                # Убираем дублирование в названии типа "Бананы (3.00 кг) (3.00 кг)"
+                name_parts = name.split(' (')
+                if len(name_parts) > 1:
+                    # Берем только первую часть до первой скобки
+                    name = name_parts[0].strip()
+
+            safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+
+            if item.get('is_weight'):
+                weight = item.get('weight', 0)
+                price = item.get('price', 0)
+                items_text += f"• *{safe_name}* - {weight} кг = *{price} ₽*\n"
+                total_items_value += price
+            else:
+                quantity = item.get('quantity', 1)
+                price = item.get('price', 0)
+                item_total = price * quantity
+                items_text += f"• *{safe_name}* × {quantity} шт = *{item_total} ₽*\n"
+                total_items_value += item_total
+
+        # Скидка
+        discount_info = ""
+        if discount_amount > 0:
+            discount_info = f"\n🎁 *Скидка:* -{discount_amount} ₽\n"
+
+        # Итоговая сумма
+        final_total = total_with_delivery
+
+        # Формируем сообщение
+        message = f"""🏪 *ВАШ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*
+
+{items_text}
+{discount_info}
+━━━━━━━━━━━━━━━━━━━━
+💰 *ИТОГО: {final_total:.2f} ₽*
+
+📍 *Пункт выдачи:* {pickup_display}
+
+⏰ *Статус:* Ожидает сборки
+📝 *Заберите заказ в течение 30 минут после уведомления о готовности*
+
+🎯 *Заказ будет собран в ближайшее время! Мы уведомим вас, когда он будет готов к выдаче.*"""
+
+        # URL для веб-приложения
+        webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
+
+        # Кнопки для клиента
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "🛒 ОТКРЫТЬ МАГАЗИН",
+                        "web_app": {"url": webapp_url}
+                    }],
+
+                [{"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"}]
+            ]
+        }
+
+        # Отправляем
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+        data = {
+            'chat_id': int(telegram_id),
+            'text': message,
+            'parse_mode': 'Markdown',
+            'disable_web_page_preview': True,
+            'reply_markup': json.dumps(keyboard)
+        }
+
+        print(f"   Отправка клиенту {telegram_id}...")
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"   ✅ Уведомление о самовывозе отправлено клиенту {telegram_id}")
+            return True
+        else:
+            print(f"   ❌ Ошибка отправки клиенту: {response.text}")
             return False
 
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомления о самовывозе: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def send_order_ready_notification(order_id):
+    """Отправить уведомление клиенту что заказ готов к выдаче"""
+    try:
         db = get_db()
 
         # Получаем информацию о заказе
@@ -3159,119 +3458,118 @@ def send_admin_pickup_notification(order_id):
             return False
 
         order_data = dict(order)
+        telegram_id = order_data.get('user_id')
+
+        if not telegram_id or telegram_id == 0:
+            print(f"❌ У заказа #{order_id} нет telegram_id")
+            db.close()
+            return False
 
         # Получаем информацию о пункте выдачи
-        pickup_info = None
+        pickup_display = order_data.get('pickup_point', '')
         if order_data.get('pickup_point'):
             try:
-                # Проверяем, является ли pickup_point числом (ID пункта выдачи)
-                pickup_point_value = order_data['pickup_point']
-                if isinstance(pickup_point_value, str) and pickup_point_value.isdigit():
+                if str(order_data['pickup_point']).isdigit():
                     pickup_info = db.execute(
                         'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
-                        (int(pickup_point_value),)
+                        (int(order_data['pickup_point']),)
                     ).fetchone()
-                elif isinstance(pickup_point_value, (int, float)):
-                    pickup_info = db.execute(
-                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
-                        (int(pickup_point_value),)
-                    ).fetchone()
+                    if pickup_info:
+                        pickup_display = f"{pickup_info['name']} - {pickup_info['address']}"
+                        if pickup_info.get('working_hours'):
+                            pickup_display += f"\n   ⌚ Часы работы: {pickup_info['working_hours']}"
+                        if pickup_info.get('phone'):
+                            pickup_display += f"\n   📞 Телефон: {pickup_info['phone']}"
+                elif '|' in order_data['pickup_point']:
+                    parts = order_data['pickup_point'].split('|')
+                    if len(parts) >= 2:
+                        pickup_display = f"{parts[1]} - {parts[2] if len(parts) > 2 else ''}"
             except Exception as e:
                 print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
-                pickup_info = None
 
         db.close()
 
-        # Парсим товары
-        items_list = []
-        items_count = 0
-        if order_data.get('items'):
-            try:
-                items_list = json.loads(order_data['items'])
-                items_count = sum(item.get('quantity', 1) for item in items_list)
-            except:
-                items_list = []
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
 
-        # Форматируем информацию о пункте выдачи
-        pickup_text = ""
-        if pickup_info:
-            pickup_text = f"📍 *Пункт выдачи:* {pickup_info['name']}\n"
-            if pickup_info['address']:
-                pickup_text += f"   Адрес: {pickup_info['address']}\n"
-            if pickup_info['working_hours']:
-                pickup_text += f"   Часы работы: {pickup_info['working_hours']}\n"
-            if pickup_info['phone']:
-                pickup_text += f"   Телефон: {pickup_info['phone']}\n"
-        elif order_data.get('pickup_point'):
-            # Если pickup_point это текст (название), а не ID
-            pickup_text = f"📍 *Пункт выдачи:* {order_data['pickup_point']}\n"
+        # Формируем сообщение
+        message = f"""✅ *ВАШ ЗАКАЗ ГОТОВ К ВЫДАЧЕ!*
 
-        # Формируем сообщение для админа
-        text = f"🏪 *НОВЫЙ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*\n\n"
-        text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
-        text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
-        text += pickup_text
-        text += f"📦 *Товаров:* {items_count} шт\n"
-        text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
+📦 *Заказ №{order_id}*
+💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽
 
-        if order_data.get('discount_amount', 0) > 0:
-            text += f"🎁 *Скидка:* {order_data.get('discount_amount', 0)} ₽\n"
+📍 *Пункт выдачи:*
+{pickup_display}
 
-        if order_data.get('cash_received', 0) > 0:
-            text += f"💵 *Наличные:* {order_data.get('cash_received', 0)} ₽"
-            if order_data.get('cash_change', 0) > 0:
-                text += f" (сдача {order_data.get('cash_change', 0)} ₽)"
-            text += "\n"
+⚠️ *ВАЖНО:*
+• Заказ будет ждать вас в течение 24 часов
+• При себе необходимо иметь номер заказа ({order_id})
+• Оплата производится на месте (если не оплачено онлайн)
 
-        text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
-        text += f"\n⚡ *Заказ готовится к выдаче!*"
+⏰ *Рекомендуем забрать заказ как можно скорее!*
 
-        # Кнопки для админа
-        keyboard = {
-            "inline_keyboard": [
-                [
-                    {"text": "📋 ДЕТАЛИ ЗАКАЗА", "callback_data": f"admin_order_{order_id}"},
-                    {"text": "✅ ГОТОВ К ВЫДАЧЕ", "callback_data": f"ready_pickup_{order_id}"}
-                ],
-                [
-                    {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"},
-                    {"text": "💬 ЧАТ С КЛИЕНТОМ", "callback_data": f"chat_{order_id}"}
-                ]
-            ]
-        }
+🎉 *Спасибо за покупку!*"""
 
-        # Отправляем всем админам
-        success_count = 0
-        for admin_id in admin_ids:
-            try:
-                url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
-                data = {
-                    'chat_id': int(admin_id),
-                    'text': text,
-                    'parse_mode': 'Markdown',
-                    'reply_markup': json.dumps(keyboard)
-                }
+        # Отправляем уведомление
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+        data = {
+            'chat_id': int(telegram_id),
+            'text': message,
+            'parse_mode': 'Markdown'}
 
-                print(f"   Отправка админу {admin_id}...")
-                response = requests.post(url, json=data, timeout=10)
+        print(f"📤 Отправка уведомления о готовности заказа #{order_id} клиенту {telegram_id}")
+        response = requests.post(url, json=data, timeout=10)
 
-                if response.status_code == 200:
-                    print(f"   ✅ Уведомление отправлено админу {admin_id}")
-                    success_count += 1
-                else:
-                    print(f"   ❌ Ошибка отправки админу {admin_id}: {response.text}")
-
-            except Exception as e:
-                print(f"   ❌ Исключение при отправке админу {admin_id}: {e}")
-
-        print(f"📨 Итог: отправлено {success_count}/{len(admin_ids)} админам")
-        return success_count > 0
+        if response.status_code == 200:
+            print(f"✅ Уведомление о готовности отправлено клиенту {telegram_id}")
+            return True
+        else:
+            print(f"❌ Ошибка отправки уведомления о готовности: {response.text}")
+            return False
 
     except Exception as e:
-        print(f"❌ Критическая ошибка в send_admin_pickup_notification: {e}")
+        print(f"❌ Ошибка отправки уведомления о готовности: {e}")
         import traceback
         traceback.print_exc()
         return False
+
+@app.route('/api/admin/orders/<int:order_id>/ready-for-pickup', methods=['POST'])
+def admin_mark_order_ready_for_pickup(order_id):
+    """Пометить заказ как готовый к выдаче (самовывоз)"""
+    db = get_db()
+    try:
+        # Получаем заказ
+        order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if not order:
+            return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
+
+        order_dict = dict(order)
+
+        # Проверяем что это самовывоз
+        if order_dict.get('delivery_type') != 'pickup':
+            return jsonify({'success': False, 'error': 'Это не заказ на самовывоз'}), 400
+
+        # Обновляем статус заказа
+        db.execute('UPDATE orders SET status = ? WHERE id = ?',
+                   ('ready_for_pickup', order_id))
+
+        db.commit()
+
+        # Отправляем уведомление клиенту что заказ готов
+        send_order_ready_notification(order_id)
+
+        return jsonify({
+            'success': True,
+            'message': 'Заказ помечен как готовый к выдаче. Клиент получил уведомление.'
+        })
+
+    except Exception as e:
+        print(f"❌ Ошибка пометки заказа как готового: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
 
 
 @app.route('/api/pickup-points-with-details', methods=['GET'])
