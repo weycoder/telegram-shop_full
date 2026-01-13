@@ -1994,76 +1994,118 @@ def api_get_courier_telegram(courier_id):
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
-def send_order_notification(order_id, status, courier_id=None):
-    """Отправка уведомлений покупателю через Telegram бота - ИСПРАВЛЕННАЯ"""
-    db = None
+
+
+def send_order_ready_notification(order_id):
+    """Отправить уведомление клиенту что заказ готов к выдаче"""
     try:
         db = get_db()
 
         # Получаем информацию о заказе
-        order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+        order = db.execute('''
+                           SELECT o.*,
+                                  (o.total_price + COALESCE(o.delivery_cost, 0) -
+                                   COALESCE(o.discount_amount, 0)) as total_amount
+                           FROM orders o
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
 
         if not order:
-            print(f"⚠️ Заказ #{order_id} не найден")
+            print(f"❌ Заказ #{order_id} не найден")
+            db.close()
             return False
 
-        order_dict = dict(order)
-
-        # user_id должен быть telegram_id
-        telegram_id = order_dict.get('user_id')
+        order_data = dict(order)
+        telegram_id = order_data.get('user_id')
 
         if not telegram_id or telegram_id == 0:
-            print(f"⚠️ У заказа #{order_id} нет telegram_id (user_id)")
+            print(f"❌ У заказа #{order_id} нет telegram_id")
+            db.close()
             return False
 
-        # Получаем информацию о курьере если есть
-        courier_name = None
-        courier_phone = None
-
-        if courier_id:
-            courier = db.execute('SELECT full_name, phone FROM couriers WHERE id = ?',
-                                 (courier_id,)).fetchone()
-            if courier:
-                courier = dict(courier)
-                courier_name = courier.get('full_name')
-                courier_phone = courier.get('phone')
-
-        # Парсим items для детализированного уведомления
-        items_list = []
-        if order_dict.get('items'):
+        # Получаем информацию о пункте выдачи
+        pickup_display = order_data.get('pickup_point', '')
+        if order_data.get('pickup_point'):
             try:
-                items_list = json.loads(order_dict['items'])
-            except:
-                items_list = []
+                if str(order_data['pickup_point']).isdigit():
+                    pickup_info = db.execute(
+                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
+                        (int(order_data['pickup_point']),)
+                    ).fetchone()
+                    if pickup_info:
+                        pickup_display = f"{pickup_info['name']} - {pickup_info['address']}"
+                        if pickup_info.get('working_hours'):
+                            pickup_display += f"\n   ⌚ Часы работы: {pickup_info['working_hours']}"
+                        if pickup_info.get('phone'):
+                            pickup_display += f"\n   📞 Телефон: {pickup_info['phone']}"
+                elif '|' in order_data['pickup_point']:
+                    parts = order_data['pickup_point'].split('|')
+                    if len(parts) >= 2:
+                        pickup_display = f"{parts[1]} - {parts[2] if len(parts) > 2 else ''}"
+            except Exception as e:
+                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
 
-        delivery_type = order_dict.get('delivery_type', 'courier')
+        db.close()
 
-        # Отправляем уведомление - ИСПРАВЛЕННЫЙ ВЫЗОВ
-        status_sent = send_order_details_notification(
-            telegram_id=telegram_id,
-            order_id=order_id,
-            items=items_list,
-            status=status,
-            delivery_type=delivery_type,
-            courier_name=courier_name,
-            courier_phone=courier_phone
-        )
+        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
 
-        if status_sent:
-            print(f"✅ Уведомление для заказа #{order_id} отправлено (статус: {status})")
+        # Формируем сообщение
+        message = f"""✅ *ВАШ ЗАКАЗ ГОТОВ К ВЫДАЧЕ!*
+
+📦 *Заказ №{order_id}*
+💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽
+
+📍 *Пункт выдачи:*
+{pickup_display}
+
+⚠️ *ВАЖНО:*
+• Заказ будет ждать вас в течение 24 часов
+• При себе необходимо иметь номер заказа ({order_id})
+• Оплата производится на месте (если не оплачено онлайн)
+
+⏰ *Рекомендуем забрать заказ как можно скорее!*
+
+🎉 *Спасибо за покупку!*"""
+
+        # Кнопки для клиента
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ ПОНЯЛ, ЗАБЕРУ", "callback_data": f"order_ack_{order_id}"}
+                ],
+                [
+                    {"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"}
+                ]
+            ]
+        }
+
+        # Отправляем уведомление
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+        data = {
+            'chat_id': int(telegram_id),
+            'text': message,
+            'parse_mode': 'Markdown',
+            'reply_markup': json.dumps(keyboard)
+        }
+
+        print(f"📤 Отправка уведомления о готовности заказа #{order_id} клиенту {telegram_id}")
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"✅ Уведомление о готовности отправлено клиенту {telegram_id}")
+            return True
         else:
-            print(f"⚠️ Уведомление для заказа #{order_id} не отправлено")
-
-        return status_sent
+            print(f"❌ Ошибка отправки уведомления о готовности: {response.text}")
+            return False
 
     except Exception as e:
-        print(f"❌ Критическая ошибка отправки уведомления: {e}")
+        print(f"❌ Ошибка отправки уведомления о готовности: {e}")
         import traceback
         traceback.print_exc()
         return False
-    finally:
-        if db:
-            db.close()
 
 def assign_order_to_courier(order_id, delivery_type):
     """Автоматически назначить заказ курьеру"""
@@ -6451,6 +6493,171 @@ def clear_failed_logins():
         return jsonify({'success': True, 'message': 'Cleared old failed login attempts'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def handle_order_ready_callback_webhook(call):
+    """Обработка кнопки 'Заказ готов' через вебхук"""
+    try:
+        order_id = int(call['data'].replace('order_ready_', ''))
+
+        # Обновляем статус заказа
+        db = get_db()
+        db.execute('UPDATE orders SET status = ? WHERE id = ?',
+                   ('ready_for_pickup', order_id))
+        db.commit()
+
+        # Отправляем уведомление клиенту что заказ готов
+        send_order_ready_notification(order_id)
+
+        # Ответ админу
+        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        if BOT_TOKEN:
+            # Ответ на callback query
+            answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
+            requests.post(answer_url, json={
+                'callback_query_id': call['id'],
+                'text': f'✅ Заказ #{order_id} помечен как готовый. Клиент уведомлен!',
+                'show_alert': True
+            }, timeout=5)
+
+            # Обновляем сообщение админа
+            message = call['message']
+
+            # Получаем обновленную информацию о заказе
+            order = db.execute('''
+                               SELECT o.*,
+                                      (o.total_price + COALESCE(o.delivery_cost, 0) -
+                                       COALESCE(o.discount_amount, 0)) as total_amount
+                               FROM orders o
+                               WHERE o.id = ?
+                               ''', (order_id,)).fetchone()
+
+            db.close()
+
+            if order:
+                order_data = dict(order)
+
+                # Получаем информацию о пункте выдачи
+                pickup_display = order_data.get('pickup_point', '')
+                if order_data.get('pickup_point'):
+                    try:
+                        if str(order_data['pickup_point']).isdigit():
+                            pickup_info = db.execute(
+                                'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
+                                (int(order_data['pickup_point']),)
+                            ).fetchone()
+                            if pickup_info:
+                                pickup_display = f"{pickup_info['name']}\n   📍 Адрес: {pickup_info['address']}"
+                        elif '|' in order_data['pickup_point']:
+                            parts = order_data['pickup_point'].split('|')
+                            if len(parts) >= 2:
+                                pickup_display = f"{parts[1]}\n   📍 Адрес: {parts[2] if len(parts) > 2 else ''}"
+                    except Exception as e:
+                        print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+
+                # Формируем обновленное сообщение
+                text = f"✅ *ЗАКАЗ #{order_id} ГОТОВ К ВЫДАЧЕ*\n\n"
+                text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
+                text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
+                text += f"📍 *Пункт выдачи:*\n{pickup_display}\n"
+                text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
+                text += f"⏰ *Готов:* {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                text += f"\n📋 *Клиент получил уведомление о готовности.*"
+
+                edit_url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
+                requests.post(edit_url, json={
+                    'chat_id': message['chat']['id'],
+                    'message_id': message['message_id'],
+                    'text': text,
+                    'parse_mode': 'Markdown',
+                    'reply_markup': json.dumps({
+                        "inline_keyboard": [
+                            [
+                                {"text": "📋 ДЕТАЛИ ЗАКАЗА", "callback_data": f"admin_order_{order_id}"},
+                                {"text": "✅ ВЫДАН", "callback_data": f"order_completed_{order_id}"}
+                            ],
+                            [
+                                {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"},
+                                {"text": "💬 ЧАТ С КЛИЕНТОМ", "callback_data": f"chat_{order_id}"}
+                            ]
+                        ]
+                    })
+                }, timeout=5)
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        print(f"❌ Ошибка в handle_order_ready_callback_webhook: {e}")
+        return jsonify({'ok': False, 'error': str(e)})
+
+# ========== НАСТРОЙКА TELEGRAM WEBHOOK ==========
+
+
+@app.route('/api/telegram-webhook', methods=['POST'])
+def telegram_webhook():
+    """Обработчик вебхуков от Telegram"""
+    try:
+        data = request.get_json()
+        print(f"📥 Telegram webhook received: {json.dumps(data, ensure_ascii=False)[:500]}...")
+
+        # Обработка callback query
+        if 'callback_query' in data:
+            call = data['callback_query']
+            call_data = call.get('data', '')
+
+            print(f"🔄 Processing callback: {call_data}")
+
+            # Обработка нажатия на кнопку "Заказ готов"
+            if call_data.startswith('order_ready_'):
+                return handle_order_ready_callback_webhook(call)
+
+        # Обработка обычных сообщений (если нужно)
+        elif 'message' in data:
+            message = data['message']
+            text = message.get('text', '')
+            chat_id = message['chat']['id']
+
+            print(f"💬 Message from {chat_id}: {text}")
+
+            # Обработка команд
+            if text.startswith('/'):
+                return handle_telegram_command(chat_id, text)
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        print(f"❌ Ошибка в обработчике вебхука: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+def setup_telegram_webhook():
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://telegram-shop-full.onrender.com/')
+
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        # Устанавливаем вебхук
+        webhook_url = f"{WEBHOOK_URL.rstrip('/')}/api/telegram-webhook"
+        print(f"🔄 Настройка вебхука: {webhook_url}")
+
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/setWebhook'
+        response = requests.post(url, json={'url': webhook_url})
+
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Вебхук настроен: {result}")
+            return True
+        else:
+            print(f"❌ Ошибка настройки вебхука: {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Ошибка настройки вебхука: {e}")
+        return False
 
 # ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
 if __name__ == '__main__':
