@@ -3102,16 +3102,21 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
         traceback.print_exc()
         return False
 
+
 def send_admin_pickup_notification(order_id):
     """Отправить админу уведомление о заказе на самовывоз"""
     try:
-        BOT_TOKEN = os.getenv('8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        BOT_TOKEN = '8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg'
         ADMIN_TELEGRAM_IDS = 7331765165
 
         print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
 
-        if not BOT_TOKEN or not ADMIN_TELEGRAM_IDS:
-            print("❌ BOT_TOKEN или ADMIN_IDS не установлены")
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        if not ADMIN_TELEGRAM_IDS:
+            print("⚠️ ADMIN_IDS не установлены, проверь переменные окружения")
             return False
 
         db = get_db()
@@ -3131,6 +3136,20 @@ def send_admin_pickup_notification(order_id):
             return False
 
         order_data = dict(order)
+
+        # Получаем информацию о пункте выдачи
+        pickup_info = None
+        if order_data.get('pickup_point'):
+            try:
+                if order_data['pickup_point'].isdigit():
+                    pickup_info = db.execute(
+                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
+                        (int(order_data['pickup_point']),)
+                    ).fetchone()
+            except Exception as e:
+                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+                pickup_info = None
+
         db.close()
 
         # Разбираем ID админов
@@ -3150,11 +3169,24 @@ def send_admin_pickup_notification(order_id):
             except:
                 items_list = []
 
+        # Форматируем информацию о пункте выдачи
+        pickup_text = ""
+        if pickup_info:
+            pickup_text = f"📍 *Пункт выдачи:* {pickup_info['name']}\n"
+            if pickup_info['address']:
+                pickup_text += f"   Адрес: {pickup_info['address']}\n"
+            if pickup_info['working_hours']:
+                pickup_text += f"   Часы работы: {pickup_info['working_hours']}\n"
+            if pickup_info['phone']:
+                pickup_text += f"   Телефон: {pickup_info['phone']}\n"
+        elif order_data.get('pickup_point'):
+            pickup_text = f"📍 *Пункт выдачи:* {order_data['pickup_point']}\n"
+
         # Формируем сообщение для админа
         text = f"🏪 *НОВЫЙ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*\n\n"
         text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
         text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
-        text += f"📍 *Пункт выдачи:* {order_data.get('pickup_point', 'Не указан')}\n"
+        text += pickup_text
         text += f"📦 *Товаров:* {items_count} шт\n"
         text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
 
@@ -3218,16 +3250,38 @@ def send_admin_pickup_notification(order_id):
         return False
 
 
+@app.route('/api/pickup-points-with-details', methods=['GET'])
+def get_pickup_points_with_details():
+    """Получить точки самовывоза с полной информацией"""
+    db = get_db()
+    try:
+        points = db.execute('''
+                            SELECT id,
+                                   name,
+                                   address,
+                                   working_hours,
+                                   phone,
+                                   latitude,
+                                   longitude,
+                                   is_active
+                            FROM pickup_points
+                            WHERE is_active = 1
+                            ORDER BY name
+                            ''').fetchall()
 
+        result = []
+        for point in points:
+            point_dict = dict(point)
+            # Форматируем для фронтенда
+            point_dict['display_name'] = f"{point_dict['name']} - {point_dict['address']}"
+            result.append(point_dict)
 
-
-
-
-
-
-
-
-
+        return jsonify(result)
+    except Exception as e:
+        print(f"❌ Ошибка получения точек самовывоза: {e}")
+        return jsonify([])
+    finally:
+        db.close()
 
 @app.route('/api/admin/chats', methods=['GET'])
 def api_admin_chats():
