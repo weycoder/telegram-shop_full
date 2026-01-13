@@ -2156,16 +2156,15 @@ async editOrder(orderId) {
             this.showNotification(`❌ Доступно только ${this.currentProduct.stock_weight} кг`, 'error');
             return;
         }
-        // Передаем БЕЗ веса в названии - вес добавится в addToCart
+
         this.addToCart(
             productId,
-            this.currentProduct.name, // Только название, без веса
+            this.currentProduct.name, // Только название товара
             price,
             1,
-            this.currentProduct.image_url,
-            weight, // Передаем вес отдельным параметром
-            unit    // И единицу измерения
+            this.currentProduct.image_url
         );
+
         // Сбрасываем вес
         this.selectedWeight = 0.1;
         this.selectedWeightPrice = 0;
