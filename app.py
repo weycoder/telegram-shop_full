@@ -1160,13 +1160,13 @@ def api_bot_get_order_detail(order_id, telegram_id):
 
 def send_order_details_notification(telegram_id, order_id, items, status, delivery_type,
                                     courier_name=None, courier_phone=None):
-    """Отправить уведомление клиенту - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Отправить уведомление клиенту - КРАСИВЫЙ ПРОФЕССИОНАЛЬНЫЙ ДИЗАЙН"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
-        print(f"📤 ОТПРАВКА УВЕДОМЛЕНИЯ КЛИЕНТУ О ЗАКАЗЕ #{order_id}")
-        print(f"   Telegram ID клиента: {telegram_id}")
+        print(f"🎨 КРАСИВОЕ УВЕДОМЛЕНИЕ КЛИЕНТУ #{order_id}")
+        print(f"   👤 Telegram ID: {telegram_id}")
 
         if not telegram_id or telegram_id == 0:
             print("❌ Неверный telegram_id клиента")
@@ -1182,7 +1182,8 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             order = db.execute('''
                                SELECT o.*,
                                       (o.total_price + COALESCE(o.delivery_cost, 0) -
-                                       COALESCE(o.discount_amount, 0)) as total_amount
+                                       COALESCE(o.discount_amount, 0)) as total_amount,
+                                      o.created_at
                                FROM orders o
                                WHERE o.id = ?
                                ''', (order_id,)).fetchone()
@@ -1208,108 +1209,168 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             except:
                 items = []
 
-        # Тексты статусов
-        status_texts = {
-            'created': '🔄 *СОЗДАН И ОЖИДАЕТ ОБРАБОТКИ*',
-            'assigned': '👤 *КУРЬЕР НАЗНАЧЕН*',
-            'processing': '⚙️ *В ОБРАБОТКЕ*',
-            'ready_for_pickup': '🏪 *ГОТОВ К ВЫДАЧЕ*',
-            'picked_up': '📦 *КУРЬЕР ЗАБРАЛ ЗАКАЗ*',
-            'delivering': '🚚 *В ПУТИ*',
-            'delivered': '✅ *ДОСТАВЛЕН*',
-            'completed': '🎉 *ЗАКАЗ ЗАВЕРШЕН*',
-            'pending': '⏳ *ОЖИДАЕТ ОБРАБОТКИ*'
+        # ЭМОДЗИ И ЦВЕТА ДЛЯ СТАТУСОВ
+        status_configs = {
+            'created': {'emoji': '🆕', 'color': '🟡', 'title': 'СОЗДАН И ОЖИДАЕТ ОБРАБОТКИ'},
+            'assigned': {'emoji': '👤', 'color': '🟢', 'title': 'КУРЬЕР НАЗНАЧЕН'},
+            'processing': {'emoji': '⚙️', 'color': '🟠', 'title': 'В ОБРАБОТКЕ'},
+            'ready_for_pickup': {'emoji': '📦', 'color': '🟣', 'title': 'ГОТОВ К ВЫДАЧЕ'},
+            'picked_up': {'emoji': '🚚', 'color': '🔵', 'title': 'КУРЬЕР ЗАБРАЛ ЗАКАЗ'},
+            'delivering': {'emoji': '⚡', 'color': '🔵', 'title': 'В ПУТИ К ВАМ'},
+            'delivered': {'emoji': '✅', 'color': '🟢', 'title': 'УСПЕШНО ДОСТАВЛЕН'},
+            'completed': {'emoji': '🏆', 'color': '🟢', 'title': 'ЗАКАЗ ЗАВЕРШЕН'},
+            'pending': {'emoji': '⏳', 'color': '🟡', 'title': 'ОЖИДАЕТ ОБРАБОТКИ'}
         }
 
-        status_text = status_texts.get(status, f"📊 *{status.upper()}*")
+        status_config = status_configs.get(status, {'emoji': '📊', 'color': '⚫', 'title': status.upper()})
 
-        # Форматируем товары
-        items_text = "\n📦 *СОСТАВ ЗАКАЗА:*\n"
+        # ЗАГОЛОВОК С БАННЕРОМ
+        banner_emoji = "✨" * 10
+        header = f"{banner_emoji}\n🎯 *ВАШ ЗАКАЗ #{order_id}*\n{banner_emoji}"
+
+        # СТАТУС ЗАКАЗА С ЭМОДЗИ
+        status_section = f"\n{status_config['color']} {status_config['emoji']} *СТАТУС: {status_config['title']}* {status_config['emoji']} {status_config['color']}"
+
+        # ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ПО СТАТУСУ
+        extra_info = ""
+        if status == 'picked_up':
+            extra_info = "\n\n⚡ *Курьер уже в пути! Приготовьтесь к встрече.*\n📍 Пожалуйста, будьте готовы принять заказ."
+        elif status == 'ready_for_pickup' and delivery_type == 'pickup':
+            extra_info = "\n\n🏪 *Заказ готов к выдаче!*\n⏰ Можете забрать его в удобное для вас время."
+        elif status == 'assigned':
+            extra_info = "\n\n👤 *Курьер назначен и скоро заберет ваш заказ*"
+        elif status == 'delivering':
+            extra_info = "\n\n🚚 *Курьер уже едет к вам!*\n📱 Пожалуйста, будьте на связи."
+
+        # ФОРМАТИРОВАНИЕ ТОВАРОВ КАК ТАБЛИЦА
+        items_section = "\n\n📦 *СОСТАВ ЗАКАЗА:*\n"
+        items_section += "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"
+
         total_items_value = 0
+        item_counter = 0
 
         for item in items:
+            item_counter += 1
             name = item.get('name', 'Товар')
             safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+
+            # Обрезаем длинные названия
+            if len(safe_name) > 25:
+                safe_name = safe_name[:22] + "..."
 
             if item.get('is_weight'):
                 weight = item.get('weight', 0)
                 price = item.get('price', 0)
-                items_text += f"• *{safe_name}* - {weight} кг = *{price} ₽*\n"
+                items_section += f"┃ {item_counter:2d}. {safe_name:<25} ┃\n"
+                items_section += f"┃     ⚖️ {weight:>4.2f} кг × {price:>7.0f} ₽/кг ┃\n"
+                items_section += f"┃     {'=' * 28} ┃\n"
+                items_section += f"┃     💰 ИТОГО: {price:>18.0f} ₽ ┃\n"
                 total_items_value += price
             else:
                 quantity = item.get('quantity', 1)
                 price = item.get('price', 0)
                 item_total = price * quantity
-                items_text += f"• *{safe_name}* × {quantity} шт - *{item_total} ₽*\n"
+                items_section += f"┃ {item_counter:2d}. {safe_name:<25} ┃\n"
+                items_section += f"┃     🧮 ×{quantity:<2} шт × {price:>7.0f} ₽ ┃\n"
+                items_section += f"┃     {'=' * 28} ┃\n"
+                items_section += f"┃     💰 ИТОГО: {item_total:>18.0f} ₽ ┃\n"
                 total_items_value += item_total
 
-        # Информация о курьере
-        courier_info = ""
+            if item_counter < len(items):
+                items_section += "┃" + " " * 32 + "┃\n"
+
+        items_section += "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n"
+
+        # ИНФОРМАЦИЯ О КУРЬЕРЕ (КРАСИВОЕ ОФОРМЛЕНИЕ)
+        courier_section = ""
         if courier_name:
             safe_courier_name = courier_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
-            courier_info = f"\n👤 *КУРЬЕР:* {safe_courier_name}"
+            courier_section = "\n👤 *ИНФОРМАЦИЯ О КУРЬЕРЕ:*\n"
+            courier_section += "╔══════════════════════════════╗\n"
+            courier_section += f"║ 👤 *Имя:* {safe_courier_name:<15} ║\n"
             if courier_phone:
-                courier_info += f"\n📱 *ТЕЛЕФОН:* {courier_phone}"
+                courier_section += f"║ 📱 *Телефон:* {courier_phone:<13} ║\n"
+            courier_section += "╚══════════════════════════════╝"
 
-        # Дополнительная информация
-        extra_info = ""
-        if status == 'picked_up':
-            extra_info = "\n\n⚡ *Курьер уже в пути! Приготовьтесь к встрече.*"
-        elif status == 'ready_for_pickup' and delivery_type == 'pickup':
-            extra_info = "\n\n🏪 *Заказ готов к выдаче! Можете забирать.*"
-
-        # Скидка
+        # СКИДКА
         discount_info = ""
         discount_amount = order_data.get('discount_amount', 0)
         if discount_amount > 0:
-            discount_info = f"\n🎁 *СКИДКА:* -{discount_amount} ₽\n"
+            discount_info = f"\n🎁 *СКИДКА ПО АКЦИИ:* -{discount_amount:.2f} ₽"
 
-        # Доставка
+        # ДОСТАВКА
         delivery_info = ""
         delivery_cost = order_data.get('delivery_cost', 0)
         if delivery_type == 'courier':
             if delivery_cost > 0:
-                delivery_info = f"\n🚚 *ДОСТАВКА:* {delivery_cost} ₽"
+                delivery_info = f"\n🚚 *СТОИМОСТЬ ДОСТАВКИ:* {delivery_cost:.2f} ₽"
             else:
-                delivery_info = f"\n🚚 *ДОСТАВКА:* Бесплатно"
+                delivery_info = f"\n🚚 *ДОСТАВКА:* 🎉 БЕСПЛАТНО"
         else:
-            delivery_info = f"\n🏪 *САМОВЫВОЗ:* Бесплатно"
+            delivery_info = f"\n🏪 *СПОСОБ ПОЛУЧЕНИЯ:* Самовывоз (бесплатно)"
 
-        # Итоговая сумма
+        # ИТОГОВАЯ СУММА
         total_amount = order_data.get('total_amount', 0)
 
-        # Формируем сообщение
-        message = f"""🎯 *ВАШ ЗАКАЗ #{order_id}*
+        # ПОДРОБНЫЙ РАСЧЕТ
+        calculation_section = "\n\n🧮 *ПОДРОБНЫЙ РАСЧЕТ:*"
+        calculation_section += "\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+        calculation_section += f"\n┃ 📦 Стоимость товаров: {total_items_value:>11.2f} ₽ ┃"
 
-{status_text}{extra_info}
-{items_text}
-{discount_info}
-━━━━━━━━━━━━━━━━━━━━
-💰 *ТОВАРЫ:* {total_items_value} ₽
-{delivery_info}{courier_info}
+        if discount_amount > 0:
+            calculation_section += f"\n┃ 🎁 Скидка: -{discount_amount:>22.2f} ₽ ┃"
 
-💰 *ИТОГО К ОПЛАТЕ: {total_amount:.2f} ₽*"""
+        if delivery_cost > 0:
+            calculation_section += f"\n┃ 🚚 Доставка: {delivery_cost:>22.2f} ₽ ┃"
+        elif delivery_type == 'courier' and delivery_cost == 0:
+            calculation_section += f"\n┃ 🚚 Доставка: {'БЕСПЛАТНО':>22} ┃"
 
-        # URL для веб-приложения
+        calculation_section += "\n┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫"
+        calculation_section += f"\n┃ 💰 *ИТОГО К ОПЛАТЕ:* {total_amount:>12.2f} ₽ ┃"
+        calculation_section += "\n┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+
+        # ДАТА И ВРЕМЯ
+        created_at = order_data.get('created_at', '')
+        time_section = ""
+        if created_at:
+            try:
+                dt = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S')
+                time_section = f"\n\n📅 *Дата заказа:* {dt.strftime('%d.%m.%Y')}\n🕒 *Время:* {dt.strftime('%H:%M')}"
+            except:
+                time_section = f"\n\n📅 *Заказ создан:* {created_at[:10]}"
+
+        # СОБИРАЕМ ПОЛНОЕ СООБЩЕНИЕ
+        message = f"""{header}
+{status_section}{extra_info}
+{items_section}
+{calculation_section}{discount_info}{delivery_info}
+{courier_section}{time_section}
+
+💡 *Приятных покупок! Спасибо, что выбираете нас!* 🛍️"""
+
+        # КРАСИВЫЕ КНОПКИ
         webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
 
-        # Кнопки
         keyboard = {
             "inline_keyboard": [
                 [
                     {
-                        "text": "🛒 ОТКРЫТЬ МАГАЗИН",
+                        "text": "🛍️ ОТКРЫТЬ МАГАЗИН",
                         "web_app": {"url": webapp_url}
                     }
                 ],
                 [
                     {"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"},
-                    {"text": "🚚 ОТСЛЕДИТЬ", "callback_data": f"track_{order_id}"}
+                    {"text": "📍 ОТСЛЕДИТЬ", "callback_data": f"track_{order_id}"}
+                ],
+                [
+                    {"text": "👤 ПОДДЕРЖКА", "callback_data": "help"},
+                    {"text": "⭐ ОЦЕНИТЬ", "callback_data": f"rate_{order_id}"}
                 ]
             ]
         }
 
-        # Отправляем
+        # ОТПРАВКА СООБЩЕНИЯ
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
@@ -1319,22 +1380,27 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             'reply_markup': json.dumps(keyboard)
         }
 
-        print(f"   Отправка клиенту {telegram_id}...")
+        print(f"   🎨 Отправка красивого уведомления клиенту {telegram_id}...")
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"   ✅ Уведомление отправлено клиенту {telegram_id}")
+            print(f"   ✅ Красивое уведомление отправлено клиенту {telegram_id}")
+
+            # Дополнительно: отправляем простую версию если сообщение слишком длинное
+            if len(message) > 4000:
+                print("   ⚠️ Сообщение длинное, отправляем упрощенную версию...")
+                send_simple_notification(telegram_id, order_id, status, total_amount, courier_name)
+
             return True
         else:
-            print(f"   ❌ Ошибка отправки клиенту: {response.text}")
-            return False
+            print(f"   ❌ Ошибка отправки: {response.text}")
+            # Пробуем отправить простую версию
+            return send_simple_notification(telegram_id, order_id, status, total_amount, courier_name)
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления клиенту: {e}")
+        print(f"❌ Ошибка отправки красивого уведомления: {e}")
         import traceback
         traceback.print_exc()
-        return False
-
 
 def send_order_notification(order_id, status, courier_id=None):
     """Универсальная функция отправки уведомлений о заказе"""
