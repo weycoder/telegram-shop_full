@@ -1224,7 +1224,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         status_text = status_texts.get(status, f"📊 *{status.upper()}*")
 
         # Форматируем товары
-        items_text = "📦 *СОСТАВ ЗАКАЗА:*\n"
+        items_text = "\n📦 *СОСТАВ ЗАКАЗА:*\n"
         total_items_value = 0
 
         for item in items:
@@ -2157,7 +2157,17 @@ def assign_order_to_courier(order_id, delivery_type):
         print(f"✅ Заказ #{order_id} назначен курьеру #{courier_id} ({courier_name})")
 
         # Отправляем уведомление о назначении курьера
-        send_order_notification(order_id, 'assigned', courier_id)
+        order = db.execute('SELECT user_id, items, delivery_type FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if order:
+            send_order_details_notification(
+                telegram_id=order['user_id'],
+                order_id=order_id,
+                items=json.loads(order['items']) if order['items'] else [],
+                status='assigned',
+                delivery_type=order['delivery_type'],
+                courier_name=courier_name,
+                courier_phone=courier_phone
+            )
 
         return courier_id
 
@@ -3974,7 +3984,15 @@ def courier_take_order():
         print(f"✅ Заказ #{order_id} взят курьером #{courier_id}")
 
         # Отправляем уведомление покупателю
-        send_order_notification(order_id, 'assigned', courier_id)
+        send_order_details_notification(
+            telegram_id=order_info['user_id'],  # Нужно получить user_id заказа
+            order_id=order_id,
+            items=order_info.get('items_list', []),
+            status='assigned',
+            delivery_type='courier',
+            courier_name=courier_info.get('full_name'),
+            courier_phone=courier_info.get('phone')
+        )
 
         return jsonify({'success': True, 'message': 'Заказ успешно взят в доставку'})
 
@@ -4255,7 +4273,18 @@ def update_delivery_status():
 
         # Отправляем уведомление в бот с правильным статусом
         # Если статус 'picked_up', отправляем 'picked_up' для специального текста
-        send_order_notification(order_id, status if status == 'picked_up' else status, courier_id)
+        db = get_db()
+        order = db.execute('SELECT user_id, items, delivery_type FROM orders WHERE id = ?', (order_id,)).fetchone()
+        if order:
+            send_order_details_notification(
+                telegram_id=order['user_id'],
+                order_id=order_id,
+                items=json.loads(order['items']) if order['items'] else [],
+                status='picked_up' if status == 'picked_up' else status,
+                delivery_type=order['delivery_type'],
+                courier_name=courier_name,
+                courier_phone=courier_phone
+            )
 
         return jsonify({'success': True, 'photo_url': photo_url})
 
