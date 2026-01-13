@@ -2550,7 +2550,8 @@ def api_create_order():
                 print(f"✅ Доставка бесплатная (сумма заказа: {order_total} руб)")
 
         total_with_delivery = order_total + delivery_cost
-        print(f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
+        print(
+            f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
 
         # ========== ОПЛАТА НАЛИЧНЫМИ ==========
         cash_payment = data.get('cash_payment', {}) or {}
@@ -2570,6 +2571,7 @@ def api_create_order():
             print(f"💵 Авторасчет наличных: получено={cash_received}, сдача={cash_change}")
 
         cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
+
         # ОБРАБОТКА АДРЕСА
         address_obj = {}
         if isinstance(delivery_address, str):
@@ -2712,30 +2714,50 @@ def api_create_order():
         except Exception as e:
             print(f"⚠️ Не удалось создать чат: {e}")
 
-            # ========== ОТПРАВКА УВЕДОМЛЕНИЙ ==========
-            print(f"📨 ОТПРАВКА УВЕДОМЛЕНИЙ ДЛЯ ЗАКАЗА #{order_id}")
+        # ========== ОСОБАЯ ОБРАБОТКА ДЛЯ САМОВЫВОЗА ==========
+        if delivery_type == 'pickup':
+            print(f"📦 ЗАКАЗ #{order_id} - САМОВЫВОЗ: отправляем специальные уведомления")
 
-            # 1. Уведомление клиенту
+            # 1. Уведомление клиенту о самовывозе
             if user_id and user_id > 0:
-                print(f"   Клиент: user_id={user_id}, username={username}")
                 try:
-                    # Получаем items для уведомления
-                    items_for_notification = data.get('items', [])
+                    send_pickup_order_notification(
+                        telegram_id=user_id,
+                        order_id=order_id,
+                        items=data.get('items', []),
+                        pickup_point=data.get('pickup_point', ''),
+                        order_total=order_total,
+                        discount_amount=discount_amount,
+                        username=username,
+                        total_with_delivery=total_with_delivery
+                    )
+                except Exception as e:
+                    print(f"   ❌ Ошибка отправки уведомления клиенту (самовывоз): {e}")
 
+            # 2. Уведомление админу о заказе на самовывоз
+            try:
+                send_admin_pickup_notification(order_id)
+            except Exception as e:
+                print(f"   ❌ Ошибка отправки уведомления админу (самовывоз): {e}")
+
+        else:
+            # ========== ОБЫЧНЫЕ УВЕДОМЛЕНИЯ ДЛЯ ДОСТАВКИ ==========
+            print(f"🚚 ЗАКАЗ #{order_id} - КУРЬЕРСКАЯ ДОСТАВКА")
+
+            # 1. Уведомление клиенту (для доставки)
+            if user_id and user_id > 0:
+                try:
                     send_order_details_notification(
                         telegram_id=user_id,
                         order_id=order_id,
-                        items=items_for_notification,
+                        items=data.get('items', []),
                         status='created',
                         delivery_type=delivery_type
                     )
                 except Exception as e:
-                    print(f"   ❌ Ошибка отправки клиенту: {e}")
-            else:
-                print("   ⚠️ Нет user_id для отправки клиенту")
+                    print(f"   ❌ Ошибка отправки клиенту (доставка): {e}")
 
             # 2. Уведомление админу
-            print("   Отправка админу...")
             try:
                 send_admin_order_notification(order_id)
             except Exception as e:
@@ -2743,7 +2765,6 @@ def api_create_order():
 
             # 3. Если курьерская доставка - уведомляем курьеров
             if delivery_type == 'courier':
-                print("   Отправка курьерам...")
                 try:
                     send_courier_order_notification(order_id)
                 except Exception as e:
@@ -2761,7 +2782,7 @@ def api_create_order():
             'delivery_cost': delivery_cost,
             'total_with_delivery': total_with_delivery,
             'discount_amount': discount_amount,
-            'order_total': order_total  # Добавляем для отладки
+            'order_total': order_total
         })
 
     except Exception as e:
@@ -2929,6 +2950,243 @@ def send_admin_order_notification(order_id):
         import traceback
         traceback.print_exc()
         return False
+
+
+def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, order_total, discount_amount, username,
+                                   total_with_delivery):
+    """Отправить специальное уведомление для заказа с самовывозом"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
+
+        print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
+
+        if not telegram_id or telegram_id == 0:
+            print("❌ Неверный telegram_id клиента")
+            return False
+
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        # Форматируем товары
+        items_text = "📦 *Ваш заказ:*\n"
+        total_items_value = 0
+
+        for item in items:
+            name = item.get('name', 'Товар')
+            safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+
+            if item.get('is_weight'):
+                weight = item.get('weight', 0)
+                price = item.get('price', 0)
+                items_text += f"• *{safe_name}* - {weight} кг = *{price} ₽*\n"
+                total_items_value += price
+            else:
+                quantity = item.get('quantity', 1)
+                price = item.get('price', 0)
+                item_total = price * quantity
+                items_text += f"• *{safe_name}* × {quantity} шт - *{item_total} ₽*\n"
+                total_items_value += item_total
+
+        # Скидка
+        discount_info = ""
+        if discount_amount > 0:
+            discount_info = f"\n🎁 *Скидка:* -{discount_amount} ₽\n"
+
+        # Итоговая сумма
+        final_total = total_with_delivery
+
+        # Формируем сообщение
+        message = f"""🏪 *ВАШ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*
+
+{items_text}
+{discount_info}
+━━━━━━━━━━━━━━━━━━━━
+💰 *ИТОГО: {final_total:.2f} ₽*
+
+📍 *Пункт выдачи:* {pickup_point}
+
+⏰ *Статус:* Ожидает сборки
+📝 *Заберите заказ в течение 30 минут после уведомления о готовности*
+
+🎯 *Заказ будет собран в ближайшее время! Мы уведомим вас, когда он будет готов к выдаче.*"""
+
+        # URL для веб-приложения
+        webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
+
+        # Кнопки для клиента
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "🛒 ОТКРЫТЬ МАГАЗИН",
+                        "web_app": {"url": webapp_url}
+                    }
+                ],
+                [
+                    {"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"},
+                    {"text": "💬 ЗАДАТЬ ВОПРОС", "callback_data": f"ask_question_{order_id}"}
+                ],
+                [
+                    {"text": "📍 КАК ДОБРАТЬСЯ", "callback_data": f"get_directions_{order_id}"}
+                ]
+            ]
+        }
+
+        # Отправляем
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+        data = {
+            'chat_id': int(telegram_id),
+            'text': message,
+            'parse_mode': 'Markdown',
+            'disable_web_page_preview': True,
+            'reply_markup': json.dumps(keyboard)
+        }
+
+        print(f"   Отправка клиенту {telegram_id}...")
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"   ✅ Уведомление о самовывозе отправлено клиенту {telegram_id}")
+            return True
+        else:
+            print(f"   ❌ Ошибка отправки клиенту: {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомления о самовывозе: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def send_admin_pickup_notification(order_id):
+    """Отправить админу уведомление о заказе на самовывоз"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        ADMIN_TELEGRAM_IDS = os.getenv('ADMIN_IDS', '')
+
+        print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
+
+        if not BOT_TOKEN or not ADMIN_TELEGRAM_IDS:
+            print("❌ BOT_TOKEN или ADMIN_IDS не установлены")
+            return False
+
+        db = get_db()
+
+        # Получаем информацию о заказе
+        order = db.execute('''
+                           SELECT o.*,
+                                  (o.total_price + COALESCE(o.delivery_cost, 0) -
+                                   COALESCE(o.discount_amount, 0)) as total_amount
+                           FROM orders o
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
+
+        if not order:
+            print(f"❌ Заказ #{order_id} не найден")
+            db.close()
+            return False
+
+        order_data = dict(order)
+        db.close()
+
+        # Разбираем ID админов
+        admin_ids = []
+        for admin_id in ADMIN_TELEGRAM_IDS.split(','):
+            admin_id = admin_id.strip()
+            if admin_id and admin_id.isdigit():
+                admin_ids.append(int(admin_id))
+
+        # Парсим товары
+        items_list = []
+        items_count = 0
+        if order_data.get('items'):
+            try:
+                items_list = json.loads(order_data['items'])
+                items_count = sum(item.get('quantity', 1) for item in items_list)
+            except:
+                items_list = []
+
+        # Формируем сообщение для админа
+        text = f"🏪 *НОВЫЙ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*\n\n"
+        text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
+        text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
+        text += f"📍 *Пункт выдачи:* {order_data.get('pickup_point', 'Не указан')}\n"
+        text += f"📦 *Товаров:* {items_count} шт\n"
+        text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
+
+        if order_data.get('discount_amount', 0) > 0:
+            text += f"🎁 *Скидка:* {order_data.get('discount_amount', 0)} ₽\n"
+
+        if order_data.get('cash_received', 0) > 0:
+            text += f"💵 *Наличные:* {order_data.get('cash_received', 0)} ₽"
+            if order_data.get('cash_change', 0) > 0:
+                text += f" (сдача {order_data.get('cash_change', 0)} ₽)"
+            text += "\n"
+
+        text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
+        text += f"\n⚡ *Заказ готовится к выдаче!*"
+
+        # Кнопки для админа
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "📋 ДЕТАЛИ ЗАКАЗА", "callback_data": f"admin_order_{order_id}"},
+                    {"text": "✅ ГОТОВ К ВЫДАЧЕ", "callback_data": f"ready_pickup_{order_id}"}
+                ],
+                [
+                    {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"},
+                    {"text": "💬 ЧАТ С КЛИЕНТОМ", "callback_data": f"chat_{order_id}"}
+                ]
+            ]
+        }
+
+        # Отправляем всем админам
+        success_count = 0
+        for admin_id in admin_ids:
+            try:
+                url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+                data = {
+                    'chat_id': int(admin_id),
+                    'text': text,
+                    'parse_mode': 'Markdown',
+                    'reply_markup': json.dumps(keyboard)
+                }
+
+                print(f"   Отправка админу {admin_id}...")
+                response = requests.post(url, json=data, timeout=10)
+
+                if response.status_code == 200:
+                    print(f"   ✅ Уведомление отправлено админу {admin_id}")
+                    success_count += 1
+                else:
+                    print(f"   ❌ Ошибка отправки админу {admin_id}: {response.text}")
+
+            except Exception as e:
+                print(f"   ❌ Исключение при отправке админу {admin_id}: {e}")
+
+        print(f"📨 Итог: отправлено {success_count}/{len(admin_ids)} админам")
+        return success_count > 0
+
+    except Exception as e:
+        print(f"❌ Критическая ошибка в send_admin_pickup_notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+
+
+
+
+
+
+
+
+
+
 
 @app.route('/api/admin/chats', methods=['GET'])
 def api_admin_chats():
