@@ -2969,6 +2969,49 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
             print("❌ BOT_TOKEN не установлен")
             return False
 
+        # Получаем информацию о пункте выдачи из базы данных
+        db = get_db()
+        pickup_info = None
+        if pickup_point:
+            try:
+                # Если pickup_point это ID (число), получаем данные из базы
+                if pickup_point.isdigit():
+                    pickup_info = db.execute(
+                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
+                        (int(pickup_point),)
+                    ).fetchone()
+                else:
+                    # Иначе используем как есть (текст)
+                    pickup_info = {'name': pickup_point, 'address': pickup_point}
+            except Exception as e:
+                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+                pickup_info = None
+        db.close()
+
+        # Форматируем информацию о пункте выдачи
+        pickup_text = ""
+        if pickup_info:
+            if isinstance(pickup_info, dict):
+                # Если это словарь (уже имеет данные)
+                pickup_text = f"📍 *Пункт выдачи:* {pickup_info.get('name', pickup_point)}\n"
+                if pickup_info.get('address'):
+                    pickup_text += f"   Адрес: {pickup_info['address']}\n"
+                if pickup_info.get('working_hours'):
+                    pickup_text += f"   Часы работы: {pickup_info['working_hours']}\n"
+                if pickup_info.get('phone'):
+                    pickup_text += f"   Телефон: {pickup_info['phone']}\n"
+            else:
+                # Если это объект Row из SQLite
+                pickup_text = f"📍 *Пункт выдачи:* {pickup_info['name']}\n"
+                if pickup_info['address']:
+                    pickup_text += f"   Адрес: {pickup_info['address']}\n"
+                if pickup_info['working_hours']:
+                    pickup_text += f"   Часы работы: {pickup_info['working_hours']}\n"
+                if pickup_info['phone']:
+                    pickup_text += f"   Телефон: {pickup_info['phone']}\n"
+        else:
+            pickup_text = f"📍 *Пункт выдачи:* {pickup_point}\n"
+
         # Форматируем товары
         items_text = "📦 *Ваш заказ:*\n"
         total_items_value = 0
@@ -3005,8 +3048,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
 ━━━━━━━━━━━━━━━━━━━━
 💰 *ИТОГО: {final_total:.2f} ₽*
 
-📍 *Пункт выдачи:* {pickup_point}
-
+{pickup_text}
 ⏰ *Статус:* Ожидает сборки
 📝 *Заберите заказ в течение 30 минут после уведомления о готовности*
 
@@ -3060,12 +3102,11 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
         traceback.print_exc()
         return False
 
-
 def send_admin_pickup_notification(order_id):
     """Отправить админу уведомление о заказе на самовывоз"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
-        ADMIN_TELEGRAM_IDS = os.getenv('ADMIN_IDS', '')
+        BOT_TOKEN = os.getenv('8325707242:AAEYar6iU06dBWEwoUPbZCsHSUjlkVsx1sg')
+        ADMIN_TELEGRAM_IDS = 7331765165
 
         print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
 
