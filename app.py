@@ -1174,7 +1174,7 @@ def api_bot_get_order_detail(order_id, telegram_id):
 
 def send_order_details_notification(telegram_id, order_id, items, status, delivery_type,
                                     courier_name=None, courier_phone=None):
-    """Отправить уведомление клиенту - ПОЛНАЯ ВЕРСИЯ АДРЕСА"""
+    """Отправить уведомление клиенту - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
@@ -1234,17 +1234,17 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         # Форматируем ПОЛНЫЙ адрес для уведомления
         address_parts = []
         if order_data.get('city'):
-            address_parts.append(f"г. {order_data['city']}")
+            address_parts.append(f"{order_data['city']}")
         if order_data.get('street'):
             address_parts.append(f"ул. {order_data['street']}")
         if order_data.get('house'):
             address_parts.append(f"д. {order_data['house']}")
         if order_data.get('building'):
-            address_parts.append(f"корп. {order_data['building']}")
+            address_parts.append(f"к{order_data['building']}")
         if order_data.get('entrance'):
-            address_parts.append(f"подъезд {order_data['entrance']}")
+            address_parts.append(f"п{order_data['entrance']}")
         if order_data.get('apartment'):
-            address_parts.append(f"кв. {order_data['apartment']}")
+            address_parts.append(f"кв{order_data['apartment']}")
 
         address = ', '.join(address_parts) if address_parts else "Адрес не указан"
 
@@ -1939,7 +1939,7 @@ def api_get_chat_messages():
 
 
 def send_courier_order_notification(order_id):
-    """Отправить уведомление всем курьерам о новом заказе - ПОЛНАЯ ВЕРСИЯ АДРЕСА"""
+    """Отправить уведомление всем курьерам о новом заказе - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
         BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         if not BOT_TOKEN:
@@ -1972,23 +1972,36 @@ def send_courier_order_notification(order_id):
 
         order_dict = dict(order)
 
-        # Форматируем ПОЛНЫЙ адрес с ВСЕМИ полями
+        # Форматируем ПОЛНЫЙ адрес для отображения
         address_parts = []
         if order_dict.get('city'):
-            address_parts.append(order_dict['city'])
+            address_parts.append(f"{order_dict['city']}")
         if order_dict.get('street'):
             address_parts.append(f"ул. {order_dict['street']}")
         if order_dict.get('house'):
             address_parts.append(f"д. {order_dict['house']}")
         if order_dict.get('building'):
-            address_parts.append(f"корп. {order_dict['building']}")
+            address_parts.append(f"к{order_dict['building']}")
         if order_dict.get('entrance'):
-            address_parts.append(f"подъезд {order_dict['entrance']}")
+            address_parts.append(f"п{order_dict['entrance']}")
         if order_dict.get('apartment'):
-            address_parts.append(f"кв. {order_dict['apartment']}")
+            address_parts.append(f"кв{order_dict['apartment']}")
 
-        # Основной адрес
-        address_main = ', '.join(address_parts) if address_parts else "Адрес не указан"
+        # Основной адрес (все в одной строке)
+        address_full = ', '.join(address_parts) if address_parts else "Адрес не указан"
+
+        # Форматируем адрес для навигатора (без "кв")
+        nav_parts = []
+        if order_dict.get('city'):
+            nav_parts.append(order_dict['city'])
+        if order_dict.get('street'):
+            nav_parts.append(f"улица {order_dict['street']}")
+        if order_dict.get('house'):
+            nav_parts.append(f"дом {order_dict['house']}")
+        if order_dict.get('building'):
+            nav_parts.append(f"корпус {order_dict['building']}")
+
+        nav_address = ', '.join(nav_parts) if nav_parts else ""
 
         # Дополнительная информация
         address_details = []
@@ -2000,7 +2013,7 @@ def send_courier_order_notification(order_id):
         # Комментарий курьеру
         comment_text = ""
         if order_dict.get('address_comment'):
-            comment_text = f"\n📝 *Комментарий курьеру:* {order_dict['address_comment']}"
+            comment_text = f"📝 *Комментарий к заказу:* {order_dict['address_comment']}"
 
         # Парсим товары
         items_list = []
@@ -2039,16 +2052,17 @@ def send_courier_order_notification(order_id):
         text += f"📦 *Заказ:* #{order_id}\n"
         text += f"👤 *Получатель:* {order_dict.get('recipient_name_full', order_dict.get('recipient_name', order_dict.get('username', 'Клиент')))}\n"
         text += f"📱 *Телефон:* {order_dict.get('phone_full', order_dict.get('phone_number', 'Не указан'))}\n"
-        text += f"📍 *Адрес:* {address_main}\n"
+        text += f"📍 *Адрес:* {address_full}\n"
 
-        # Дополнительная информация об адресе
+        # Добавляем детали адреса если есть
         if address_details:
             text += f"\n📋 *Детали адреса:*\n"
             for detail in address_details:
                 text += f"• {detail}\n"
 
-        # Комментарий курьеру
-        text += f"{comment_text}"
+        # Добавляем комментарий если есть
+        if comment_text:
+            text += f"\n{comment_text}\n"
 
         # Информация о товарах
         if total_weight > 0:
@@ -2074,7 +2088,7 @@ def send_courier_order_notification(order_id):
         # Список товаров (компактно)
         if items_list:
             text += f"\n📦 *Состав заказа:*\n"
-            for idx, item in enumerate(items_list[:5], 1):  # Показываем первые 5 товаров
+            for idx, item in enumerate(items_list[:5], 1):
                 name = item.get('name', 'Товар')
                 if len(name) > 30:
                     name = name[:27] + "..."
@@ -2098,13 +2112,16 @@ def send_courier_order_notification(order_id):
                 [
                     {"text": "✅ ВЗЯТЬ ЗАКАЗ", "callback_data": f"courier_take_{order_id}"},
                     {"text": "🚀 КУРЬЕР ПАНЕЛЬ", "callback_data": "courier_panel"}
-                ],
-                [
-                    {"text": "📍 ОТКРЫТЬ В НАВИГАТОРЕ",
-                     "url": f"https://yandex.ru/maps/?text={address_main.replace(' ', '+')}"}
                 ]
             ]
         }
+
+        # Добавляем кнопку навигатора если есть адрес
+        if nav_address:
+            keyboard["inline_keyboard"].append([
+                {"text": "📍 ОТКРЫТЬ В НАВИГАТОРЕ",
+                 "url": f"https://yandex.ru/maps/?text={nav_address.replace(' ', '+')}"}
+            ])
 
         # Отправляем сообщение всем курьерам
         success_count = 0
@@ -3160,7 +3177,7 @@ def api_create_order():
 
 
 def send_admin_order_notification(order_id):
-    """Отправить уведомление админу о новом заказе - ПОЛНАЯ ВЕРСИЯ АДРЕСА"""
+    """Отправить уведомление админу о новом заказе - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
         BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         ADMIN_TELEGRAM_IDS = 7331765165
@@ -3205,35 +3222,35 @@ def send_admin_order_notification(order_id):
         order_data = dict(order)
         db.close()
 
-        # Формируем ПОЛНЫЙ адрес с ВСЕМИ полями
+        # Форматируем ПОЛНЫЙ адрес с корпусом и подъездом
         address_parts = []
         if order_data.get('city'):
-            address_parts.append(f"г. {order_data['city']}")
+            address_parts.append(f"{order_data['city']}")
         if order_data.get('street'):
             address_parts.append(f"ул. {order_data['street']}")
         if order_data.get('house'):
             address_parts.append(f"д. {order_data['house']}")
-
-        # Основной адрес (город, улица, дом)
-        address_main = ', '.join(address_parts) if address_parts else "Адрес не указан"
-
-        # Дополнительные поля адреса
-        address_details = []
         if order_data.get('building'):
-            address_details.append(f"корп. {order_data['building']}")
+            address_parts.append(f"к{order_data['building']}")
         if order_data.get('entrance'):
-            address_details.append(f"подъезд {order_data['entrance']}")
+            address_parts.append(f"п{order_data['entrance']}")
         if order_data.get('apartment'):
-            address_details.append(f"кв. {order_data['apartment']}")
+            address_parts.append(f"кв{order_data['apartment']}")
+
+        # Основной адрес (все в одной строке)
+        address_full = ', '.join(address_parts) if address_parts else "Адрес не указан"
+
+        # Дополнительные детали адреса
+        address_details = []
         if order_data.get('floor'):
-            address_details.append(f"этаж {order_data['floor']}")
+            address_details.append(f"Этаж: {order_data['floor']}")
         if order_data.get('doorcode'):
-            address_details.append(f"домофон: {order_data['doorcode']}")
+            address_details.append(f"Домофон: {order_data['doorcode']}")
 
         # Комментарий курьеру
         comment_text = ""
         if order_data.get('address_comment'):
-            comment_text = f"\n📝 *Комментарий курьеру:* {order_data['address_comment']}"
+            comment_text = f"📝 *Комментарий к заказу:* {order_data['address_comment']}"
 
         # Получаем ID админов
         admin_ids = []
@@ -3274,7 +3291,7 @@ def send_admin_order_notification(order_id):
 
         if order_data.get('delivery_type') == 'courier':
             text += f"🚚 *Тип:* Доставка курьером\n"
-            text += f"📍 *Адрес:* {address_main}\n"
+            text += f"📍 *Адрес:* {address_full}\n"
 
             # Добавляем детали адреса если есть
             if address_details:
@@ -3283,7 +3300,8 @@ def send_admin_order_notification(order_id):
                     text += f"• {detail}\n"
 
             # Добавляем комментарий если есть
-            text += f"{comment_text}"
+            if comment_text:
+                text += f"\n{comment_text}\n"
         else:
             text += f"🏪 *Тип:* Самовывоз\n"
 
@@ -3343,7 +3361,6 @@ def send_admin_order_notification(order_id):
         import traceback
         traceback.print_exc()
         return False
-
 
 def handle_order_ready_callback(call):
     """Обработчик нажатия на кнопку 'Заказ готов'"""
