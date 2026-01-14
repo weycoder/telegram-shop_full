@@ -2713,6 +2713,7 @@ async editOrder(orderId) {
                             <i class="fas fa-map-marker-alt" style="font-size: 18px;"></i>
                             <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Адрес доставки</h3>
                         </div>
+                        </div>
 
                         <div class="form-group" style="margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
@@ -3490,6 +3491,7 @@ async editOrder(orderId) {
                 'terminal': 'Терминал'
             };
             this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
+            this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
             this.confirmOrder();
         }
     }
@@ -3846,17 +3848,37 @@ async editOrder(orderId) {
                 discount_info: item.discount_info || null
             }));
 
-            // Подготавливаем delivery_details для сохранения
+            // 🚨 ИСПРАВЛЕНИЕ: Подготавливаем delivery_details С ВСЕМИ полями
             let deliveryDetails = null;
+            let recipientName = '';
+            let phoneNumber = '';
+            let addressComment = '';
+
             if (this.deliveryData.type === 'courier' && this.deliveryData.address_details) {
+                // Формируем ПОЛНЫЙ объект адреса со ВСЕМИ полями
                 deliveryDetails = {
                     city: this.deliveryData.address_details.city || '',
                     street: this.deliveryData.address_details.street || '',
                     house: this.deliveryData.address_details.house || '',
+                    // 🚨 ДОБАВЛЯЕМ ПРОПУЩЕННЫЕ ПОЛЯ:
+                    building: this.deliveryData.address_details.building || '',
+                    entrance: this.deliveryData.address_details.entrance || '',
+                    // Конец добавления пропущенных полей
                     apartment: this.deliveryData.address_details.apartment || '',
                     floor: this.deliveryData.address_details.floor || '',
-                    doorcode: this.deliveryData.address_details.doorcode || ''
+                    doorcode: this.deliveryData.address_details.doorcode || '',
+                    // 🚨 ДОБАВЛЯЕМ ОБЯЗАТЕЛЬНЫЕ ПОЛЯ:
+                    recipient_name: this.deliveryData.address_details.recipient_name || this.username || 'Покупатель',
+                    phone: this.deliveryData.address_details.phone || '',
+                    comment: this.deliveryData.address_comment || ''
                 };
+
+                // Также сохраняем отдельно для передачи на верхнем уровне
+                recipientName = deliveryDetails.recipient_name;
+                phoneNumber = deliveryDetails.phone;
+                addressComment = deliveryDetails.comment;
+
+                console.log('📦 Полные данные адреса для отправки:', deliveryDetails);
             }
 
             const orderData = {
@@ -3867,12 +3889,25 @@ async editOrder(orderId) {
                 items_discount: itemsDiscount,
                 discounted_subtotal: discountedSubtotal,
                 delivery_type: this.deliveryData.type,
-                delivery_address: deliveryDetails ? JSON.stringify(deliveryDetails) : null,
+                // 🚨 ИСПРАВЛЕНИЕ: Отправляем ВЕСЬ адрес как JSON строку
+                delivery_address: deliveryDetails ? JSON.stringify(deliveryDetails) : '{}',
                 delivery_cost: deliveryCost,
                 pickup_point: this.deliveryData.pickup_point,
                 payment_method: this.deliveryData.payment_method || 'cash',
-                recipient_name: this.deliveryData.address_details?.recipient_name || this.username || 'Покупатель',
-                phone_number: this.deliveryData.address_details?.phone || '',
+                // 🚨 ДОБАВЛЯЕМ поля на верхнем уровне для гарантии:
+                recipient_name: recipientName,
+                phone_number: phoneNumber,
+                comment: addressComment,
+                // Также добавляем отдельные поля адреса для удобства
+                city: deliveryDetails?.city || '',
+                street: deliveryDetails?.street || '',
+                house: deliveryDetails?.house || '',
+                building: deliveryDetails?.building || '',
+                entrance: deliveryDetails?.entrance || '',
+                apartment: deliveryDetails?.apartment || '',
+                floor: deliveryDetails?.floor || '',
+                doorcode: deliveryDetails?.doorcode || '',
+                // Конец добавления
                 cash_payment: this.deliveryData.cash_payment || null,
                 promo_code: this.appliedPromoCode?.code || null,
                 promo_code_id: this.appliedPromoCode?.id || null,
@@ -3880,7 +3915,7 @@ async editOrder(orderId) {
                 total: totalWithDelivery
             };
 
-            console.log('📤 Отправка заказа на сервер:', orderData);
+            console.log('📤 Отправка заказа на сервер:', JSON.stringify(orderData, null, 2));
 
             const result = await this.createOrder(orderData);
 
@@ -3910,7 +3945,7 @@ async editOrder(orderId) {
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка сервера');
             }
-                localStorage.removeItem('applied_promo_code');
+            localStorage.removeItem('applied_promo_code');
 
         } catch (error) {
             console.error('❌ Ошибка оформления заказа:', error);

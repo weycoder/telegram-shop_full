@@ -1060,11 +1060,6 @@ def init_security():
 # Вызовите после init_db()
 init_security()
 
-
-
-
-
-
 @app.route('/api/bot/get-orders/<int:telegram_id>', methods=['GET'])
 def api_bot_get_orders(telegram_id):
     """API для получения заказов пользователя (для бота)"""
