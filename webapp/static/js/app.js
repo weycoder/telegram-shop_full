@@ -2713,7 +2713,6 @@ async editOrder(orderId) {
                             <i class="fas fa-map-marker-alt" style="font-size: 18px;"></i>
                             <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Адрес доставки</h3>
                         </div>
-                        </div>
 
                         <div class="form-group" style="margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
