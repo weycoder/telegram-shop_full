@@ -256,6 +256,7 @@ class CourierApp {
     createAvailableOrderCard(order) {
         // Извлекаем данные как в createOrderCard
         let address = "Адрес не указан";
+        let addressDetails = [];
         let recipient = "Не указан";
         let phone = "Телефон не указан";
         let paymentInfo = "Не указан";
@@ -277,6 +278,7 @@ class CourierApp {
             phone = order.phone_number;
         }
 
+        // Обработка адреса - ПОЛНАЯ ИНФОРМАЦИЯ
         if (order.delivery_address) {
             try {
                 let addressData = null;
@@ -291,21 +293,22 @@ class CourierApp {
                 }
 
                 if (addressData && typeof addressData === 'object') {
-                    const parts = [];
-                    if (addressData.city) parts.push(addressData.city);
-                    if (addressData.street) parts.push(`ул. ${addressData.street}`);
-                    if (addressData.house) parts.push(`д. ${addressData.house}`);
-                    if (addressData.building) parts.push(`к. ${addressData.building}`);
-                    if (addressData.entrance) parts.push(`п. ${addressData.entrance}`);
-                    if (addressData.floor) parts.push(`эт. ${addressData.floor}`);
-                    if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
-                    if (addressData.doorcode) parts.push(`Домофон: ${addressData.doorcode}`);
+                    // Основные части адреса
+                    const mainParts = [];
+                    if (addressData.city) mainParts.push(addressData.city);
+                    if (addressData.street) mainParts.push(`ул. ${addressData.street}`);
+                    if (addressData.house) mainParts.push(`д. ${addressData.house}`);
+                    if (addressData.building) mainParts.push(`корп. ${addressData.building}`);
 
-                    if (parts.length > 0) {
-                        address = parts.join(', ');
-                    } else if (addressData.address) {
-                        address = addressData.address;
+                    if (mainParts.length > 0) {
+                        address = mainParts.join(', ');
                     }
+
+                    // Детали адреса
+                    if (addressData.entrance) addressDetails.push(`Подъезд: ${addressData.entrance}`);
+                    if (addressData.floor) addressDetails.push(`Этаж: ${addressData.floor}`);
+                    if (addressData.apartment) addressDetails.push(`Квартира: ${addressData.apartment}`);
+                    if (addressData.doorcode) addressDetails.push(`Домофон: ${addressData.doorcode}`);
 
                     if (recipient === "Не указан" && addressData.recipient_name) {
                         recipient = addressData.recipient_name;
@@ -355,7 +358,6 @@ class CourierApp {
         let cashPaymentInfo = '';
         if (order.payment_method === 'cash') {
             if (cashReceived > 0 || cashChange > 0) {
-                // Если есть данные о наличных
                 cashPaymentInfo = `
                     <div class="cash-payment-details" style="margin-top: 10px; padding: 12px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: bold;">
@@ -389,7 +391,6 @@ class CourierApp {
 
                 cashPaymentInfo += `</div>`;
             } else {
-                // Если нет данных о наличных, но оплата наличными
                 cashPaymentInfo = `
                     <div class="cash-payment-details" style="margin-top: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px dashed #6c757d;">
                         <div style="text-align: center; color: #6c757d;">
@@ -428,6 +429,14 @@ class CourierApp {
                         <span class="info-label">Адрес:</span>
                         <span class="info-value" style="font-size: 12px;">${address}</span>
                     </div>
+                    ${addressDetails.length > 0 ? `
+                        <div class="info-item">
+                            <span class="info-label">Детали:</span>
+                            <span class="info-value" style="font-size: 11px; color: #666;">
+                                ${addressDetails.join(', ')}
+                            </span>
+                        </div>
+                    ` : ''}
                     <div class="info-item">
                         <span class="info-label">Создан:</span>
                         <span class="info-value">${new Date(order.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</span>
@@ -678,11 +687,9 @@ class CourierApp {
     createOrderCard(order, isCompleted = false) {
         // ========== ИСПРАВЛЕННОЕ ИЗВЛЕЧЕНИЕ ДАННЫХ ==========
         let address = "Адрес не указан";
+        let addressDetails = [];
         let recipient = "Не указан";
         let phone = "Телефон не указан";
-
-        // ИНФОРМАЦИЯ О НАЛИЧНОЙ ОПЛАТЕ
-        let cashInfo = "";
         let paymentInfo = "Не указан";
 
         // ========== РАСЧЕТ СУММ С УЧЕТОМ СКИДКИ ==========
@@ -692,7 +699,10 @@ class CourierApp {
         const deliveryCost = parseFloat(order.delivery_cost) || 0;
         const totalWithDelivery = totalAfterDiscount + deliveryCost;
 
-        // ИНФОРМАЦИЯ О СКИДКЕ
+        // ========== ИНФОРМАЦИЯ О НАЛИЧНОЙ ОПЛАТЕ ==========
+        let cashInfo = "";
+
+        // ========== ИНФОРМАЦИЯ О СКИДКЕ ==========
         let discountInfo = '';
         if (discountAmount > 0) {
             discountInfo = `
@@ -746,7 +756,6 @@ class CourierApp {
             const cashReceived = parseFloat(order.cash_received) || 0;
             const cashChange = parseFloat(order.cash_change) || 0;
 
-            // Всегда показываем информацию о наличной оплате для наличных заказов
             cashInfo = `
                 <div class="cash-payment-info" style="margin-top: 8px; padding: 10px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107; font-size: 13px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
@@ -801,7 +810,7 @@ class CourierApp {
             phone = order.phone_number;
         }
 
-        // 3. Обработка адреса
+        // 3. Обработка адреса - ПОЛНАЯ ИНФОРМАЦИЯ
         let addressData = null;
         if (order.delivery_address) {
             try {
@@ -816,23 +825,25 @@ class CourierApp {
                 }
 
                 if (addressData && typeof addressData === 'object') {
-                    const parts = [];
-                    if (addressData.city) parts.push(addressData.city);
-                    if (addressData.street) parts.push(`ул. ${addressData.street}`);
-                    if (addressData.house) parts.push(`д. ${addressData.house}`);
-                    if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
-                    if (addressData.building) parts.push(`к. ${addressData.building}`);
-                    if (addressData.entrance) parts.push(`п. ${addressData.entrance}`);
-                    if (addressData.floor) parts.push(`эт. ${addressData.floor}`);
-                    if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
-                    if (addressData.doorcode) parts.push(`Домофон: ${addressData.doorcode}`);
+                    // Основные части адреса
+                    const mainParts = [];
+                    if (addressData.city) mainParts.push(addressData.city);
+                    if (addressData.street) mainParts.push(`ул. ${addressData.street}`);
+                    if (addressData.house) mainParts.push(`д. ${addressData.house}`);
+                    if (addressData.building) mainParts.push(`корп. ${addressData.building}`);
 
-
-                    if (parts.length > 0) {
-                        address = parts.join(', ');
+                    if (mainParts.length > 0) {
+                        address = mainParts.join(', ');
                     } else if (addressData.address) {
                         address = addressData.address;
                     }
+
+                    // Детали адреса (отдельно для лучшего отображения)
+                    if (addressData.entrance) addressDetails.push(`Подъезд: ${addressData.entrance}`);
+                    if (addressData.floor) addressDetails.push(`Этаж: ${addressData.floor}`);
+                    if (addressData.apartment) addressDetails.push(`Квартира: ${addressData.apartment}`);
+                    if (addressData.doorcode) addressDetails.push(`Домофон: ${addressData.doorcode}`);
+                    if (addressData.comment) addressDetails.push(`Комментарий: ${addressData.comment}`);
 
                     if (recipient === "Не указан" && addressData.recipient_name) {
                         recipient = addressData.recipient_name;
@@ -963,6 +974,14 @@ class CourierApp {
                             ${address}
                         </span>
                     </div>
+                    ${addressDetails.length > 0 ? `
+                        <div class="info-item">
+                            <span class="info-label">Детали:</span>
+                            <span class="info-value" style="font-size: 12px; color: #666;">
+                                ${addressDetails.join(', ')}
+                            </span>
+                        </div>
+                    ` : ''}
                 </div>
 
                 ${actionsHtml}
