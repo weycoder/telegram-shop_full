@@ -2679,3 +2679,13 @@ body {
 .pickup-card.closed-card:hover {
     opacity: 0.9;
 }
+
+.address-details-item {
+    display: inline-block;
+    margin-right: 15px;
+    margin-top: 5px;
+    background: #dee2e6;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+}

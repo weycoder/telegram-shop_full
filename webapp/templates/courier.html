@@ -722,26 +722,50 @@
 
         // Функция для извлечения данных о доставке из заказа
         function extractDeliveryInfo(order) {
-            let addressText = 'Адрес не указан';
-            let recipientName = order.recipient_name || 'Не указан';
-            let phoneNumber = order.phone_number || 'Не указан';
+            let address = "Адрес не указан";
+            let addressDetails = [];
+            let recipient = order.recipient_name || order.username || "Не указан";
+            let phone = order.phone_number || "Телефон не указан";
 
-            // Пробуем разные источники данных
-            let deliveryData = null;
+            // Обработка адреса - ПОЛНАЯ ИНФОРМАЦИЯ
+            if (order.delivery_address_obj) {
+                const addr = order.delivery_address_obj;
 
-            // 1. Из delivery_address_obj (если уже распарсено сервером)
-            if (order.delivery_address_obj && typeof order.delivery_address_obj === 'object') {
-                deliveryData = order.delivery_address_obj;
-            }
-            // 2. Из delivery_address (строка JSON)
-            else if (order.delivery_address && typeof order.delivery_address === 'string') {
-                try {
-                    deliveryData = JSON.parse(order.delivery_address);
-                } catch (e) {
-                    // Если не JSON, используем как текст адреса
-                    addressText = order.delivery_address;
+                // Основные части адреса
+                const mainParts = [];
+                if (addr.city) mainParts.push(addr.city);
+                if (addr.street) mainParts.push(`ул. ${addr.street}`);
+                if (addr.house) mainParts.push(`д. ${addr.house}`);
+                if (addr.building) mainParts.push(`корп. ${addr.building}`);
+
+                if (mainParts.length > 0) {
+                    address = mainParts.join(', ');
+                }
+
+                // Детали адреса (отдельно для лучшего отображения)
+                if (addr.entrance) addressDetails.push(`Подъезд: ${addr.entrance}`);
+                if (addr.floor) addressDetails.push(`Этаж: ${addr.floor}`);
+                if (addr.apartment) addressDetails.push(`Квартира: ${addr.apartment}`);
+                if (addr.doorcode) addressDetails.push(`Домофон: ${addr.doorcode}`);
+                if (addr.comment) addressDetails.push(`Комментарий: ${addr.comment}`);
+
+                if (recipient === "Не указан" && addr.recipient_name) {
+                    recipient = addr.recipient_name;
+                }
+
+                if (phone === "Телефон не указан") {
+                    phone = addr.phone || addr.phone_number || "Телефон не указан";
                 }
             }
+
+            return {
+                address,
+                addressDetails,
+                recipient,
+                phone
+            };
+        }
+
 
             // Если нашли данные о доставке
             if (deliveryData) {
@@ -1115,17 +1139,31 @@
                             </div>
                         </div>
                     `;
-
-                    // Адрес доставки (если есть)
+                    // ЗАМЕНИТЕ его на этот:
                     if (deliveryInfo.address && deliveryInfo.address !== 'Адрес не указан') {
-                        html += `
+                        let addressHtml = `
                             <div style="margin-bottom: 20px;">
                                 <h3 style="margin-bottom: 15px;">📍 Адрес доставки</h3>
                                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                                     <p><strong>Адрес:</strong> ${deliveryInfo.address}</p>
-                                </div>
-                            </div>
                         `;
+
+                        // Добавляем детали адреса, если они есть
+                        if (deliveryInfo.addressDetails && deliveryInfo.addressDetails.length > 0) {
+                            addressHtml += `
+                                <div style="margin-top: 10px; padding: 10px; background: #e9ecef; border-radius: 6px; font-size: 14px;">
+                                    <strong style="color: #495057;">Детали адреса:</strong><br>
+                            `;
+
+                            deliveryInfo.addressDetails.forEach(detail => {
+                                addressHtml += `<span style="display: inline-block; margin-right: 15px; margin-top: 5px;">• ${detail}</span><br>`;
+                            });
+
+                            addressHtml += `</div>`;
+                        }
+
+                        addressHtml += `</div></div>`;
+                        html += addressHtml;
                     }
 
                     // Состав заказа
@@ -1213,7 +1251,7 @@
                 console.error('Error loading order details:', error);
                 alert('Не удалось загрузить детали заказа');
             }
-        }
+        z}
 
         // Функция для форматирования цены
         function formatPrice(price) {
