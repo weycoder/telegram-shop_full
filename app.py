@@ -737,6 +737,10 @@ def init_db():
                            TEXT
                            NOT
                            NULL,
+                           building
+                           TEXT,
+                           entrance
+                           TEXT,
                            apartment
                            TEXT,
                            floor
@@ -749,6 +753,8 @@ def init_db():
                            NULL,
                            phone
                            TEXT,
+                           comment
+                           TEXT,
                            is_default
                            INTEGER
                            DEFAULT
@@ -756,8 +762,16 @@ def init_db():
                            created_at
                            TIMESTAMP
                            DEFAULT
-                           CURRENT_TIMESTAMP
-                       )
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           user_id
+                       ) REFERENCES users
+                       (
+                           id
+                       ) ON DELETE CASCADE
+                           )
                        ''')
 
         # 10. Токены для уведомлений
@@ -1160,7 +1174,7 @@ def api_bot_get_order_detail(order_id, telegram_id):
 
 def send_order_details_notification(telegram_id, order_id, items, status, delivery_type,
                                     courier_name=None, courier_phone=None):
-    """Отправить уведомление клиенту - КОМПАКТНЫЙ И КРАСИВЫЙ ДИЗАЙН"""
+    """Отправить уведомление клиенту - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
@@ -1176,13 +1190,22 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Получаем данные заказа
+        # Получаем данные заказа с новыми полями
         db = get_db()
         try:
             order = db.execute('''
                                SELECT o.*,
+                                      json_extract(o.delivery_address, '$.city')      as city,
+                                      json_extract(o.delivery_address, '$.street')    as street,
+                                      json_extract(o.delivery_address, '$.house')     as house,
+                                      json_extract(o.delivery_address, '$.building')  as building,
+                                      json_extract(o.delivery_address, '$.entrance')  as entrance,
+                                      json_extract(o.delivery_address, '$.apartment') as apartment,
+                                      json_extract(o.delivery_address, '$.floor')     as floor,
+                                      json_extract(o.delivery_address, '$.doorcode')  as doorcode,
+                                      json_extract(o.delivery_address, '$.comment')   as address_comment,
                                       (o.total_price + COALESCE(o.delivery_cost, 0) -
-                                       COALESCE(o.discount_amount, 0)) as total_amount
+                                       COALESCE(o.discount_amount, 0))                as total_amount
                                FROM orders o
                                WHERE o.id = ?
                                ''', (order_id,)).fetchone()
@@ -1207,6 +1230,32 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                     items = json.loads(order_data['items'])
             except:
                 items = []
+
+        # Форматируем адрес для уведомления
+        address_parts = []
+        if order_data.get('city'):
+            address_parts.append(f"г. {order_data['city']}")
+        if order_data.get('street'):
+            address_parts.append(f"ул. {order_data['street']}")
+        if order_data.get('house'):
+            address_parts.append(f"д. {order_data['house']}")
+        if order_data.get('building'):
+            address_parts.append(f"корп. {order_data['building']}")
+        if order_data.get('entrance'):
+            address_parts.append(f"подъезд {order_data['entrance']}")
+        if order_data.get('apartment'):
+            address_parts.append(f"кв. {order_data['apartment']}")
+
+        address = ', '.join(address_parts) if address_parts else "Адрес не указан"
+
+        # Дополнительные детали
+        address_details = []
+        if order_data.get('floor'):
+            address_details.append(f"Этаж: {order_data['floor']}")
+        if order_data.get('doorcode'):
+            address_details.append(f"Домофон: {order_data['doorcode']}")
+        if order_data.get('address_comment'):
+            address_details.append(f"Комментарий: {order_data['address_comment']}")
 
         # Эмодзи статусов
         status_emojis = {
@@ -1241,14 +1290,21 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         message += f"📊 *Статус:* {status_texts.get(status, 'В обработке')}\n"
 
+        # Адрес
+        message += f"📍 *Адрес:* {address}\n"
+
+        # Детали адреса если есть
+        if address_details:
+            message += "\n📋 *Детали доставки:*\n"
+            for detail in address_details:
+                message += f"• {detail}\n"
+
         # Курьер
         if courier_name:
             safe_name = courier_name.replace('*', '\\*')
-            message += f"👤 *Курьер:* {safe_name}\n"
+            message += f"\n👤 *Курьер:* {safe_name}\n"
             if courier_phone:
-                message += f"📱 *Телефон:* {courier_phone}\n"
-
-        message += f"💰 *Сумма:* {total_amount:.2f} ₽\n"
+                message += f"📱 *Телефон курьера:* {courier_phone}\n"
 
         # Товары (компактно)
         if items:
@@ -1288,10 +1344,10 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         # Дополнительные советы
         tips = {
-            'assigned': "\n\n💡 Курьер скоро заберет ваш заказ",
-            'picked_up': "\n\n💡 Курьер уже в пути! Будьте готовы",
-            'delivering': "\n\n💡 Курьер едет к вам! Будьте на связи",
-            'ready_for_pickup': "\n\n💡 Заказ готов! Заберите в удобное время",
+            'assigned': "\n\n💡 Курьер скоро заберет ваш заказ. Будьте на связи!",
+            'picked_up': "\n\n💡 Курьер уже в пути! Будьте готовы к встрече.",
+            'delivering': "\n\n💡 Курьер едет к вам! Будьте на связи.",
+            'ready_for_pickup': "\n\n💡 Заказ готов! Заберите в удобное время.",
             'delivered': "\n\n💡 Заказ доставлен! Спасибо за покупку!",
             'completed': "\n\n💡 Заказ завершен! Ждем вас снова! 🛍️"
         }
@@ -1341,6 +1397,8 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         import traceback
         traceback.print_exc()
         return False
+
+
 
 def send_order_notification(order_id, status, courier_id=None):
     """Универсальная функция отправки уведомлений о заказе"""
@@ -1881,7 +1939,7 @@ def api_get_chat_messages():
 
 
 def send_courier_order_notification(order_id):
-    """Отправить уведомление всем курьерам о новом заказе"""
+    """Отправить уведомление всем курьерам о новом заказе - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     try:
         BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         if not BOT_TOKEN:
@@ -1890,13 +1948,20 @@ def send_courier_order_notification(order_id):
 
         db = get_db()
 
-        # Получаем информацию о заказе
+        # Получаем информацию о заказе с новыми полями адреса
         order = db.execute('''
                            SELECT o.*,
-                                  json_extract(o.delivery_address, '$.city')      as city,
-                                  json_extract(o.delivery_address, '$.street')    as street,
-                                  json_extract(o.delivery_address, '$.house')     as house,
-                                  json_extract(o.delivery_address, '$.apartment') as apartment
+                                  json_extract(o.delivery_address, '$.city')           as city,
+                                  json_extract(o.delivery_address, '$.street')         as street,
+                                  json_extract(o.delivery_address, '$.house')          as house,
+                                  json_extract(o.delivery_address, '$.building')       as building,
+                                  json_extract(o.delivery_address, '$.entrance')       as entrance,
+                                  json_extract(o.delivery_address, '$.apartment')      as apartment,
+                                  json_extract(o.delivery_address, '$.floor')          as floor,
+                                  json_extract(o.delivery_address, '$.doorcode')       as doorcode,
+                                  json_extract(o.delivery_address, '$.comment')        as address_comment,
+                                  json_extract(o.delivery_address, '$.recipient_name') as recipient_name,
+                                  json_extract(o.delivery_address, '$.phone')          as phone
                            FROM orders o
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
@@ -1907,7 +1972,7 @@ def send_courier_order_notification(order_id):
 
         order_dict = dict(order)
 
-        # Форматируем адрес
+        # Форматируем полный адрес с новыми полями
         address_parts = []
         if order_dict.get('city'):
             address_parts.append(order_dict['city'])
@@ -1915,19 +1980,42 @@ def send_courier_order_notification(order_id):
             address_parts.append(f"ул. {order_dict['street']}")
         if order_dict.get('house'):
             address_parts.append(f"д. {order_dict['house']}")
+        if order_dict.get('building'):
+            address_parts.append(f"корп. {order_dict['building']}")
+        if order_dict.get('entrance'):
+            address_parts.append(f"подъезд {order_dict['entrance']}")
         if order_dict.get('apartment'):
             address_parts.append(f"кв. {order_dict['apartment']}")
+        if order_dict.get('floor'):
+            address_parts.append(f"этаж {order_dict['floor']}")
 
+        # Основной адрес
         address = ', '.join(address_parts) if address_parts else "Адрес не указан"
+
+        # Дополнительная информация
+        address_details = []
+        if order_dict.get('doorcode'):
+            address_details.append(f"Домофон: {order_dict['doorcode']}")
+        if order_dict.get('address_comment'):
+            address_details.append(f"Комментарий: {order_dict['address_comment']}")
 
         # Парсим товары
         items_list = []
         total_items = 0
+        total_weight = 0
         if order_dict.get('items'):
             try:
                 items_list = json.loads(order_dict['items'])
-                total_items = sum(item.get('quantity', 1) for item in items_list)
-            except:
+                for item in items_list:
+                    if item.get('is_weight'):
+                        weight = item.get('weight', 0)
+                        total_items += 1
+                        total_weight += weight
+                    else:
+                        quantity = item.get('quantity', 1)
+                        total_items += quantity
+            except Exception as e:
+                print(f"⚠️ Ошибка парсинга items: {e}")
                 pass
 
         # Получаем всех курьеров с telegram_id
@@ -1943,21 +2031,60 @@ def send_courier_order_notification(order_id):
             print("⚠️ Нет курьеров с Telegram ID")
             return False
 
-        # Формируем сообщение для курьера
+        # Формируем сообщение для курьера (полная версия)
         text = f"🚚 *НОВЫЙ ЗАКАЗ ДЛЯ ДОСТАВКИ*\n\n"
         text += f"📦 *Заказ:* #{order_id}\n"
-        text += f"👤 *Клиент:* {order_dict.get('recipient_name', order_dict.get('username', 'Клиент'))}\n"
-        text += f"📱 *Телефон:* {order_dict.get('phone_number', 'Не указан')}\n"
+        text += f"👤 *Получатель:* {order_dict.get('recipient_name', order_dict.get('username', 'Клиент'))}\n"
+        text += f"📱 *Телефон:* {order_dict.get('phone', order_dict.get('phone_number', 'Не указан'))}\n"
         text += f"📍 *Адрес:* {address}\n"
-        text += f"📊 *Товаров:* {total_items} шт\n"
-        text += f"💰 *Сумма:* {order_dict.get('total_price', 0)} ₽\n"
 
-        if order_dict.get('cash_received', 0) > 0:
-            text += f"💵 *Оплата наличными:* {order_dict['cash_received']} ₽\n"
-            if order_dict.get('cash_change', 0) > 0:
-                text += f"💰 *Сдача:* {order_dict['cash_change']} ₽\n"
+        # Дополнительная информация об адресе
+        if address_details:
+            text += f"\n📋 *Детали адреса:*\n"
+            for detail in address_details:
+                text += f"• {detail}\n"
 
-        text += f"\n⏰ *Создан:* {order_dict.get('created_at', '')[:16]}"
+        # Информация о товарах
+        if total_weight > 0:
+            text += f"\n📊 *Товары:* {total_items} шт ({total_weight:.2f} кг)\n"
+        else:
+            text += f"\n📊 *Товаров:* {total_items} шт\n"
+
+        text += f"💰 *Сумма заказа:* {order_dict.get('total_price', 0)} ₽\n"
+
+        # Информация об оплате
+        if order_dict.get('payment_method') == 'cash':
+            if order_dict.get('cash_received', 0) > 0:
+                text += f"💵 *Оплата наличными:* {order_dict['cash_received']} ₽\n"
+                if order_dict.get('cash_change', 0) > 0:
+                    text += f"💰 *Сдача:* {order_dict['cash_change']} ₽\n"
+            else:
+                text += f"💵 *Оплата:* Наличными при получении\n"
+        else:
+            text += f"💳 *Оплата:* Картой онлайн\n"
+
+        text += f"\n⏰ *Создан:* {order_dict.get('created_at', '')[:16]}\n"
+
+        # Список товаров (компактно)
+        if items_list:
+            text += f"\n📦 *Состав заказа:*\n"
+            for idx, item in enumerate(items_list[:5], 1):  # Показываем первые 5 товаров
+                name = item.get('name', 'Товар')
+                if len(name) > 30:
+                    name = name[:27] + "..."
+
+                if item.get('is_weight'):
+                    weight = item.get('weight', 0)
+                    price = item.get('price', 0)
+                    text += f"{idx}. {name}\n   ⚖️ {weight} кг = {price} ₽\n"
+                else:
+                    quantity = item.get('quantity', 1)
+                    price = item.get('price', 0)
+                    item_total = price * quantity
+                    text += f"{idx}. {name}\n   🧮 {quantity} шт × {price} ₽ = {item_total} ₽\n"
+
+            if len(items_list) > 5:
+                text += f"\n... и ещё {len(items_list) - 5} товаров\n"
 
         # Кнопки для курьера
         keyboard = {
@@ -1965,6 +2092,10 @@ def send_courier_order_notification(order_id):
                 [
                     {"text": "✅ ВЗЯТЬ ЗАКАЗ", "callback_data": f"courier_take_{order_id}"},
                     {"text": "🚀 КУРЬЕР ПАНЕЛЬ", "callback_data": "courier_panel"}
+                ],
+                [
+                    {"text": "📍 ОТКРЫТЬ В НАВИГАТОРЕ",
+                     "url": f"https://yandex.ru/maps/?text={address.replace(' ', '+')}"}
                 ]
             ]
         }
@@ -1998,6 +2129,8 @@ def send_courier_order_notification(order_id):
 
     except Exception as e:
         print(f"❌ Ошибка отправки уведомлений курьерам: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         if 'db' in locals():
@@ -2554,9 +2687,25 @@ def api_create_order():
         delivery_address = data.get('delivery_address', '{}')
         promo_code = data.get('promo_code')
 
+        # ========== ВАЛИДАЦИЯ ДАННЫХ ==========
+        # Проверяем обязательные поля
+        if not data.get('items') or len(data['items']) == 0:
+            return jsonify({'success': False, 'error': 'Корзина пуста'}), 400
+
+        if delivery_type not in ['courier', 'pickup']:
+            return jsonify({'success': False, 'error': 'Неверный тип доставки'}), 400
+
+        if delivery_type == 'courier':
+            if not delivery_address or delivery_address == '{}':
+                return jsonify({'success': False, 'error': 'Для курьерской доставки укажите адрес'}), 400
+
+        if delivery_type == 'pickup' and not data.get('pickup_point'):
+            return jsonify({'success': False, 'error': 'Для самовывоза выберите пункт выдачи'}), 400
+
         # ========== ПРОВЕРКА ПРОМОКОДА ==========
         discount_amount = 0.0
         promo_code_id = None
+        promo_dict = None  # Добавляем инициализацию
 
         if promo_code:
             try:
@@ -2702,25 +2851,49 @@ def api_create_order():
 
         cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
 
-        # ОБРАБОТКА АДРЕСА
+        # ========== ОБРАБОТКА АДРЕСА - ИСПРАВЛЕННАЯ ВЕРСИЯ ==========
         address_obj = {}
+
         if isinstance(delivery_address, str):
             try:
                 if delivery_address and delivery_address != '{}':
                     address_obj = json.loads(delivery_address)
-            except:
-                print("⚠️ Не удалось распарсить delivery_address")
+                else:
+                    address_obj = {}
+            except json.JSONDecodeError as e:
+                print(f"⚠️ Не удалось распарсить delivery_address как JSON: {e}")
+                print(f"   Содержимое: {delivery_address}")
                 address_obj = {}
         elif isinstance(delivery_address, dict):
             address_obj = delivery_address
+        else:
+            address_obj = {}
+            print("⚠️ delivery_address не является ни строкой ни словарем")
 
+        print(f"📋 Распаршенный адрес: {json.dumps(address_obj, ensure_ascii=False, indent=2)}")
+
+        # Извлекаем информацию из адреса
         recipient_name = ""
         phone_number = ""
+        address_comment = ""
 
         if isinstance(address_obj, dict):
+            # Основные поля получателя
             recipient_name = address_obj.get('recipient_name', '')
             phone_number = address_obj.get('phone', '') or address_obj.get('phone_number', '')
+            address_comment = address_obj.get('comment', '') or address_obj.get('address_comment', '')
 
+            # Обязательные поля для адреса доставки
+            if delivery_type == 'courier':
+                required_fields = ['city', 'street', 'house', 'recipient_name']
+                for field in required_fields:
+                    if not address_obj.get(field):
+                        return jsonify({
+                            'success': False,
+                            'error': f'Для доставки заполните обязательное поле: {field}'
+                        }), 400
+
+        # Альтернативные источники данных
         if not recipient_name:
             recipient_name = data.get('recipient_name', '')
         if not phone_number:
@@ -2730,6 +2903,10 @@ def api_create_order():
             recipient_name = data.get('username', 'Гость')
         if not phone_number:
             phone_number = 'Не указан'
+
+        print(f"👤 Получатель: {recipient_name}")
+        print(f"📱 Телефон: {phone_number}")
+        print(f"📝 Комментарий: {address_comment}")
 
         user_id = data.get('user_id', 0)
         username = data.get('username', 'Гость')
@@ -2765,6 +2942,21 @@ def api_create_order():
         print(f"👤 Используемый username: {username}")
 
         # ========== СОХРАНЕНИЕ ЗАКАЗА ==========
+        # Создаем полный объект адреса для сохранения
+        full_address_obj = address_obj.copy() if isinstance(address_obj, dict) else {}
+
+        # Добавляем отсутствующие поля, но которые есть в данных
+        if 'recipient_name' not in full_address_obj and recipient_name:
+            full_address_obj['recipient_name'] = recipient_name
+        if 'phone' not in full_address_obj and phone_number:
+            full_address_obj['phone'] = phone_number
+        if 'comment' not in full_address_obj and address_comment:
+            full_address_obj['comment'] = address_comment
+
+        # Также сохраняем recipient_name и phone_number в отдельных полях для удобства
+        final_recipient_name = recipient_name
+        final_phone_number = phone_number
+
         cursor = db.execute('''
                             INSERT INTO orders (user_id, username, items, total_price, delivery_cost, status,
                                                 delivery_type, delivery_address, pickup_point,
@@ -2780,11 +2972,11 @@ def api_create_order():
                                 delivery_cost,
                                 'pending',
                                 delivery_type,
-                                json.dumps(address_obj if address_obj else {}, ensure_ascii=False),
+                                json.dumps(full_address_obj, ensure_ascii=False),
                                 data.get('pickup_point'),
                                 payment_method,
-                                recipient_name,
-                                phone_number,
+                                final_recipient_name,
+                                final_phone_number,
                                 cash_received,
                                 cash_change,
                                 cash_details,
@@ -2900,12 +3092,6 @@ def api_create_order():
                 except Exception as e:
                     print(f"   ❌ Ошибка отправки курьерам: {e}")
 
-        print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
-        print(f"💰 Итоговая сумма: {total_with_delivery} руб")
-        print(f"📊 Скидка по промокоду: {discount_amount} руб")
-        print(f"💵 Наличные: получено {cash_received} руб, сдача {cash_change} руб")
-        print("=" * 50)
-
         return jsonify({
             'success': True,
             'order_id': order_id,
@@ -2936,9 +3122,8 @@ def api_create_order():
         except:
             pass
 
-
 def send_admin_order_notification(order_id):
-    """Отправить уведомление админу о новом заказе - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Отправить уведомление админу о новом заказе - ОБНОВЛЕННАЯ ВЕРСИЯ"""
     try:
         BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         ADMIN_TELEGRAM_IDS = 7331765165
@@ -2955,11 +3140,20 @@ def send_admin_order_notification(order_id):
 
         db = get_db()
 
-        # Получаем информацию о заказе
+        # Получаем информацию о заказе с новыми полями адреса
         order = db.execute('''
                            SELECT o.*,
+                                  json_extract(o.delivery_address, '$.city')      as city,
+                                  json_extract(o.delivery_address, '$.street')    as street,
+                                  json_extract(o.delivery_address, '$.house')     as house,
+                                  json_extract(o.delivery_address, '$.building')  as building,
+                                  json_extract(o.delivery_address, '$.entrance')  as entrance,
+                                  json_extract(o.delivery_address, '$.apartment') as apartment,
+                                  json_extract(o.delivery_address, '$.floor')     as floor,
+                                  json_extract(o.delivery_address, '$.doorcode')  as doorcode,
+                                  json_extract(o.delivery_address, '$.comment')   as address_comment,
                                   (o.total_price + COALESCE(o.delivery_cost, 0) -
-                                   COALESCE(o.discount_amount, 0)) as total_amount
+                                   COALESCE(o.discount_amount, 0))                as total_amount
                            FROM orders o
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
@@ -2971,6 +3165,32 @@ def send_admin_order_notification(order_id):
 
         order_data = dict(order)
         db.close()
+
+        # Форматируем полный адрес
+        address_parts = []
+        if order_data.get('city'):
+            address_parts.append(order_data['city'])
+        if order_data.get('street'):
+            address_parts.append(f"ул. {order_data['street']}")
+        if order_data.get('house'):
+            address_parts.append(f"д. {order_data['house']}")
+        if order_data.get('building'):
+            address_parts.append(f"корп. {order_data['building']}")
+        if order_data.get('entrance'):
+            address_parts.append(f"подъезд {order_data['entrance']}")
+        if order_data.get('apartment'):
+            address_parts.append(f"кв. {order_data['apartment']}")
+
+        address = ', '.join(address_parts) if address_parts else "Адрес не указан"
+
+        # Детали адреса
+        address_details = []
+        if order_data.get('floor'):
+            address_details.append(f"Этаж: {order_data['floor']}")
+        if order_data.get('doorcode'):
+            address_details.append(f"Домофон: {order_data['doorcode']}")
+        if order_data.get('address_comment'):
+            address_details.append(f"Комментарий: {order_data['address_comment']}")
 
         # Получаем ID админов
         admin_ids = []
@@ -3004,38 +3224,25 @@ def send_admin_order_notification(order_id):
                 print(f"⚠️ Ошибка парсинга items: {e}")
                 items_list = []
 
-        # Форматируем адрес или точку самовывоза
-        delivery_info = ""
-        if order_data.get('delivery_type') == 'courier':
-            if order_data.get('delivery_address'):
-                try:
-                    addr_data = json.loads(order_data['delivery_address'])
-                    address_parts = []
-                    if addr_data.get('city'):
-                        address_parts.append(addr_data['city'])
-                    if addr_data.get('street'):
-                        address_parts.append(f"ул. {addr_data['street']}")
-                    if addr_data.get('house'):
-                        address_parts.append(f"д. {addr_data['house']}")
-                    if addr_data.get('apartment'):
-                        address_parts.append(f"кв. {addr_data['apartment']}")
-                    delivery_info = "📍 *Адрес доставки:* " + ', '.join(address_parts) + "\n"
-                except Exception as e:
-                    print(f"⚠️ Ошибка парсинга адреса: {e}")
-                    delivery_info = f"📍 *Адрес:* {order_data.get('delivery_address', 'Не указан')}\n"
-        else:
-            delivery_info = "🏪 *Самовывоз*\n"
-
         # Формируем сообщение для админа
         text = f"🆕 *НОВЫЙ ЗАКАЗ #{order_id}*\n\n"
         text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
         text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
+
+        if order_data.get('delivery_type') == 'courier':
+            text += f"🚚 *Тип:* Доставка курьером\n"
+            text += f"📍 *Адрес:* {address}\n"
+            if address_details:
+                text += f"\n📋 *Детали адреса:*\n"
+                for detail in address_details:
+                    text += f"• {detail}\n"
+        else:
+            text += f"🏪 *Тип:* Самовывоз\n"
+            # Добавь обработку пункта выдачи если нужно
+
         text += f"📦 *Товаров:* {items_count} шт\n"
         text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
-        text += f"🚚 *Тип:* {'Доставка курьером' if order_data.get('delivery_type') == 'courier' else 'Самовывоз'}\n"
-        text += f"{delivery_info}"
         text += f"💳 *Оплата:* {order_data.get('payment_method', 'cash')}\n"
-        text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
 
         if order_data.get('discount_amount', 0) > 0:
             text += f"🎁 *Скидка:* {order_data.get('discount_amount', 0)} ₽\n"
@@ -3045,6 +3252,8 @@ def send_admin_order_notification(order_id):
             if order_data.get('cash_change', 0) > 0:
                 text += f", сдача {order_data.get('cash_change', 0)} ₽"
             text += "\n"
+
+        text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
 
         # Кнопки для админа
         keyboard = {
@@ -4300,6 +4509,14 @@ def update_delivery_status():
                 'UPDATE order_assignments SET status = ?, delivered_at = CURRENT_TIMESTAMP, photo_proof = ?, delivery_notes = ? WHERE order_id = ? AND courier_id = ?',
                 (status, photo_url, notes, order_id, courier_id))
             db.execute('UPDATE orders SET status = "delivered" WHERE id = ?', (order_id,))
+            db.execute('''
+                           UPDATE orders
+                           SET status       = 'completed',
+                               completed_at = CURRENT_TIMESTAMP,
+                               courier_id   = ?
+                           WHERE id = ?
+                             AND status = 'delivering'
+                       ''', (courier_id, order_id))
         else:
             db.execute('UPDATE order_assignments SET status = ? WHERE order_id = ? AND courier_id = ?',
                        (status, order_id, courier_id))

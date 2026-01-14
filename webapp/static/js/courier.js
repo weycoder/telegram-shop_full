@@ -1161,7 +1161,7 @@ class CourierApp {
                     assignment_id: this.currentOrderId,
                     photo_data: this.currentPhoto.data,
                     notes: notes
-                })
+                })я
             });
 
             const result = await response.json();

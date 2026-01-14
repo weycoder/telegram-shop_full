@@ -1866,9 +1866,13 @@ async editOrder(orderId) {
         }
     }
 
-    showLoading(show) {
-        const loading = document.getElementById('loading');
-        if (loading) loading.style.display = show ? 'block' : 'none';
+    showLoading() {
+        // Реализация индикатора загрузки
+        const saveBtn = document.querySelector('.btn-primary');
+        if (saveBtn) {
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Сохранение...';
+            saveBtn.disabled = true;
+        }
     }
 
     // ========== ОБРАБОТЧИКИ ДЛЯ ВЕСОВЫХ ТОВАРОВ ==========
@@ -2392,6 +2396,7 @@ async editOrder(orderId) {
         if (value < 1) value = 1;
         if (value > maxStock) value = maxStock;
 
+
         input.value = value;
     }
 
@@ -2461,27 +2466,64 @@ async editOrder(orderId) {
             const cartOverlay = document.getElementById('cartOverlay');
             if (!cartOverlay) return;
 
+            // Функция для форматирования адреса с новыми полями
+            const formatAddress = (addr) => {
+                let parts = [];
+
+                if (addr.city) parts.push(`г. ${addr.city}`);
+                if (addr.street) parts.push(`ул. ${addr.street}`);
+                if (addr.house) parts.push(`д. ${addr.house}`);
+                if (addr.building) parts.push(`корп. ${addr.building}`);
+                if (addr.entrance) parts.push(`подъезд ${addr.entrance}`);
+                if (addr.apartment) parts.push(`кв. ${addr.apartment}`);
+                if (addr.floor) parts.push(`этаж ${addr.floor}`);
+
+                return parts.join(', ');
+            };
+
             let addressesHTML = '';
             let hasAddresses = addresses.length > 0;
 
             if (hasAddresses) {
                 addresses.forEach((addr, index) => {
+                    const addressId = userId === 0 ? index : addr.id;
+                    const formattedAddress = formatAddress(addr);
+
                     addressesHTML += `
-                        <div class="address-card" onclick="shop.selectAddress(${userId === 0 ? index : addr.id})">
+                        <div class="address-card" onclick="shop.selectAddress(${addressId})">
                             <div class="address-header">
-                                <h3>${addr.recipient_name || 'Адрес'}</h3>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <i class="fas fa-map-marker-alt" style="color: #667eea;"></i>
+                                    <strong>${addr.recipient_name || 'Адрес'}</strong>
+                                    <span style="color: #718096;">${addr.phone || ''}</span>
+                                </div>
                                 ${addr.is_default ? '<span class="default-badge">По умолчанию</span>' : ''}
                             </div>
+
                             <div class="address-details">
-                                <p><i class="fas fa-city"></i> ${addr.city}</p>
-                                <p><i class="fas fa-road"></i> ${addr.street}, ${addr.house}</p>
-                                ${addr.apartment ? `<p><i class="fas fa-door-closed"></i> Кв. ${addr.apartment}</p>` : ''}
-                                ${addr.phone ? `<p><i class="fas fa-phone"></i> ${addr.phone}</p>` : ''}
+                                <div style="color: #4a5568; font-size: 14px; margin-bottom: 4px;">
+                                    ${formattedAddress}
+                                </div>
+
+                                <!-- Показываем домофон если есть -->
+                                ${addr.doorcode ? `
+                                    <p style="font-size: 13px; color: #718096; margin: 4px 0;">
+                                        <i class="fas fa-key"></i> Домофон: ${addr.doorcode}
+                                    </p>
+                                ` : ''}
+
+                                <!-- Показываем комментарий если есть -->
+                                ${addr.comment ? `
+                                    <div style="color: #718096; font-size: 13px; font-style: italic; margin-top: 6px; padding: 6px; background: #f7fafc; border-radius: 4px;">
+                                        <i class="fas fa-comment"></i> ${addr.comment}
+                                    </div>
+                                ` : ''}
                             </div>
+
                             ${userId === 0 ? `
                                 <div class="address-actions">
-                                    <button class="btn-small" onclick="event.stopPropagation(); shop.removeGuestAddress(${index})">
-                                        Удалить
+                                    <button class="btn-small btn-danger" onclick="event.stopPropagation(); shop.removeGuestAddress(${index})">
+                                        <i class="fas fa-trash"></i> Удалить
                                     </button>
                                 </div>
                             ` : ''}
@@ -2493,27 +2535,71 @@ async editOrder(orderId) {
             cartOverlay.innerHTML = `
                 <div class="cart-modal">
                     <div class="cart-header">
-                        <h2><i class="fas fa-map-marker-alt"></i> Выберите адрес</h2>
+                        <h2><i class="fas fa-map-marker-alt"></i> Выберите адрес доставки</h2>
                         <button class="close-cart" onclick="shop.closeCart()">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
 
-                    <div class="addresses-list">
+                    <div class="addresses-list" style="
+                        padding: 16px;
+                        max-height: 60vh;
+                        overflow-y: auto;
+                    ">
                         ${hasAddresses ? addressesHTML : `
-                            <div class="no-addresses">
-                                <i class="fas fa-map-marker-slash"></i>
-                                <h3>Нет сохраненных адресов</h3>
-                                <p>Добавьте адрес для доставки</p>
+                            <div class="no-addresses" style="
+                                text-align: center;
+                                padding: 40px 20px;
+                                color: #718096;
+                            ">
+                                <i class="fas fa-map-marker-slash" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                                <h3 style="margin: 0 0 8px 0; color: #4a5568;">Нет сохраненных адресов</h3>
+                                <p style="margin: 0;">Добавьте адрес для доставки</p>
                             </div>
                         `}
                     </div>
 
-                    <div class="delivery-actions">
-                        <button class="btn btn-primary" onclick="shop.showAddressForm()">
+                    <div class="delivery-actions" style="
+                        padding: 16px;
+                        border-top: 1px solid #e2e8f0;
+                        display: flex;
+                        gap: 12px;
+                    ">
+                        <button class="btn btn-primary"
+                                onclick="shop.showAddressForm()"
+                                style="
+                                    flex: 1;
+                                    padding: 14px;
+                                    background: #667eea;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 8px;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    gap: 8px;
+                                ">
                             <i class="fas fa-plus"></i> Добавить новый адрес
                         </button>
-                        <button class="btn btn-outline" onclick="shop.showDeliverySelection()">
+                        <button class="btn btn-outline"
+                                onclick="shop.showDeliverySelection()"
+                                style="
+                                    padding: 14px 20px;
+                                    background: white;
+                                    color: #4a5568;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    gap: 8px;
+                                ">
                             <i class="fas fa-arrow-left"></i> Назад
                         </button>
                     </div>
@@ -2524,6 +2610,21 @@ async editOrder(orderId) {
             console.error('❌ Ошибка загрузки адресов:', error);
             await this.showAddressForm();
         }
+    }
+
+
+    function formatAddress(address) {
+        let parts = [];
+
+        if (address.city) parts.push(`г. ${address.city}`);
+        if (address.street) parts.push(`ул. ${address.street}`);
+        if (address.house) parts.push(`д. ${address.house}`);
+        if (address.building) parts.push(`корп. ${address.building}`);
+        if (address.entrance) parts.push(`подъезд ${address.entrance}`);
+        if (address.apartment) parts.push(`кв. ${address.apartment}`);
+        if (address.floor) parts.push(`этаж ${address.floor}`);
+
+        return parts.join(', ');
     }
 
     // ========== МЕТОДЫ АДРЕСА И ДОСТАВКИ ==========
@@ -2557,7 +2658,9 @@ async editOrder(orderId) {
                         <div class="form-group" style="margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                                 <i class="fas fa-user" style="color: #667eea; font-size: 14px;"></i>
-                                <label style="font-size: 14px; color: #4a5568;">Имя получателя *</label>
+                                <label style="font-size: 14px; color: #4a5568;">
+                                    Имя получателя <span style="color: #e53e3e;">*</span>
+                                </label>
                             </div>
                             <input type="text"
                                    id="recipientName"
@@ -2573,16 +2676,23 @@ async editOrder(orderId) {
                                    "
                                    onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                                    onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            <div id="recipientNameError" style="color: #e53e3e; font-size: 12px; margin-top: 4px; display: none;">
+                                Поле обязательно для заполнения
+                            </div>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                                 <i class="fas fa-phone" style="color: #667eea; font-size: 14px;"></i>
-                                <label style="font-size: 14px; color: #4a5568;">Телефон</label>
+                                <label style="font-size: 14px; color: #4a5568;">
+                                    Телефон <span style="color: #e53e3e;">*</span>
+                                </label>
                             </div>
                             <input type="tel"
                                    id="recipientPhone"
                                    placeholder="+7 (999) 123-45-67"
+                                   required
+                                   pattern="^\+7\s?[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$"
                                    style="
                                        width: 100%;
                                        padding: 12px;
@@ -2592,6 +2702,9 @@ async editOrder(orderId) {
                                    "
                                    onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                                    onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            <div id="phoneError" style="color: #e53e3e; font-size: 12px; margin-top: 4px; display: none;">
+                                Введите корректный номер телефона (формат: +7 XXX XXX-XX-XX)
+                            </div>
                         </div>
                     </div>
 
@@ -2605,7 +2718,9 @@ async editOrder(orderId) {
                         <div class="form-group" style="margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                                 <i class="fas fa-city" style="color: #667eea; font-size: 14px;"></i>
-                                <label style="font-size: 14px; color: #4a5568;">Город *</label>
+                                <label style="font-size: 14px; color: #4a5568;">
+                                    Город <span style="color: #e53e3e;">*</span>
+                                </label>
                             </div>
                             <input type="text"
                                    id="city"
@@ -2620,12 +2735,17 @@ async editOrder(orderId) {
                                    "
                                    onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                                    onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            <div id="cityError" style="color: #e53e3e; font-size: 12px; margin-top: 4px; display: none;">
+                                Поле обязательно для заполнения
+                            </div>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                                 <i class="fas fa-road" style="color: #667eea; font-size: 14px;"></i>
-                                <label style="font-size: 14px; color: #4a5568;">Улица *</label>
+                                <label style="font-size: 14px; color: #4a5568;">
+                                    Улица <span style="color: #e53e3e;">*</span>
+                                </label>
                             </div>
                             <input type="text"
                                    id="street"
@@ -2640,13 +2760,18 @@ async editOrder(orderId) {
                                    "
                                    onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                                    onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            <div id="streetError" style="color: #e53e3e; font-size: 12px; margin-top: 4px; display: none;">
+                                Поле обязательно для заполнения
+                            </div>
                         </div>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                             <div class="form-group">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                                     <i class="fas fa-home" style="color: #667eea; font-size: 14px;"></i>
-                                    <label style="font-size: 14px; color: #4a5568;">Дом *</label>
+                                    <label style="font-size: 14px; color: #4a5568;">
+                                        Дом <span style="color: #e53e3e;">*</span>
+                                    </label>
                                 </div>
                                 <input type="text"
                                        id="house"
@@ -2661,8 +2786,32 @@ async editOrder(orderId) {
                                        "
                                        onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                                        onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                                <div id="houseError" style="color: #e53e3e; font-size: 12px; margin-top: 4px; display: none;">
+                                    Поле обязательно для заполнения
+                                </div>
                             </div>
 
+                            <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-building" style="color: #667eea; font-size: 14px;"></i>
+                                    <label style="font-size: 14px; color: #4a5568;">Корпус</label>
+                                </div>
+                                <input type="text"
+                                       id="building"
+                                       placeholder="1"
+                                       style="
+                                           width: 100%;
+                                           padding: 12px;
+                                           border: 2px solid #e2e8f0;
+                                           border-radius: 8px;
+                                           font-size: 16px;
+                                       "
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                       onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                             <div class="form-group">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                                     <i class="fas fa-door-closed" style="color: #667eea; font-size: 14px;"></i>
@@ -2681,9 +2830,28 @@ async editOrder(orderId) {
                                        onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                                        onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
                             </div>
+
+                            <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-door-open" style="color: #667eea; font-size: 14px;"></i>
+                                    <label style="font-size: 14px; color: #4a5568;">Подъезд</label>
+                                </div>
+                                <input type="text"
+                                       id="entrance"
+                                       placeholder="2"
+                                       style="
+                                           width: 100%;
+                                           padding: 12px;
+                                           border: 2px solid #e2e8f0;
+                                           border-radius: 8px;
+                                           font-size: 16px;
+                                       "
+                                       onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                       onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            </div>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                             <div class="form-group">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                                     <i class="fas fa-stairs" style="color: #667eea; font-size: 14px;"></i>
@@ -2721,6 +2889,28 @@ async editOrder(orderId) {
                                        onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                                        onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
                             </div>
+                        </div>
+
+                        <!-- Комментарий курьеру -->
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-comment" style="color: #667eea; font-size: 14px;"></i>
+                                <label style="font-size: 14px; color: #4a5568;">Комментарий курьеру</label>
+                            </div>
+                            <textarea id="comment"
+                                      placeholder="Например: Позвоните за 5 минут до доставки, оставьте у двери..."
+                                      style="
+                                          width: 100%;
+                                          padding: 12px;
+                                          border: 2px solid #e2e8f0;
+                                          border-radius: 8px;
+                                          font-size: 16px;
+                                          min-height: 80px;
+                                          resize: vertical;
+                                          font-family: inherit;
+                                      "
+                                      onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                                      onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'"></textarea>
                         </div>
                     </div>
                 </div>
@@ -2825,20 +3015,67 @@ async editOrder(orderId) {
         try {
             const addressData = {
                 user_id: this.userId,
-                city: document.getElementById('city').value,
-                street: document.getElementById('street').value,
-                house: document.getElementById('house').value,
-                apartment: document.getElementById('apartment').value,
-                floor: document.getElementById('floor').value,
-                doorcode: document.getElementById('doorcode').value,
-                recipient_name: document.getElementById('recipientName').value,
-                phone: document.getElementById('recipientPhone').value
+                city: document.getElementById('city').value.trim(),
+                street: document.getElementById('street').value.trim(),
+                house: document.getElementById('house').value.trim(),
+                building: document.getElementById('building').value.trim(),
+                entrance: document.getElementById('entrance').value.trim(),
+                apartment: document.getElementById('apartment').value.trim(),
+                floor: document.getElementById('floor').value.trim(),
+                doorcode: document.getElementById('doorcode').value.trim(),
+                recipient_name: document.getElementById('recipientName').value.trim(),
+                phone: document.getElementById('recipientPhone').value.trim(),
+                comment: document.getElementById('comment')?.value.trim() || ''
             };
 
-            if (!addressData.city || !addressData.street || !addressData.house || !addressData.recipient_name) {
-                this.showNotification('❌ Заполните обязательные поля', 'error');
+            // Валидация обязательных полей
+            let hasError = false;
+
+            if (!addressData.recipient_name) {
+                this.showFieldError('recipientNameError', 'Поле обязательно для заполнения');
+                hasError = true;
+            } else {
+                this.hideFieldError('recipientNameError');
+            }
+
+            if (!addressData.phone) {
+                this.showFieldError('phoneError', 'Поле обязательно для заполнения');
+                hasError = true;
+            } else if (!this.validatePhone(addressData.phone)) {
+                this.showFieldError('phoneError', 'Введите корректный номер телефона');
+                hasError = true;
+            } else {
+                this.hideFieldError('phoneError');
+            }
+
+            if (!addressData.city) {
+                this.showFieldError('cityError', 'Поле обязательно для заполнения');
+                hasError = true;
+            } else {
+                this.hideFieldError('cityError');
+            }
+
+            if (!addressData.street) {
+                this.showFieldError('streetError', 'Поле обязательно для заполнения');
+                hasError = true;
+            } else {
+                this.hideFieldError('streetError');
+            }
+
+            if (!addressData.house) {
+                this.showFieldError('houseError', 'Поле обязательно для заполнения');
+                hasError = true;
+            } else {
+                this.hideFieldError('houseError');
+            }
+
+            if (hasError) {
+                this.showNotification('❌ Заполните все обязательные поля', 'error');
                 return;
             }
+
+            // Показываем индикатор загрузки
+            this.showLoading();
 
             let result;
 
@@ -2855,6 +3092,7 @@ async editOrder(orderId) {
 
             if (result.success) {
                 this.deliveryData.address_id = result.id;
+                this.deliveryData.address_comment = addressData.comment;
                 this.showNotification('✅ Адрес сохранен', 'success');
                 setTimeout(() => {
                     this.showAddressSelection();
@@ -2866,37 +3104,106 @@ async editOrder(orderId) {
         } catch (error) {
             console.error('Ошибка сохранения адреса:', error);
             this.showNotification(`❌ ${error.message}`, 'error');
+        } finally {
+            this.hideLoading();
         }
     }
+
+
+    hideLoading() {
+        const saveBtn = document.querySelector('.btn-primary');
+        if (saveBtn) {
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить адрес';
+            saveBtn.disabled = false;
+        }
+    }
+
+
+    showFieldError(elementId, message) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = message;
+            element.style.display = 'block';
+
+            // Подсветка поля
+            const inputId = elementId.replace('Error', '');
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.style.borderColor = '#e53e3e';
+                input.style.boxShadow = '0 0 0 3px rgba(229, 62, 62, 0.1)';
+            }
+        }
+    }
+
+    hideFieldError(elementId) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.style.display = 'none';
+
+            // Сброс подсветки поля
+            const inputId = elementId.replace('Error', '');
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.style.borderColor = '#e2e8f0';
+                input.style.boxShadow = 'none';
+            }
+        }
+    }
+
 
     saveGuestAddress(addressData) {
         try {
             const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
-            guestAddresses.push({
+            const newAddress = {
                 ...addressData,
-                id: guestAddresses.length + 1,
-                is_default: guestAddresses.length === 0
-            });
+                id: Date.now(), // Уникальный ID на основе времени
+                is_default: guestAddresses.length === 0,
+                created_at: new Date().toISOString()
+            };
+
+            guestAddresses.push(newAddress);
             localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
-            return { success: true, id: guestAddresses.length };
+
+            return {
+                success: true,
+                id: `guest_${newAddress.id}`,
+                address: newAddress
+            };
         } catch (error) {
             console.error('Ошибка сохранения адреса гостя:', error);
             return { success: false, error: error.message };
         }
     }
 
+        // Вспомогательные методы для валидации
+    validatePhone(phone) {
+        // Простая валидация российского номера
+        const phoneRegex = /^\+7\s?[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$/;
+        return phoneRegex.test(phone);
+    }
+
     removeGuestAddress(index) {
         try {
             const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
             if (index >= 0 && index < guestAddresses.length) {
+                const removedAddress = guestAddresses[index];
                 guestAddresses.splice(index, 1);
+
+                // Если удаляемый адрес был по умолчанию, назначаем новый (первый в списке)
+                if (removedAddress.is_default && guestAddresses.length > 0) {
+                    guestAddresses[0].is_default = true;
+                }
+
                 localStorage.setItem('guest_addresses', JSON.stringify(guestAddresses));
+
+                this.showNotification('✅ Адрес удален', 'success');
                 this.showAddressSelection();
                 return true;
             }
             return false;
         } catch (error) {
             console.error('Ошибка удаления адреса гостя:', error);
+            this.showNotification('❌ Ошибка удаления адреса', 'error');
             return false;
         }
     }
@@ -2909,7 +3216,12 @@ async editOrder(orderId) {
                 this.deliveryData.address_id = `guest_${addressId}`;
                 const guestAddresses = JSON.parse(localStorage.getItem('guest_addresses') || '[]');
                 const addressIndex = addressId;
-                this.deliveryData.address_details = guestAddresses[addressIndex] || null;
+                const selectedAddress = guestAddresses[addressIndex];
+
+                if (selectedAddress) {
+                    this.deliveryData.address_details = selectedAddress;
+                    this.deliveryData.address_comment = selectedAddress.comment || '';
+                }
             } else {
                 this.deliveryData.address_id = addressId;
                 try {
@@ -2917,7 +3229,11 @@ async editOrder(orderId) {
                     if (response.ok) {
                         const addresses = await response.json();
                         const selectedAddress = addresses.find(addr => addr.id === addressId);
-                        this.deliveryData.address_details = selectedAddress || null;
+
+                        if (selectedAddress) {
+                            this.deliveryData.address_details = selectedAddress;
+                            this.deliveryData.address_comment = selectedAddress.comment || '';
+                        }
                     }
                 } catch (error) {
                     console.warn('⚠️ Не удалось загрузить детали адреса:', error);
@@ -2967,7 +3283,7 @@ async editOrder(orderId) {
                 const isClickable = isOpen; // Только открытые точки можно выбирать
 
                 pointsHTML += `
-                    <div class="pickup-card ${!isOpen ? 'closed-card' : ''}" 
+                    <div class="pickup-card ${!isOpen ? 'closed-card' : ''}"
                          ${isClickable ? `onclick="shop.selectPickupPoint(${point.id})"` : ''}>
                         <div class="pickup-header">
                             <h3>${point.name}</h3>
