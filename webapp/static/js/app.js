@@ -1383,7 +1383,7 @@ class TelegramShop {
 
         cartOverlay.innerHTML = `
             <div class="cart-modal">
-                <div class="cart-header" style="background: linear-gradient(135deg, #667eea, #667eea); color: white;">
+                <div class="cart-header" style="background: linear-gradient(135deg, #135deg, #135deg); color: white;">
                     <h2><i class="fas fa-truck"></i> Доставка</h2>
                     <button class="close-cart" id="closeDeliverySelection">
                         <i class="fas fa-times"></i>
@@ -1400,7 +1400,7 @@ class TelegramShop {
                             ${!this.appliedPromoCode ? `
                                 <div style="display: flex; gap: 8px;">
                                     <input type="text" id="compactPromoCodeInput" placeholder="Введите код" style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;">
-                                    <button id="applyPromoBtnCompact" style="width: 60px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                                    <button id="applyPromoBtnCompact" style="width: 60px; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer;">
                                         OK
                                     </button>
                                 </div>
