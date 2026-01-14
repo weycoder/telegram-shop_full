@@ -1393,7 +1393,7 @@ class TelegramShop {
                     <div class="compact-promo-section">
                         <div style="margin-bottom: 16px; background: white; border-radius: 12px; padding: 12px; border: 1px solid #e0e0e0;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                <i class="fas fa-ticket-alt" style="color: #667eea;"></i>
+                                <i class="fas fa-ticket-alt" style="color: #f37425"></i>
                                 <span style="font-weight: 600; color: #333; font-size: 14px;">Промокод</span>
                             </div>
 
