@@ -295,7 +295,11 @@ class CourierApp {
                     if (addressData.city) parts.push(addressData.city);
                     if (addressData.street) parts.push(`ул. ${addressData.street}`);
                     if (addressData.house) parts.push(`д. ${addressData.house}`);
+                    if (addressData.building) parts.push(`к. ${addressData.building}`);
+                    if (addressData.entrance) parts.push(`п. ${addressData.entrance}`);
+                    if (addressData.floor) parts.push(`эт. ${addressData.floor}`);
                     if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
+                    if (addressData.doorcode) parts.push(`Домофон: ${addressData.doorcode}`);
 
                     if (parts.length > 0) {
                         address = parts.join(', ');
@@ -817,6 +821,12 @@ class CourierApp {
                     if (addressData.street) parts.push(`ул. ${addressData.street}`);
                     if (addressData.house) parts.push(`д. ${addressData.house}`);
                     if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
+                    if (addressData.building) parts.push(`к. ${addressData.building}`);
+                    if (addressData.entrance) parts.push(`п. ${addressData.entrance}`);
+                    if (addressData.floor) parts.push(`эт. ${addressData.floor}`);
+                    if (addressData.apartment) parts.push(`кв. ${addressData.apartment}`);
+                    if (addressData.doorcode) parts.push(`Домофон: ${addressData.doorcode}`);
+
 
                     if (parts.length > 0) {
                         address = parts.join(', ');

@@ -6140,7 +6140,7 @@ def user_addresses():
                                     data['recipient_name'],
                                     data.get('phone', ''),
                                     data.get('comment', ''),
-                                    is_default                    
+                                    is_default
                                 ))
 
             if is_default:
