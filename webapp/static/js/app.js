@@ -1430,7 +1430,7 @@ class TelegramShop {
                             <div id="courierOption" style="margin-bottom: 8px; padding: 12px; border: ${this.deliveryData.type === 'courier' ? '2px solid #667eea' : '1px solid #e0e0e0'}; border-radius: 10px; background: ${this.deliveryData.type === 'courier' ? '#f8f9ff' : 'white'}; cursor: pointer;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'courier' ? '#667eea' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                        <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'courier' ? 'linear-gradient(135deg, #e67e22 0%, #d35400 100%)' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                             <i class="fas fa-truck" style="color: white;"></i>
                                         </div>
                                         <div>
@@ -1447,7 +1447,7 @@ class TelegramShop {
                             <div id="pickupOption" style="padding: 12px; border: ${this.deliveryData.type === 'pickup' ? '2px solid #667eea' : '1px solid #e0e0e0'}; border-radius: 10px; background: ${this.deliveryData.type === 'pickup' ? '#f8f9ff' : 'white'}; cursor: pointer;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'pickup' ? '#667eea' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                        <div style="width: 40px; height: 40px; background: ${this.deliveryData.type === 'pickup' ? 'linear-gradient(135deg, #e67e22 0%, #d35400 100%)' : '#6c757d'}; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                             <i class="fas fa-store" style="color: white;"></i>
                                         </div>
                                         <div>
@@ -3852,7 +3852,6 @@ async editOrder(orderId) {
 
 let shopInstance = null;
 const styleSheet = document.createElement('style');
-styleSheet.textContent = cartStyles;
 document.head.appendChild(styleSheet);
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('📋 DOM загружен, запускаем магазин...');
