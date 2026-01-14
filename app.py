@@ -1941,6 +1941,7 @@ def send_courier_order_notification(order_id):
             return False
 
         db = get_db()
+        # 🚨 ИСПРАВЛЕНИЕ: Добавляем извлечение building и entrance
         order = db.execute('''
                            SELECT o.*,
                                   json_extract(o.delivery_address, '$.city')           as city,
@@ -3112,21 +3113,22 @@ def send_admin_order_notification(order_id):
             return False
 
         db = get_db()
+        # 🚨 ИСПРАВЬТЕ И ЭТОТ ЗАПРОС:
         order = db.execute('''
                            SELECT o.*,
-                                  json_extract(o.delivery_address, '$.city')                                      as city,
-                                  json_extract(o.delivery_address, '$.street')                                    as street,
-                                  json_extract(o.delivery_address, '$.house')                                     as house,
-                                  json_extract(o.delivery_address, '$.building')                                  as building,
-                                  json_extract(o.delivery_address, '$.entrance')                                  as entrance,
-                                  json_extract(o.delivery_address, '$.apartment')                                 as apartment,
-                                  json_extract(o.delivery_address, '$.floor')                                     as floor,
-                                  json_extract(o.delivery_address, '$.doorcode')                                  as doorcode,
-                                  json_extract(o.delivery_address, '$.comment')                                   as address_comment,
-                                  json_extract(o.delivery_address, '$.recipient_name')                            as recipient_name_full,
-                                  json_extract(o.delivery_address, '$.phone')                                     as phone_full,
+                                  json_extract(o.delivery_address, '$.city')           as city,
+                                  json_extract(o.delivery_address, '$.street')         as street,
+                                  json_extract(o.delivery_address, '$.house')          as house,
+                                  json_extract(o.delivery_address, '$.building')       as building,  # ДОБАВЬТЕ
+                                  json_extract(o.delivery_address, '$.entrance')       as entrance,  # ДОБАВЬТЕ
+                                  json_extract(o.delivery_address, '$.apartment')      as apartment,
+                                  json_extract(o.delivery_address, '$.floor')          as floor,
+                                  json_extract(o.delivery_address, '$.doorcode')       as doorcode,
+                                  json_extract(o.delivery_address, '$.comment')        as address_comment,
+                                  json_extract(o.delivery_address, '$.recipient_name') as recipient_name_full,
+                                  json_extract(o.delivery_address, '$.phone')          as phone_full,
                                   (o.total_price + COALESCE(o.delivery_cost, 0) -
-                                   COALESCE(o.discount_amount, 0))                                                as total_amount
+                                   COALESCE(o.discount_amount, 0))                     as total_amount
                            FROM orders o
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
@@ -6088,7 +6090,6 @@ def get_pickup_points():
     finally:
         db.close()
 
-
 @app.route('/api/user/addresses', methods=['GET', 'POST'])
 def user_addresses():
     db = get_db()
@@ -6118,14 +6119,28 @@ def user_addresses():
             count = db.execute('SELECT COUNT(*) FROM user_addresses WHERE user_id = ?', (user_id,)).fetchone()[0]
             is_default = 1 if count == 0 else data.get('is_default', 0)
 
+            # 🚨 ИСПРАВЛЕНИЕ: Добавляем недостающие поля building, entrance и comment
             cursor = db.execute('''
-                                INSERT INTO user_addresses (user_id, city, street, house, apartment, floor, doorcode,
-                                                            recipient_name, phone, is_default)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                INSERT INTO user_addresses (
+                                    user_id, city, street, house, 
+                                    building, entrance, apartment, floor, doorcode,
+                                    recipient_name, phone, comment, is_default
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (
-                                    user_id, data['city'], data['street'], data['house'],
-                                    data.get('apartment', ''), data.get('floor', ''), data.get('doorcode', ''),
-                                    data['recipient_name'], data.get('phone', ''), is_default
+                                    user_id,
+                                    data['city'],
+                                    data['street'],
+                                    data['house'],
+                                    # 🚨 ДОБАВЛЯЕМ ПРОПУЩЕННЫЕ ПОЛЯ:
+                                    data.get('building', ''),
+                                    data.get('entrance', ''),
+                                    data.get('apartment', ''),
+                                    data.get('floor', ''),
+                                    data.get('doorcode', ''),
+                                    data['recipient_name'],
+                                    data.get('phone', ''),
+                                    data.get('comment', ''),
+                                    is_default                    
                                 ))
 
             if is_default:
