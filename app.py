@@ -2852,6 +2852,8 @@ def api_create_order():
         cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
 
         # ========== ОБРАБОТКА АДРЕСА - ИСПРАВЛЕННАЯ ВЕРСИЯ ==========
+
+        # ========== ОБРАБОТКА АДРЕСА - ИСПРАВЛЕННАЯ ВЕРСИЯ ==========
         address_obj = {}
 
         if isinstance(delivery_address, str):
@@ -2878,7 +2880,7 @@ def api_create_order():
         address_comment = ""
 
         if isinstance(address_obj, dict):
-            # Основные поля получателя
+            # Основные поля получателя - ИСПРАВЛЕНО: берем из адреса
             recipient_name = address_obj.get('recipient_name', '')
             phone_number = address_obj.get('phone', '') or address_obj.get('phone_number', '')
             address_comment = address_obj.get('comment', '') or address_obj.get('address_comment', '')
@@ -2888,25 +2890,29 @@ def api_create_order():
                 required_fields = ['city', 'street', 'house', 'recipient_name']
                 for field in required_fields:
                     if not address_obj.get(field):
+                        error_message = {
+                            'city': 'город',
+                            'street': 'улицу',
+                            'house': 'номер дома',
+                            'recipient_name': 'имя получателя'
+                        }.get(field, field)
+
                         return jsonify({
                             'success': False,
-                            'error': f'Для доставки заполните обязательное поле: {field}'
+                            'error': f'Для доставки заполните поле: {error_message}'
                         }), 400
 
-        # Альтернативные источники данных
+        # Альтернативные источники данных (на случай если recipient_name в данных)
         if not recipient_name:
             recipient_name = data.get('recipient_name', '')
         if not phone_number:
             phone_number = data.get('phone_number', '')
 
+        # Если все еще нет получателя - берем username
         if not recipient_name:
             recipient_name = data.get('username', 'Гость')
         if not phone_number:
             phone_number = 'Не указан'
-
-        print(f"👤 Получатель: {recipient_name}")
-        print(f"📱 Телефон: {phone_number}")
-        print(f"📝 Комментарий: {address_comment}")
 
         user_id = data.get('user_id', 0)
         username = data.get('username', 'Гость')
