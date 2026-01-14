@@ -2612,8 +2612,8 @@ async editOrder(orderId) {
         }
     }
 
-
-    function formatAddress(address) {
+]
+     formatAddress(address) {
         let parts = [];
 
         if (address.city) parts.push(`г. ${address.city}`);
