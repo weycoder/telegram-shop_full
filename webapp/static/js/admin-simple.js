@@ -35,11 +35,9 @@ class AdminPanel {
         this.loadDashboardData();
     }
 
-
     formatPrice(price) {
         return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
     }
-
 
     bindEvents() {
         console.log('🔗 Назначаем обработчики...');
@@ -83,9 +81,7 @@ class AdminPanel {
         console.log('✅ Все обработчики назначены');
     }
 
-
     showNotification(message, type = 'info') {
-        // Создаем уведомление
         const notification = document.createElement('div');
         notification.className = `admin-notification notification-${type}`;
         notification.innerHTML = `
@@ -106,16 +102,12 @@ class AdminPanel {
         }, 3000);
     }
 
-
-        // Добавьте в класс (где-то после showNotification):
     showLoading(show) {
         const loading = document.getElementById('loading');
         if (loading) {
             loading.style.display = show ? 'block' : 'none';
         }
     }
-
-    // ========== ОСНОВНЫЕ МЕТОДЫ ==========
 
     showAlert(message, type = 'info') {
         const alertDiv = document.createElement('div');
@@ -206,8 +198,6 @@ class AdminPanel {
         }, 50);
     }
 
-
-
     refreshCurrentPage() {
         if (this.currentPage === 'dashboard') {
             this.loadDashboardData();
@@ -232,8 +222,6 @@ class AdminPanel {
         }
     }
 
-    // ========== ЗАГРУЗКА ДАННЫХ ==========
-
     async loadProducts() {
         try {
             this.showLoading(true);
@@ -247,7 +235,6 @@ class AdminPanel {
 
             const result = await response.json();
 
-            // Проверяем структуру ответа
             if (result.success && Array.isArray(result.products)) {
                 this.products = result.products;
                 this.renderProducts(result.products);
@@ -267,11 +254,8 @@ class AdminPanel {
         }
     }
 
-
-
     renderProducts(products) {
         try {
-            // Локальная функция formatPrice чтобы избежать проблем с this
             const formatPrice = (price) => {
                 return new Intl.NumberFormat('ru-RU').format(Math.round(price || 0));
             };
@@ -284,7 +268,6 @@ class AdminPanel {
                 return;
             }
 
-            // Проверяем, есть ли товары
             if (!products || !Array.isArray(products) || products.length === 0) {
                 console.log('⚠️ Нет товаров для отображения');
                 productsTableBody.innerHTML = `
@@ -302,27 +285,23 @@ class AdminPanel {
             console.log('🔄 Начинаем рендеринг таблицы товаров...');
             let html = '';
 
-            // Проходим по каждому товару
             products.forEach((product, index) => {
                 console.log(`--- Товар #${index + 1} ---`, product);
 
-                // Определяем тип товара
                 const isWeightProduct = product.product_type === 'weight';
                 const hasDiscount = product.has_discount === true;
                 const discountedPrice = product.discounted_price || product.price;
 
-                // Формируем цену для отображения (используем локальную formatPrice)
                 let priceDisplay = '';
                 if (isWeightProduct) {
                     const pricePerKg = product.price_per_kg || product.price;
-                    priceDisplay = `${formatPrice(pricePerKg)} ₽/кг`;  // <-- Локальная функция
+                    priceDisplay = `${formatPrice(pricePerKg)} ₽/кг`;
                 } else {
                     priceDisplay = hasDiscount ?
                         `<span style="color: #10b981; font-weight: 500;">${formatPrice(discountedPrice)} ₽</span>` :
-                        `${formatPrice(product.price)} ₽`;  // <-- Локальная функция
+                        `${formatPrice(product.price)} ₽`;
                 }
 
-                // Формируем остаток для отображения
                 let stockDisplay = '';
                 if (isWeightProduct) {
                     stockDisplay = `${product.stock_weight || 0} кг`;
@@ -330,7 +309,6 @@ class AdminPanel {
                     stockDisplay = `${product.stock || 0} шт`;
                 }
 
-                // Создаем строку таблицы
                 html += `
                     <tr data-product-id="${product.id}">
                         <td><strong>${product.id}</strong></td>
@@ -435,7 +413,6 @@ class AdminPanel {
                 return;
             }
 
-            // Проверяем, действительно ли есть заказы
             if (!orders || orders.length === 0) {
                 console.log('⚠️ Нет заказов для отображения');
                 ordersTableBody.innerHTML = `
@@ -453,20 +430,16 @@ class AdminPanel {
             console.log('🔄 Начинаем рендеринг таблицы...');
             let html = '';
 
-            // Проходим по каждому заказу
             orders.forEach((order, index) => {
                 console.log(`--- Заказ #${index + 1} ---`, order);
 
-                // ПАРСИМ ITEMS
                 let items = [];
                 let itemsText = '';
                 try {
                     if (order.items && Array.isArray(order.items)) {
                         items = order.items;
 
-                        // Формируем текст для отображения в таблице
                         if (items.length > 0) {
-                            // Берем только первые 2-3 товара для компактного отображения
                             const displayItems = items.slice(0, 2);
                             itemsText = displayItems.map(item => {
                                 const name = item.name || 'Товар';
@@ -484,7 +457,6 @@ class AdminPanel {
                     itemsText = 'Ошибка загрузки товаров';
                 }
 
-                // Форматируем дату
                 const orderDate = new Date(order.created_at || order.order_date || Date.now());
                 const formattedDate = orderDate.toLocaleDateString('ru-RU', {
                     day: '2-digit',
@@ -494,7 +466,6 @@ class AdminPanel {
                     minute: '2-digit'
                 });
 
-                // Определяем статус
                 const statusConfig = {
                     'pending': { text: 'Ожидает', color: '#f59e0b', class: 'status-pending' },
                     'processing': { text: 'В обработке', color: '#3b82f6', class: 'status-processing' },
@@ -505,14 +476,17 @@ class AdminPanel {
 
                 const status = statusConfig[order.status] || statusConfig.pending;
 
-                // ВАЖНО: Используем правильное поле для суммы
                 const totalAmount = order.total_price || order.total || 0;
                 const formattedTotal = this.formatPrice(totalAmount);
 
-                // Получаем имя клиента
                 const clientName = order.username || order.recipient_name || 'Гость';
 
-                // Собираем HTML для строки таблицы
+                // Компактный адрес для таблицы
+                let addressPreview = '';
+                if (order.delivery_type === 'courier' && order.delivery_address) {
+                    addressPreview = this.formatCompactAddress(order.delivery_address);
+                }
+
                 html += `
                     <tr data-order-id="${order.id}">
                         <td><strong>#${order.id}</strong></td>
@@ -520,6 +494,13 @@ class AdminPanel {
                             <div class="client-info">
                                 <i class="fas fa-user"></i>
                                 <span>${clientName}</span>
+                                ${order.delivery_type === 'courier' && addressPreview ? `
+                                <br>
+                                <small style="color: #666; font-size: 12px;">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    ${addressPreview}
+                                </small>
+                                ` : ''}
                             </div>
                         </td>
                         <td>
@@ -578,6 +559,18 @@ class AdminPanel {
             }
         }
     }
+
+    formatCompactAddress(addressObj) {
+        if (!addressObj || typeof addressObj !== 'object') return '';
+
+        const parts = [];
+        if (addressObj.street) parts.push(`ул. ${addressObj.street}`);
+        if (addressObj.house) parts.push(`д. ${addressObj.house}`);
+        if (addressObj.apartment) parts.push(`кв. ${addressObj.apartment}`);
+
+        return parts.join(', ') || 'Адрес доставки';
+    }
+
     async viewOrderDetails(orderId) {
         try {
             console.log('🔍 Просмотр заказа #', orderId);
@@ -606,7 +599,6 @@ class AdminPanel {
 
             if (!modal || !modalContent) return;
 
-            // ПАРСИМ ITEMS
             let items = [];
             let itemsTotal = 0;
 
@@ -614,7 +606,6 @@ class AdminPanel {
                 if (order.items && Array.isArray(order.items)) {
                     items = order.items;
 
-                    // Правильно считаем сумму товаров
                     items.forEach(item => {
                         const price = parseFloat(item.discounted_price || item.price || 0);
                         const quantity = parseInt(item.quantity || 1);
@@ -627,11 +618,9 @@ class AdminPanel {
                 items = [];
             }
 
-            // Используем правильное поле для суммы (total_price вместо total)
             const orderTotal = parseFloat(order.total_price || order.total || 0);
             const displayTotal = orderTotal > 0 ? orderTotal : itemsTotal;
 
-            // Форматируем дату
             let formattedDate = 'Дата не указана';
             try {
                 const orderDate = new Date(order.created_at || order.order_date || Date.now());
@@ -646,7 +635,6 @@ class AdminPanel {
                 console.error('❌ Ошибка форматирования даты:', dateError);
             }
 
-            // Определяем статус
             const statusConfig = {
                 'pending': { text: 'Ожидает', color: '#f59e0b' },
                 'processing': { text: 'В обработке', color: '#3b82f6' },
@@ -657,16 +645,13 @@ class AdminPanel {
 
             const status = statusConfig[order.status] || statusConfig.pending;
 
-            // Получаем данные клиента
             const clientName = order.username || order.recipient_name || 'Гость';
             const phoneNumber = order.phone_number || 'Не указан';
 
-            // ПРАВИЛЬНО форматируем адрес
             let deliveryAddress = 'Не указан';
             try {
                 if (order.delivery_address) {
                     if (typeof order.delivery_address === 'string') {
-                        // Если адрес пришел как строка JSON
                         try {
                             const addressObj = JSON.parse(order.delivery_address);
                             if (addressObj && typeof addressObj === 'object') {
@@ -675,11 +660,9 @@ class AdminPanel {
                                 deliveryAddress = order.delivery_address;
                             }
                         } catch (e) {
-                            // Если это уже текст
                             deliveryAddress = order.delivery_address;
                         }
                     } else if (typeof order.delivery_address === 'object') {
-                        // Если адрес уже объект
                         deliveryAddress = this.formatAddress(order.delivery_address);
                     }
                 }
@@ -688,7 +671,6 @@ class AdminPanel {
                 deliveryAddress = 'Ошибка отображения адреса';
             }
 
-            // Создаем HTML для товаров
             let itemsHTML = '';
 
             if (items.length > 0) {
@@ -721,11 +703,9 @@ class AdminPanel {
                 itemsHTML = '<p class="no-items">Товары не указаны</p>';
             }
 
-            // Получаем дополнительные данные
             const deliveryCost = parseFloat(order.delivery_cost || 0);
             const promoDiscount = parseFloat(order.discount_amount || order.promo_discount || 0);
 
-            // Создаем контент модального окна
             modalContent.innerHTML = `
                 <div class="modal-header">
                     <h3><i class="fas fa-shopping-cart"></i> Детали заказа #${order.id}</h3>
@@ -782,9 +762,68 @@ class AdminPanel {
                                 <span>${phoneNumber}</span>
                             </div>
                             ${order.delivery_type === 'courier' ? `
-                            <div class="info-row">
-                                <span>Адрес доставки:</span>
-                                <span style="font-weight: 500;">${deliveryAddress}</span>
+                            <div class="info-section">
+                                <h4><i class="fas fa-map-marker-alt"></i> Адрес доставки</h4>
+                                <div class="address-details">
+                                    ${order.delivery_address?.city ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Город:</span>
+                                        <span class="address-value">${order.delivery_address.city}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.street ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Улица:</span>
+                                        <span class="address-value">${order.delivery_address.street}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.house ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Дом:</span>
+                                        <span class="address-value">${order.delivery_address.house}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.building ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Корпус/строение:</span>
+                                        <span class="address-value">${order.delivery_address.building}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.entrance ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Подъезд:</span>
+                                        <span class="address-value">${order.delivery_address.entrance}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.floor ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Этаж:</span>
+                                        <span class="address-value">${order.delivery_address.floor}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.apartment ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Квартира/офис:</span>
+                                        <span class="address-value">${order.delivery_address.apartment}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.doorcode ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Домофон/код:</span>
+                                        <span class="address-value">${order.delivery_address.doorcode}</span>
+                                    </div>
+                                    ` : ''}
+                                    ${order.delivery_address?.comment ? `
+                                    <div class="address-field">
+                                        <span class="address-label">Комментарий:</span>
+                                        <span class="address-value comment">${order.delivery_address.comment}</span>
+                                    </div>
+                                    ` : ''}
+                                    <div class="address-summary">
+                                        <i class="fas fa-map-marked-alt"></i>
+                                        <span style="font-weight: 500;">Полный адрес: ${deliveryAddress}</span>
+                                    </div>
+                                </div>
                             </div>
                             ` : ''}
                             ${order.pickup_point ? `
@@ -857,7 +896,6 @@ class AdminPanel {
         }
     }
 
-
     formatAddress(addressObj) {
         if (!addressObj || typeof addressObj !== 'object') return 'Не указан';
 
@@ -866,10 +904,15 @@ class AdminPanel {
         if (addressObj.city) parts.push(addressObj.city);
         if (addressObj.street) parts.push(`ул. ${addressObj.street}`);
         if (addressObj.house) parts.push(`д. ${addressObj.house}`);
+
+        if (addressObj.building) parts.push(`корп. ${addressObj.building}`);
+        if (addressObj.entrance) parts.push(`подъезд ${addressObj.entrance}`);
+        if (addressObj.floor) parts.push(`этаж ${addressObj.floor}`);
         if (addressObj.apartment) parts.push(`кв. ${addressObj.apartment}`);
 
-        if (addressObj.floor) parts.push(`этаж ${addressObj.floor}`);
         if (addressObj.doorcode) parts.push(`домофон: ${addressObj.doorcode}`);
+
+        if (addressObj.comment) parts.push(`(комментарий: ${addressObj.comment})`);
 
         return parts.join(', ') || 'Адрес указан не полностью';
     }
@@ -898,17 +941,10 @@ class AdminPanel {
         return discount.discount_type || 'Скидка';
     }
 
-
-
-
-
-    // Добавь метод editOrder в класс AdminPanel:
-
     async editOrder(orderId) {
         try {
             console.log('✏️ Редактирование заказа #', orderId);
 
-            // Загружаем данные заказа
             const response = await fetch(`/api/admin/orders/${orderId}`);
             const responseText = await response.text();
 
@@ -920,7 +956,6 @@ class AdminPanel {
                 throw new Error('Не удалось загрузить данные заказа');
             }
 
-            // Создаем модальное окно редактирования
             const modal = document.createElement('div');
             modal.className = 'modal-overlay';
             modal.style.cssText = `
@@ -937,8 +972,84 @@ class AdminPanel {
                 padding: 20px;
             `;
 
+            let addressFields = '';
+            if (order.delivery_type === 'courier') {
+                const deliveryAddress = typeof order.delivery_address === 'string'
+                    ? JSON.parse(order.delivery_address)
+                    : order.delivery_address || {};
+
+                addressFields = `
+                    <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+                        <h4 style="margin: 0 0 15px 0; color: #334155;">Адрес доставки</h4>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Город</label>
+                                <input type="text" id="editAddressCity"
+                                       value="${deliveryAddress.city || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Улица</label>
+                                <input type="text" id="editAddressStreet"
+                                       value="${deliveryAddress.street || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Дом</label>
+                                <input type="text" id="editAddressHouse"
+                                       value="${deliveryAddress.house || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Корпус/строение</label>
+                                <input type="text" id="editAddressBuilding"
+                                       value="${deliveryAddress.building || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Подъезд</label>
+                                <input type="text" id="editAddressEntrance"
+                                       value="${deliveryAddress.entrance || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Этаж</label>
+                                <input type="text" id="editAddressFloor"
+                                       value="${deliveryAddress.floor || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Квартира/офис</label>
+                                <input type="text" id="editAddressApartment"
+                                       value="${deliveryAddress.apartment || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Домофон/код</label>
+                                <input type="text" id="editAddressDoorcode"
+                                       value="${deliveryAddress.doorcode || ''}"
+                                       style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #475569;">Комментарий к адресу</label>
+                            <textarea id="editAddressComment" rows="3"
+                                      style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 6px;">${deliveryAddress.comment || ''}</textarea>
+                        </div>
+                    </div>
+                `;
+            }
+
             modal.innerHTML = `
-                <div style="background: white; border-radius: 12px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto;">
+                <div style="background: white; border-radius: 12px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
                     <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                         <h3 style="margin: 0; color: #2c3e50;">
                             <i class="fas fa-edit"></i> Редактирование заказа #${order.id}
@@ -1015,6 +1126,8 @@ class AdminPanel {
                                 </div>
                             </div>
 
+                            ${addressFields}
+
                             <div style="margin-bottom: 20px;">
                                 <h4 style="margin: 0 0 15px 0; color: #334155;">Промокод и скидки</h4>
 
@@ -1064,7 +1177,6 @@ class AdminPanel {
 
             document.body.appendChild(modal);
 
-            // Обработчики событий
             modal.querySelector('.close-modal').onclick = () => modal.remove();
             modal.querySelector('.cancel-edit').onclick = () => modal.remove();
 
@@ -1072,6 +1184,21 @@ class AdminPanel {
                 e.preventDefault();
 
                 try {
+                    let addressData = {};
+                    if (document.getElementById('editDeliveryType').value === 'courier') {
+                        addressData = {
+                            city: document.getElementById('editAddressCity')?.value || '',
+                            street: document.getElementById('editAddressStreet')?.value || '',
+                            house: document.getElementById('editAddressHouse')?.value || '',
+                            building: document.getElementById('editAddressBuilding')?.value || '',
+                            entrance: document.getElementById('editAddressEntrance')?.value || '',
+                            floor: document.getElementById('editAddressFloor')?.value || '',
+                            apartment: document.getElementById('editAddressApartment')?.value || '',
+                            doorcode: document.getElementById('editAddressDoorcode')?.value || '',
+                            comment: document.getElementById('editAddressComment')?.value || ''
+                        };
+                    }
+
                     const formData = {
                         status: document.getElementById('editOrderStatus').value,
                         total: parseFloat(document.getElementById('editOrderTotal').value),
@@ -1081,10 +1208,10 @@ class AdminPanel {
                         phone_number: document.getElementById('editPhoneNumber').value,
                         promo_code: document.getElementById('editPromoCode').value || null,
                         promo_discount: parseFloat(document.getElementById('editPromoDiscount').value) || 0,
-                        delivery_cost: parseFloat(document.getElementById('editDeliveryCost').value) || 0
+                        delivery_cost: parseFloat(document.getElementById('editDeliveryCost').value) || 0,
+                        delivery_address: document.getElementById('editDeliveryType').value === 'courier' ? addressData : null
                     };
 
-                    // Валидация
                     if (!formData.recipient_name.trim()) {
                         this.showNotification('❌ Введите имя получателя', 'error');
                         return;
@@ -1111,7 +1238,6 @@ class AdminPanel {
                         this.showNotification('✅ Заказ успешно обновлен', 'success');
                         modal.remove();
 
-                        // Обновляем таблицу заказов
                         await this.loadOrders();
                     } else {
                         throw new Error(result.error || 'Ошибка обновления заказа');
@@ -1150,10 +1276,8 @@ class AdminPanel {
             if (result.success) {
                 this.showNotification(`✅ Статус заказа #${orderId} изменен на "${newStatus}"`, 'success');
 
-                // Обновляем таблицу
                 await this.loadOrders();
 
-                // Закрываем модальное окно если оно открыто
                 const modal = document.getElementById('orderDetailsModal');
                 if (modal) {
                     modal.style.display = 'none';
@@ -1168,7 +1292,7 @@ class AdminPanel {
         }
     }
 
-
+    // Остальные методы остаются без изменений...
     async loadCategories() {
         try {
             const response = await fetch('/api/admin/categories/manage');
@@ -1234,8 +1358,6 @@ class AdminPanel {
             console.error('❌ Ошибка загрузки статистики:', error);
         }
     }
-
-    // ========== ТОВАРЫ ==========
 
     showAddProduct() {
         this.isEditing = false;
@@ -1305,14 +1427,12 @@ class AdminPanel {
         if (type === 'piece') {
             pieceFields.forEach(el => {
                 el.style.display = 'block';
-                // Убираем required у скрытых полей
                 const inputs = el.querySelectorAll('input[required], select[required]');
                 inputs.forEach(input => input.required = true);
             });
 
             weightFields.forEach(el => {
                 el.style.display = 'none';
-                // Убираем required у скрытых полей
                 const inputs = el.querySelectorAll('input[required], select[required]');
                 inputs.forEach(input => input.required = false);
             });
@@ -1320,14 +1440,12 @@ class AdminPanel {
         } else {
             weightFields.forEach(el => {
                 el.style.display = 'block';
-                // Устанавливаем required для видимых полей
                 const pricePerKgInput = el.querySelector('#pricePerKg');
                 if (pricePerKgInput) pricePerKgInput.required = true;
             });
 
             pieceFields.forEach(el => {
                 el.style.display = 'none';
-                // Убираем required у скрытых полей
                 const priceInput = el.querySelector('#productPrice');
                 const stockInput = el.querySelector('#productStock');
                 if (priceInput) priceInput.required = false;
@@ -1358,7 +1476,6 @@ class AdminPanel {
                     element.value = '';
                 }
 
-                // Убираем required атрибут при сбросе
                 element.removeAttribute('required');
             }
         });
@@ -1369,7 +1486,7 @@ class AdminPanel {
         const fileInput = document.getElementById('productImageFile');
         if (fileInput) {
             fileInput.value = '';
-            fileInput.required = true; // Только файл всегда required
+            fileInput.required = true;
         }
     }
 
@@ -1379,7 +1496,6 @@ class AdminPanel {
         const activeTypeBtn = document.querySelector('.type-btn.active');
         const productType = activeTypeBtn ? activeTypeBtn.dataset.type : 'piece';
 
-        // Валидация в зависимости от типа товара
         if (productType === 'piece') {
             const price = document.getElementById('productPrice').value;
             const stock = document.getElementById('productStock').value;
@@ -1411,7 +1527,6 @@ class AdminPanel {
             this.showAlert('❌ Загрузите изображение товара', 'error');
             return;
         }
-
 
         const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
         if (!allowedTypes.includes(imageFile.type)) {
@@ -1564,8 +1679,6 @@ class AdminPanel {
         }
     }
 
-    // ========== КАТЕГОРИИ ==========
-
     updateCategorySelect() {
         const select = document.getElementById('productCategory');
         if (select) {
@@ -1636,8 +1749,6 @@ class AdminPanel {
         }
     }
 
-    // ========== ЗАКАЗЫ ==========
-
     async editOrderStatus(orderId) {
         const newStatus = prompt('Введите новый статус (pending, processing, delivering, completed, cancelled):', 'processing');
 
@@ -1666,8 +1777,6 @@ class AdminPanel {
             this.showAlert('❌ Ошибка обновления статуса заказа', 'error');
         }
     }
-
-    // ========== СКИДКИ ==========
 
     async loadDiscounts() {
         try {
@@ -1921,8 +2030,6 @@ class AdminPanel {
         }
     }
 
-    // ========== ПРОМОКОДЫ ==========
-
     async initializePromoCodesPage() {
         await Promise.all([
             this.loadPromoCodes(),
@@ -2064,8 +2171,6 @@ class AdminPanel {
                         </div>
                     </div>
 
-
-
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" onclick="admin.loadPromoCodes()">
                             Отмена
@@ -2078,7 +2183,6 @@ class AdminPanel {
             </div>
         `;
     }
-
 
     async handlePromoCodeSubmit(e) {
         e.preventDefault();
@@ -2097,7 +2201,6 @@ class AdminPanel {
                 body: JSON.stringify(formData)
             });
 
-            // ВАЖНО: Проверяем ответ перед парсингом
             const responseText = await response.text();
             console.log('📥 Ответ сервера:', responseText);
 
@@ -2144,8 +2247,6 @@ class AdminPanel {
             this.showAlert('❌ Ошибка удаления промокода', 'error');
         }
     }
-
-    // ========== ДЕРЕВО КАТЕГОРИЙ ==========
 
     async loadCategoriesTree() {
         try {
@@ -2314,8 +2415,6 @@ class AdminPanel {
         }
     }
 
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
-
     onDiscountTypeChange() {
         const type = document.getElementById('discountType').value;
         const valueGroup = document.getElementById('discountValueGroup');
@@ -2349,7 +2448,6 @@ class AdminPanel {
     }
 }
 
-// Запуск при загрузке страницы
 let admin = null;
 
 document.addEventListener('DOMContentLoaded', () => {
