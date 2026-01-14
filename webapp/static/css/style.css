@@ -2645,3 +2645,37 @@ body {
         width: 100%;
     }
 }
+
+
+/* Стили для статусов точек самовывоза */
+.pickup-status.open {
+    color: #2ecc71;
+    font-weight: 600;
+}
+
+.pickup-status.closed {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.current-time-status {
+    font-size: 13px;
+    padding: 5px 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-top: 5px;
+    display: inline-block;
+}
+
+.pickup-card[onclick] {
+    cursor: pointer;
+}
+
+.pickup-card.closed-card {
+    opacity: 0.7;
+    border-color: #e74c3c;
+}
+
+.pickup-card.closed-card:hover {
+    opacity: 0.9;
+}

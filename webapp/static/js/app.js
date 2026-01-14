@@ -2940,18 +2940,51 @@ async editOrder(orderId) {
             const cartOverlay = document.getElementById('cartOverlay');
             if (!cartOverlay) return;
 
+            // Функция проверки, открыта ли точка в текущее время
+            const isPointOpen = (workingHours) => {
+                if (!workingHours) return true; // Если время не указано, считаем открытым
+
+                const now = new Date();
+                const currentHour = now.getHours();
+                const currentMinute = now.getMinutes();
+                const currentTime = currentHour * 60 + currentMinute;
+
+                // Парсим время работы (формат: "9:00-22:00" или "10:00-20:00")
+                const match = workingHours.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
+                if (!match) return true;
+
+                const [, startHour, startMinute, endHour, endMinute] = match;
+                const openTime = parseInt(startHour) * 60 + parseInt(startMinute);
+                const closeTime = parseInt(endHour) * 60 + parseInt(endMinute);
+
+                return currentTime >= openTime && currentTime <= closeTime;
+            };
+
             let pointsHTML = '';
             points.forEach(point => {
+                const workingHours = point.working_hours || '9:00-22:00';
+                const isOpen = isPointOpen(workingHours);
+                const isClickable = isOpen; // Только открытые точки можно выбирать
+
                 pointsHTML += `
-                    <div class="pickup-card" onclick="shop.selectPickupPoint(${point.id})">
+                    <div class="pickup-card ${!isOpen ? 'closed-card' : ''}" 
+                         ${isClickable ? `onclick="shop.selectPickupPoint(${point.id})"` : ''}>
                         <div class="pickup-header">
                             <h3>${point.name}</h3>
-                            <span class="pickup-status">🟢 Открыто</span>
+                            <span class="pickup-status ${isOpen ? 'open' : 'closed'}">
+                                ${isOpen ? '🟢 Открыто' : '🔴 Закрыто'}
+                            </span>
                         </div>
                         <div class="pickup-details">
                             <p><i class="fas fa-map-marker-alt"></i> ${point.address}</p>
-                            <p><i class="fas fa-clock"></i> ${point.working_hours || 'Ежедневно 10:00-22:00'}</p>
+                            <p><i class="fas fa-clock"></i> ${workingHours}</p>
                             ${point.phone ? `<p><i class="fas fa-phone"></i> ${point.phone}</p>` : ''}
+                            ${!isOpen ? `
+                                <p style="color: #e74c3c; font-size: 13px; margin-top: 5px;">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Сейчас закрыто. Доступно для заказа с 9:00
+                                </p>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -2966,7 +2999,24 @@ async editOrder(orderId) {
                         </button>
                     </div>
 
-                    <div class="pickup-list">
+                    <div class="time-info" style="
+                        padding: 10px 20px;
+                        background: #f8f9fa;
+                        border-bottom: 1px solid #e9ecef;
+                        font-size: 14px;
+                        color: #6c757d;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    ">
+                        <i class="fas fa-clock"></i>
+                        <span>Текущее время: ${new Date().toLocaleTimeString('ru-RU', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}</span>
+                    </div>
+
+                    <div class="pickup-list" style="padding: 20px;">
                         ${pointsHTML}
                     </div>
 
