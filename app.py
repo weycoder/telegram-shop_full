@@ -3256,9 +3256,7 @@ def send_admin_pickup_notification(order_id):
                     {"text": "✅ ЗАКАЗ ГОТОВ", "callback_data": f"order_ready_{order_id}"}
                 ],
                 [
-                    {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"},
-                    {"text": "💬 ЧАТ С КЛИЕНТОМ", "callback_data": f"chat_{order_id}"}
-                ]
+                    {"text": "👨‍💼 АДМИН ПАНЕЛЬ", "callback_data": "admin_panel"}]
             ]
         }
 
@@ -3366,7 +3364,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
             if item.get('is_weight'):
                 weight = item.get('weight', 0)
                 price = item.get('price', 0)
-                items_text += f"• *{safe_name}* - {weight} кг = *{price} ₽*\n"
+                items_text += f"• *{safe_name}* = *{price} ₽*\n"
                 total_items_value += price
             else:
                 quantity = item.get('quantity', 1)
@@ -3503,7 +3501,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
             if item.get('is_weight'):
                 weight = item.get('weight', 0)
                 price = item.get('price', 0)
-                items_text += f"• *{safe_name}* - {weight} кг = *{price} ₽*\n"
+                items_text += f"• *{safe_name}* = *{price} ₽*\n"
                 total_items_value += price
             else:
                 quantity = item.get('quantity', 1)

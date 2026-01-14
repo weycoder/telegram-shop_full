@@ -3121,7 +3121,7 @@ async editOrder(orderId) {
             this.deliveryData.payment_method = method;
             const methodNames = {
                 'cash': 'Наличные',
-                'transfer': 'Перевод курьеру',
+                'transfer': 'Перевод по номеру СБП',
                 'terminal': 'Терминал'
             };
             this.showNotification(`✅ Выбрана оплата: ${methodNames[method]}`, 'success');
@@ -3587,7 +3587,7 @@ async editOrder(orderId) {
         const deliveryText = this.deliveryData.type === 'courier' ? 'Доставка курьером' : 'Самовывоз';
         const paymentMethods = {
             'cash': 'Наличные',
-            'transfer': 'Перевод курьеру',
+            'transfer': 'Перевод по номеру СБП',
             'terminal': 'Терминал'
         };
         const paymentText = paymentMethods[this.deliveryData.payment_method] || 'Наличные';

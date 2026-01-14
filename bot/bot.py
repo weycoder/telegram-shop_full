@@ -47,7 +47,6 @@ def get_user_orders(telegram_id):
 
 
 def get_order_details(order_id, user_id):
-    """Получить детали заказа через API"""
     try:
         response = requests.get(f"{API_BASE_URL}/api/bot/get-order/{order_id}/{user_id}", timeout=5)
         if response.status_code == 200:
@@ -190,35 +189,164 @@ def get_chat_messages(order_id):
 
 
 # ========== КОМАНДЫ БОТА ==========
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start"""
+    """Команда /start - проверка всех ролей пользователя"""
     user = update.effective_user
+
+    # Проверяем ВСЕ роли пользователя
+    is_admin = await check_admin(user.id)
+    is_courier = False
+    courier_info = {}
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/api/courier/telegram/by-telegram/{user.id}",
+            timeout=5
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                is_courier = True
+                courier_info = data.get('courier_info', {})
+    except Exception as e:
+        logger.error(f"Ошибка проверки курьера: {e}")
+
+    # Определяем основную роль (приоритет: Админ > Курьер > Покупатель)
+    if is_admin:
+        main_role = 'admin'
+    elif is_courier:
+        main_role = 'courier'
+    else:
+        main_role = 'customer'
+
+    # URL для разных разделов
     web_app_url = f"{WEBAPP_URL}/webapp?user_id={user.id}&username={user.username or user.first_name}"
+    admin_url = f"{WEBAPP_URL}/admin?user_id={user.id}"
+    courier_url = f"{WEBAPP_URL}/courier?user_id={user.id}"
 
-    keyboard = [
-        [InlineKeyboardButton("🛒 ОТКРЫТЬ МАГАЗИН", web_app=WebAppInfo(url=web_app_url))],
-        [InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders")],
-        [InlineKeyboardButton("❓ ПОМОЩЬ", callback_data="help")]
-    ]
+    # Создаем клавиатуру
+    keyboard = []
 
-    await update.message.reply_text(
-        f"👋 Привет, {user.first_name}!\n\n"
-        "🛍️ Добро пожаловать в наш магазин!\n\n"
+    # Кнопка магазина для всех
+    keyboard.append([
+        InlineKeyboardButton("🛒 ОТКРЫТЬ МАГАЗИН", web_app=WebAppInfo(url=web_app_url))
+    ])
+
+    # Если пользователь является И администратором, И курьером
+    if is_admin and is_courier:
+        keyboard.extend([
+            [
+                InlineKeyboardButton("👨‍💼 АДМИН САЙТ", web_app=WebAppInfo(url=admin_url)),
+                InlineKeyboardButton("🚚 КУРЬЕР САЙТ", web_app=WebAppInfo(url=courier_url))
+            ]
+        ])
+
+    # Если только администратор (не курьер)
+    elif is_admin and not is_courier:
+        keyboard.extend([
+            [
+                InlineKeyboardButton("👨‍💼 АДМИН САЙТ", web_app=WebAppInfo(url=admin_url)),
+                InlineKeyboardButton("🚚 КУРЬЕР САЙТ", url=courier_url)  # обычная ссылка
+            ]
+        ])
+
+    # Если только курьер (не администратор)
+    elif is_courier and not is_admin:
+        keyboard.append([
+            InlineKeyboardButton("🚚 КУРЬЕР САЙТ", web_app=WebAppInfo(url=courier_url))
+        ])
+
+    # Общие кнопки для всех ролей
+    keyboard.append([
+        InlineKeyboardButton("📦 МОИ ЗАКАЗЫ", callback_data="my_orders"),
+        InlineKeyboardButton("❓ ПОМОЩЬ", callback_data="help")
+    ])
+
+    # Формируем текст приветствия с учетом всех ролей
+    text = f"👋 Привет, {user.first_name}!\n\n"
+
+    # Показываем все роли пользователя
+    roles_text = []
+    if is_admin:
+        roles_text.append("👨‍💼 *Администратор*")
+    if is_courier:
+        roles_text.append("🚚 *Курьер*")
+    if not is_admin and not is_courier:
+        roles_text.append("🛍️ *Покупатель*")
+
+    text += f"👤 *Ваши роли:* {', '.join(roles_text)}\n\n"
+
+    # Основные инструкции
+    text += (
         "*Как сделать заказ:*\n"
         "1. Нажмите '🛒 ОТКРЫТЬ МАГАЗИН'\n"
         "2. Выберите товары\n"
         "3. Оформите доставку\n"
         "4. Следите за статусом здесь!\n\n"
-        "*Вы будете получать уведомления:*\n"
-        "✅ Когда заказ принят\n"
-        "👤 Когда назначен курьер\n"
-        "🚚 Когда курьер едет к вам\n"
-        "🎉 Когда заказ доставлен",
+    )
+
+    # Информация о доступных возможностях
+    text += "*Доступные вам функции:*\n"
+
+    # Функции для администратора
+    if is_admin:
+        text += "• 👨‍💼 Управление магазином\n"
+        text += "• 📊 Статистика и отчеты\n"
+        text += "• 👥 Управление курьерами\n"
+        text += "• 📦 Просмотр всех заказов\n"
+        text += "• ❗️ КОМАНДА /admin\n"
+
+
+    # Функции для курьера
+    if is_courier:
+        text += "• 🚚 Активные заказы\n"
+        text += "• ✅ История доставок\n"
+        text += "• 📈 Ваша статистика\n"
+        text += "• ❗️ КОМАНДА /courier\n"
+
+
+        if courier_info:
+            text += f"\n*Ваши данные курьера:*\n"
+            text += f"👤 Имя: {courier_info.get('full_name', 'Не указано')}\n"
+            text += f"📱 Телефон: {courier_info.get('phone', 'Не указан')}\n"
+
+    # Функции для покупателя (только если не курьер и не админ)
+    if not is_admin and not is_courier:
+        text += "• 📦 Отслеживание заказов\n"
+        text += "• 💬 Чат с поддержкой\n"
+        text += "• 🎫 Использование промокодов\n"
+
+    text += "\n*Вы будете получать уведомления:*\n"
+    text += "✅ Когда заказ принят\n"
+
+    if is_courier:
+        text += "🚚 Когда назначают на доставку\n"
+
+    text += "📱 Когда курьер едет к вам\n"
+    text += "🎉 Когда заказ доставлен"
+
+    # Особое примечание для администратора-курьера
+    if is_admin and is_courier:
+        text += "\n\n⚠️ *Важно:* Вы можете работать в обеих ролях!"
+        text += "\n• Как администратор - управляйте всем магазином"
+        text += "\n• Как курьер - выполняйте доставки"
+
+    await update.message.reply_text(
+        text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
+    # Логируем все роли пользователя
+    roles_log = []
+    if is_admin:
+        roles_log.append("администратор")
+    if is_courier:
+        roles_log.append("курьер")
+    if not roles_log:
+        roles_log.append("клиент")
+
+    logger.info(f"Пользователь {user.id} ({user.username}) вошел с ролями: {', '.join(roles_log)}")
 
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показать заказы пользователя"""
@@ -1380,13 +1508,9 @@ async def courier_panel_command(update: Update, context: ContextTypes.DEFAULT_TY
                                              callback_data=f"courier_completed_{courier_info['courier_id']}")
                     ],
                     [
-                        InlineKeyboardButton("👤 Профиль",
-                                             callback_data=f"courier_profile_{courier_info['courier_id']}"),
-                        InlineKeyboardButton("🚚 Сегодня", callback_data=f"courier_today_{courier_info['courier_id']}")
-                    ],
-                    [
-                        InlineKeyboardButton("🚀 Взять заказ", callback_data="courier_available"),
-                        InlineKeyboardButton("❓ Помощь", callback_data="courier_help")
+                        InlineKeyboardButton("🚚 Сегодня", callback_data=f"courier_today_{courier_info['courier_id']}"),
+                        InlineKeyboardButton("🚀 Взять заказ", callback_data="courier_available")],
+                        [InlineKeyboardButton("❓ Помощь", callback_data="courier_help")
                     ]
                 ]
 
