@@ -2702,14 +2702,18 @@ def api_create_order():
         if delivery_type == 'pickup' and not data.get('pickup_point'):
             return jsonify({'success': False, 'error': 'Для самовывоза выберите пункт выдачи'}), 400
 
+        print("=" * 80)
+        print("🎯 ПОЛНЫЙ ДЕБАГ ВХОДНЫХ ДАННЫХ:")
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        print("=" * 80)
+
         # ========== ПРОВЕРКА ПРОМОКОДА ==========
         discount_amount = 0.0
         promo_code_id = None
-        promo_dict = None  # Добавляем инициализацию
+        promo_dict = None
 
         if promo_code:
             try:
-                # Проверяем валидность промокода
                 promo_result = db.execute('''
                                           SELECT id,
                                                  discount_type,
@@ -2727,90 +2731,61 @@ def api_create_order():
                 if promo_result:
                     promo_dict = dict(promo_result)
 
-                    # Проверяем лимит использований
                     if promo_dict['usage_limit'] and promo_dict['used_count'] >= promo_dict['usage_limit']:
                         print(f"⚠️ Промокод {promo_code} достиг лимита использований")
                     else:
-                        # Рассчитываем сумму товаров без доставки
                         items_total = 0.0
                         for item in data['items']:
                             price = float(item.get('price', 0))
                             quantity = float(item.get('quantity', 1))
 
-                            # Для весовых товаров используем вес
                             if item.get('is_weight'):
-                                # Для весовых товаров price уже содержит итоговую стоимость
-                                items_total += float(item.get('price', 0))  # ✅
+                                items_total += float(item.get('price', 0))
                             else:
                                 items_total += price * quantity
 
-                        # Проверяем минимальную сумму заказа
                         if promo_dict['min_order_amount'] and items_total < float(promo_dict['min_order_amount']):
                             print(f"⚠️ Промокод {promo_code} требует мин. сумму {promo_dict['min_order_amount']}")
                         else:
                             promo_code_id = promo_dict['id']
 
-                            # Рассчитываем скидку
                             if promo_dict['discount_type'] == 'percentage':
                                 discount_amount = items_total * (float(promo_dict['value']) / 100)
                             elif promo_dict['discount_type'] == 'fixed':
                                 discount_amount = float(promo_dict['value'])
                             elif promo_dict['discount_type'] == 'free_delivery':
-                                discount_amount = 0  # Доставка будет бесплатной
+                                discount_amount = 0
 
                             print(f"✅ Применен промокод {promo_code}, скидка: {discount_amount} руб")
             except Exception as e:
                 print(f"⚠️ Ошибка обработки промокода: {e}")
                 discount_amount = 0.0
 
+        # ========== РАСЧЕТ СТОИМОСТИ ==========
         try:
-            print("=" * 50)
-            print("📊 ДАННЫЕ ОТ ФРОНТЕНДА:")
-            print(json.dumps(data, indent=2, ensure_ascii=False))
-            print("=" * 50)
+            order_total = 0.0
 
-            # ========== РАСЧЕТ СТОИМОСТИ ==========
-            try:
-                order_total = 0.0
+            for item in data['items']:
+                if item.get('is_weight'):
+                    item_total = float(item.get('price', 0))
+                    order_total += item_total
+                else:
+                    price = float(item.get('price', 0))
+                    quantity = float(item.get('quantity', 1))
+                    item_total = price * quantity
+                    order_total += item_total
 
-                for item in data['items']:
-                    print(f"\n📦 Обработка товара: {item.get('name')}")
-                    print(f"   Тип: {'весовой' if item.get('is_weight') else 'штучный'}")
-                    print(f"   Данные: {item}")
+            print(f"\n💰 ИТОГО ТОВАРЫ: {order_total} ₽")
 
-                    if item.get('is_weight'):
-                        # Для весовых товаров: price уже содержит итоговую стоимость
-                        item_total = float(item.get('price', 0))  # ✅ Просто берем итоговую цену
-                        print(f"   Вес: {item.get('weight', 0)} кг")
-                        print(f"   Стоимость: {item_total} ₽")
-                        order_total += item_total
-                    else:
-                        price = float(item.get('price', 0))
-                        quantity = float(item.get('quantity', 1))
-                        item_total = price * quantity
-                        print(f"   Цена: {price} ₽")
-                        print(f"   Количество: {quantity} шт")
-                        print(f"   Стоимость: {item_total} ₽")
-                        order_total += item_total
-
-                print(f"\n💰 ИТОГО ТОВАРЫ: {order_total} ₽")
-
-            except Exception as e:
-                print(f"❌ Ошибка расчета: {e}")
-                import traceback
-                traceback.print_exc()
-                order_total = 0.0
-
-            print(f"💰 Сумма товаров: {order_total} руб")
-
-            # Применяем скидку по промокоду
             if discount_amount > 0:
                 order_total = max(0, order_total - discount_amount)
                 print(f"💰 Применена скидка по промокоду: {discount_amount} руб")
                 print(f"💰 Сумма после скидки: {order_total} руб")
 
-        except (ValueError, TypeError) as e:
-            print(f"⚠️ Ошибка расчета суммы товаров: {e}")
+        except Exception as e:
+            print(f"❌ Ошибка расчета: {e}")
+            import traceback
+            traceback.print_exc()
             order_total = 0.0
 
         # ========== РАСЧЕТ ДОСТАВКИ ==========
@@ -2819,7 +2794,6 @@ def api_create_order():
         if delivery_type == 'courier':
             print(f"💰 Проверяем доставку: заказ {order_total} руб")
 
-            # Если промокод с бесплатной доставкой
             if promo_code and promo_dict and promo_dict['discount_type'] == 'free_delivery':
                 print(f"✅ Доставка бесплатная по промокоду {promo_code}")
             elif order_total < 1000.0:
@@ -2852,9 +2826,13 @@ def api_create_order():
         cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
 
         # ========== ОБРАБОТКА АДРЕСА - ИСПРАВЛЕННАЯ ВЕРСИЯ ==========
-
-        # ========== ОБРАБОТКА АДРЕСА - ИСПРАВЛЕННАЯ ВЕРСИЯ ==========
         address_obj = {}
+
+        # Выводим для отладки
+        print("📦 delivery_address содержимое:")
+        print(f"Тип: {type(delivery_address)}")
+        print(f"Значение: {delivery_address}")
+        print("=" * 80)
 
         if isinstance(delivery_address, str):
             try:
@@ -2870,7 +2848,6 @@ def api_create_order():
             address_obj = delivery_address
         else:
             address_obj = {}
-            print("⚠️ delivery_address не является ни строкой ни словарем")
 
         print(f"📋 Распаршенный адрес: {json.dumps(address_obj, ensure_ascii=False, indent=2)}")
 
@@ -2880,40 +2857,93 @@ def api_create_order():
         address_comment = ""
 
         if isinstance(address_obj, dict):
-            # Основные поля получателя - ИСПРАВЛЕНО: берем из адреса
             recipient_name = address_obj.get('recipient_name', '')
             phone_number = address_obj.get('phone', '') or address_obj.get('phone_number', '')
             address_comment = address_obj.get('comment', '') or address_obj.get('address_comment', '')
 
-            # Обязательные поля для адреса доставки
-            if delivery_type == 'courier':
-                required_fields = ['city', 'street', 'house', 'recipient_name']
-                for field in required_fields:
-                    if not address_obj.get(field):
-                        error_message = {
-                            'city': 'город',
-                            'street': 'улицу',
-                            'house': 'номер дома',
-                            'recipient_name': 'имя получателя'
-                        }.get(field, field)
+        # ОБЯЗАТЕЛЬНЫЕ ПОЛЯ ДЛЯ АДРЕСА (только адресные данные)
+        if delivery_type == 'courier':
+            required_address_fields = ['city', 'street', 'house']
+            missing_fields = []
 
-                        return jsonify({
-                            'success': False,
-                            'error': f'Для доставки заполните поле: {error_message}'
-                        }), 400
+            for field in required_address_fields:
+                if not address_obj.get(field):
+                    missing_fields.append(field)
 
-        # Альтернативные источники данных (на случай если recipient_name в данных)
+            if missing_fields:
+                error_messages = {
+                    'city': 'город',
+                    'street': 'улицу',
+                    'house': 'номер дома'
+                }
+                errors = [error_messages.get(f, f) for f in missing_fields]
+                return jsonify({
+                    'success': False,
+                    'error': f'Для доставки заполните: {", ".join(errors)}'
+                }), 400
+
+        # ПОИСК ИМЕНИ ПОЛУЧАТЕЛЯ (может быть в разных местах)
+        print("🔍 Поиск recipient_name в данных:")
+
+        # 1. Проверяем отдельное поле recipient_name в данных
         if not recipient_name:
             recipient_name = data.get('recipient_name', '')
-        if not phone_number:
-            phone_number = data.get('phone_number', '')
+            print(f"   В data.recipient_name: {recipient_name}")
 
-        # Если все еще нет получателя - берем username
+        # 2. Проверяем delivery_data если есть
+        if not recipient_name:
+            delivery_data = data.get('delivery_data', {})
+            if isinstance(delivery_data, dict):
+                recipient_name = delivery_data.get('recipient_name', '')
+                print(f"   В data.delivery_data: {recipient_name}")
+
+        # 3. Проверяем в delivery_details
+        if not recipient_name:
+            delivery_details = data.get('delivery_details', {})
+            if isinstance(delivery_details, dict):
+                recipient_name = delivery_details.get('recipient_name', '')
+                print(f"   В data.delivery_details: {recipient_name}")
+
+        # 4. Берем из username если ничего не нашли
         if not recipient_name:
             recipient_name = data.get('username', 'Гость')
+            print(f"   Используем username: {recipient_name}")
+
+        # ПОИСК ТЕЛЕФОНА
+        if not phone_number:
+            phone_number = data.get('phone_number', '')
+            if not phone_number:
+                phone_number = data.get('phone', '')
+
         if not phone_number:
             phone_number = 'Не указан'
 
+        # Проверяем что имя получателя есть
+        if not recipient_name or recipient_name == 'Гость':
+            return jsonify({
+                'success': False,
+                'error': 'Укажите имя получателя'
+            }), 400
+
+        print(f"✅ Найден recipient_name: {recipient_name}")
+        print(f"✅ Найден phone_number: {phone_number}")
+        print(f"✅ Комментарий: {address_comment}")
+
+        # ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ ПОЛЯ В ОБЪЕКТ АДРЕСА
+        full_address_obj = address_obj.copy() if isinstance(address_obj, dict) else {}
+
+        if 'recipient_name' not in full_address_obj:
+            full_address_obj['recipient_name'] = recipient_name
+
+        if 'phone' not in full_address_obj and phone_number != 'Не указан':
+            full_address_obj['phone'] = phone_number
+
+        if 'comment' not in full_address_obj and address_comment:
+            full_address_obj['comment'] = address_comment
+
+        print(f"📦 Финальный объект адреса для сохранения: {json.dumps(full_address_obj, ensure_ascii=False, indent=2)}")
+
+        # ========== ОБРАБОТКА ПОЛЬЗОВАТЕЛЯ ==========
         user_id = data.get('user_id', 0)
         username = data.get('username', 'Гость')
 
@@ -2948,21 +2978,6 @@ def api_create_order():
         print(f"👤 Используемый username: {username}")
 
         # ========== СОХРАНЕНИЕ ЗАКАЗА ==========
-        # Создаем полный объект адреса для сохранения
-        full_address_obj = address_obj.copy() if isinstance(address_obj, dict) else {}
-
-        # Добавляем отсутствующие поля, но которые есть в данных
-        if 'recipient_name' not in full_address_obj and recipient_name:
-            full_address_obj['recipient_name'] = recipient_name
-        if 'phone' not in full_address_obj and phone_number:
-            full_address_obj['phone'] = phone_number
-        if 'comment' not in full_address_obj and address_comment:
-            full_address_obj['comment'] = address_comment
-
-        # Также сохраняем recipient_name и phone_number в отдельных полях для удобства
-        final_recipient_name = recipient_name
-        final_phone_number = phone_number
-
         cursor = db.execute('''
                             INSERT INTO orders (user_id, username, items, total_price, delivery_cost, status,
                                                 delivery_type, delivery_address, pickup_point,
@@ -2974,15 +2989,15 @@ def api_create_order():
                                 user_id,
                                 username,
                                 json.dumps(data['items'], ensure_ascii=False),
-                                order_total,  # ВАЖНО: сохраняем сумму товаров
+                                order_total,
                                 delivery_cost,
                                 'pending',
                                 delivery_type,
                                 json.dumps(full_address_obj, ensure_ascii=False),
                                 data.get('pickup_point'),
                                 payment_method,
-                                final_recipient_name,
-                                final_phone_number,
+                                recipient_name,
+                                phone_number,
                                 cash_received,
                                 cash_change,
                                 cash_details,
@@ -2993,11 +3008,8 @@ def api_create_order():
         # ========== ОБНОВЛЕНИЕ ПРОМОКОДА ==========
         if promo_code_id:
             try:
-                db.execute('''
-                           UPDATE promo_codes
-                           SET used_count = used_count + 1
-                           WHERE id = ?
-                           ''', (promo_code_id,))
+                db.execute('UPDATE promo_codes SET used_count = used_count + 1 WHERE id = ?',
+                           (promo_code_id,))
                 print(f"✅ Обновлен счетчик использований промокода #{promo_code_id}")
             except Exception as e:
                 print(f"⚠️ Не удалось обновить счетчик промокода: {e}")
@@ -3013,40 +3025,32 @@ def api_create_order():
                 product_id = item.get('id')
 
                 if product_id:
-                    # Для весовых товаров
                     if item.get('is_weight'):
                         weight = item.get('weight', 0)
                         if weight > 0:
                             db.execute('UPDATE products SET stock_weight = stock_weight - ? WHERE id = ?',
                                        (weight, product_id))
                     else:
-                        # Для штучных товаров
                         db.execute('UPDATE products SET stock = stock - ? WHERE id = ?',
                                    (quantity, product_id))
-            except (ValueError, TypeError) as e:
-                print(f"⚠️ Ошибка обновления остатков для товара {item.get('id')}: {e}")
             except Exception as e:
-                print(f"⚠️ Общая ошибка обновления остатков: {e}")
+                print(f"⚠️ Ошибка обновления остатков для товара {item.get('id')}: {e}")
 
         db.commit()
 
         # Создаем активный чат для нового заказа
         try:
-            db.execute('''
-                       INSERT
-                       OR IGNORE INTO active_chats (order_id, customer_id, status)
-                VALUES (?, ?, 'active')
-                       ''', (order_id, user_id))
+            db.execute('INSERT OR IGNORE INTO active_chats (order_id, customer_id, status) VALUES (?, ?, "active")',
+                       (order_id, user_id))
             db.commit()
             print(f"✅ Создан активный чат для заказа #{order_id}")
         except Exception as e:
             print(f"⚠️ Не удалось создать чат: {e}")
 
-        # ========== ОСОБАЯ ОБРАБОТКА ДЛЯ САМОВЫВОЗА ==========
+        # ========== ОБРАБОТКА УВЕДОМЛЕНИЙ ==========
         if delivery_type == 'pickup':
-            print(f"📦 ЗАКАЗ #{order_id} - САМОВЫВОЗ: отправляем специальные уведомления")
+            print(f"📦 ЗАКАЗ #{order_id} - САМОВЫВОЗ")
 
-            # 1. Уведомление клиенту о самовывозе
             if user_id and user_id > 0:
                 try:
                     send_pickup_order_notification(
@@ -3062,17 +3066,14 @@ def api_create_order():
                 except Exception as e:
                     print(f"   ❌ Ошибка отправки уведомления клиенту (самовывоз): {e}")
 
-            # 2. Уведомление админу о заказе на самовывоз
             try:
                 send_admin_pickup_notification(order_id)
             except Exception as e:
                 print(f"   ❌ Ошибка отправки уведомления админу (самовывоз): {e}")
 
         else:
-            # ========== ОБЫЧНЫЕ УВЕДОМЛЕНИЯ ДЛЯ ДОСТАВКИ ==========
             print(f"🚚 ЗАКАЗ #{order_id} - КУРЬЕРСКАЯ ДОСТАВКА")
 
-            # 1. Уведомление клиенту (для доставки)
             if user_id and user_id > 0:
                 try:
                     send_order_details_notification(
@@ -3085,18 +3086,42 @@ def api_create_order():
                 except Exception as e:
                     print(f"   ❌ Ошибка отправки клиенту (доставка): {e}")
 
-            # 2. Уведомление админу
             try:
                 send_admin_order_notification(order_id)
             except Exception as e:
                 print(f"   ❌ Ошибка отправки админу: {e}")
 
-            # 3. Если курьерская доставка - уведомляем курьеров
             if delivery_type == 'courier':
                 try:
                     send_courier_order_notification(order_id)
                 except Exception as e:
                     print(f"   ❌ Ошибка отправки курьерам: {e}")
+
+        print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
+        print(f"💰 Итоговая сумма: {total_with_delivery} руб")
+        print(f"📊 Скидка по промокоду: {discount_amount} руб")
+        print(f"💵 Наличные: получено {cash_received} руб, сдача {cash_change} руб")
+
+        print("\n📋 ИНФОРМАЦИЯ О ЗАКАЗЕ:")
+        print(f"   Получатель: {recipient_name}")
+        print(f"   Телефон: {phone_number}")
+        print(f"   Тип доставки: {delivery_type}")
+
+        if delivery_type == 'courier':
+            print(
+                f"   Адрес: {full_address_obj.get('city', '')}, ул. {full_address_obj.get('street', '')}, д. {full_address_obj.get('house', '')}")
+            if full_address_obj.get('building'):
+                print(f"   Корпус: {full_address_obj['building']}")
+            if full_address_obj.get('entrance'):
+                print(f"   Подъезд: {full_address_obj['entrance']}")
+            if full_address_obj.get('apartment'):
+                print(f"   Квартира: {full_address_obj['apartment']}")
+            if full_address_obj.get('comment'):
+                print(f"   Комментарий: {full_address_obj['comment']}")
+        else:
+            print(f"   Пункт выдачи: {data.get('pickup_point', 'Не указан')}")
+
+        print("=" * 80)
 
         return jsonify({
             'success': True,
@@ -3112,7 +3137,6 @@ def api_create_order():
         import traceback
         traceback.print_exc()
 
-        # Пытаемся откатить изменения
         try:
             if order_id:
                 db.execute('DELETE FROM orders WHERE id = ?', (order_id,))
