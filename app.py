@@ -1178,7 +1178,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                                     courier_name=None, courier_phone=None):
     """Отправить уведомление клиенту - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        BOT_TOKEN = os.getenv('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         print(f"📤 Уведомление клиенту #{order_id}")
