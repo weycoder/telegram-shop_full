@@ -52,6 +52,7 @@ def rate_limit(max_requests=30, window=60):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # Проверяем, существует ли _ip_blocks
             if '_ip_blocks' not in globals():
                 globals()['_ip_blocks'] = {}
 
@@ -60,18 +61,19 @@ def rate_limit(max_requests=30, window=60):
 
             # Инициализируем счетчик для IP если его нет
             if ip not in _ip_blocks:
-                _ip_blocks[ip] = {'count': 0, 'start_time': current_time}
+                _ip_blocks[ip] = {'count': 1, 'window_start': current_time}
+            else:
+                # Проверяем не истекло ли окно времени
+                if current_time - _ip_blocks[ip]['window_start'] > window:
+                    # Сбрасываем счетчик
+                    _ip_blocks[ip] = {'count': 1, 'window_start': current_time}
+                else:
+                    # Увеличиваем счетчик
+                    _ip_blocks[ip]['count'] += 1
 
-            # Сбрасываем счетчик если окно времени истекло
-            if current_time - _ip_blocks[ip]['start_time'] > window:
-                _ip_blocks[ip] = {'count': 0, 'start_time': current_time}
-
-            # Проверяем лимит
-            if _ip_blocks[ip]['count'] >= max_requests:
-                return jsonify({'error': 'Too many requests'}), 429
-
-            # Увеличиваем счетчик
-            _ip_blocks[ip]['count'] += 1
+            # Проверяем не превышен ли лимит
+            if _ip_blocks[ip]['count'] > max_requests:
+                return jsonify({'error': 'Превышен лимит запросов. Попробуйте позже.'}), 429
 
             return f(*args, **kwargs)
 
@@ -1419,13 +1421,6 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         return False
 
 
-# В app.py добавьте/замените функцию send_order_notification:
-
-import base64
-import io
-from PIL import Image
-
-
 def send_order_notification(order_id, status, photo_base64=None):
     try:
         if TELEGRAM_BOT is None:
@@ -1552,7 +1547,6 @@ def send_order_notification(order_id, status, photo_base64=None):
     except Exception as e:
         print(f"❌ Общая ошибка отправки уведомления: {e}")
         return False
-
 
 def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_name, courier_phone, photo_url):
     """Отправить уведомление клиенту о доставке с фото - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
