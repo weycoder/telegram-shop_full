@@ -1095,42 +1095,6 @@ class CourierApp {
         window.showDeliveryForm(orderId);
     }
 
-    // Обработка выбора фото
-    function handlePhotoSelection(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Проверяем тип файла
-        if (!file.type.startsWith('image/')) {
-            alert('❌ Выберите изображение');
-            return;
-        }
-
-        // Проверяем размер (макс 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            alert('❌ Файл слишком большой (макс 5MB)');
-            return;
-        }
-
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            currentPhoto = {
-                data: e.target.result,
-                file: file
-            };
-
-            // Показываем превью
-            const preview = document.getElementById('photo-preview');
-            preview.innerHTML = `<img src="${e.target.result}" alt="Выбранное фото">`;
-            preview.style.display = 'block';
-
-            // Активируем кнопку подтверждения
-            document.getElementById('confirmDeliveryBtn').disabled = false;
-        };
-
-        reader.readAsDataURL(file);
-    }
 
     // Подтверждение получения заказа
     async confirmPickup() {
