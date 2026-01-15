@@ -1176,12 +1176,13 @@ def api_bot_get_order_detail(order_id, telegram_id):
 
 def send_order_details_notification(telegram_id, order_id, items, status, delivery_type,
                                     courier_name=None, courier_phone=None):
-    """Отправить красивое уведомление клиенту"""
+    """Отправить красивое уведомление клиенту с полной информацией"""
     try:
         BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
 
         print(f"📤 Уведомление клиенту #{order_id}")
         print(f"   👤 ID: {telegram_id}")
+        print(f"   📊 Статус: {status}")
 
         if not telegram_id or telegram_id == 0:
             print("❌ Неверный telegram_id")
@@ -1191,13 +1192,18 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Получаем детали заказа
+        # Получаем полные детали заказа
         db = get_db()
         try:
+            # Получаем полную информацию о заказе с адресом и способом оплаты
             order = db.execute('''
                                SELECT o.*,
                                       (o.total_price + COALESCE(o.delivery_cost, 0) -
-                                       COALESCE(o.discount_amount, 0)) as total_amount
+                                       COALESCE(o.discount_amount, 0))                as total_amount,
+                                      json_extract(o.delivery_address, '$.city')      as city,
+                                      json_extract(o.delivery_address, '$.street')    as street,
+                                      json_extract(o.delivery_address, '$.house')     as house,
+                                      json_extract(o.delivery_address, '$.apartment') as apartment
                                FROM orders o
                                WHERE o.id = ?
                                ''', (order_id,)).fetchone()
@@ -1208,6 +1214,20 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                 return False
 
             order_data = dict(order)
+
+            # Получаем информацию о пункте выдачи если это самовывоз
+            pickup_info = None
+            if delivery_type == 'pickup' and order_data.get('pickup_point'):
+                try:
+                    if str(order_data['pickup_point']).isdigit():
+                        pickup_info = db.execute('''
+                                                 SELECT name, address, working_hours
+                                                 FROM pickup_points
+                                                 WHERE id = ?
+                                                 ''', (int(order_data['pickup_point']),)).fetchone()
+                except:
+                    pass
+
         except Exception as e:
             print(f"❌ Ошибка получения заказа: {e}")
             db.close()
@@ -1217,71 +1237,192 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         # Определяем эмодзи и текст статуса
         status_config = {
-            'assigned': {
-                'emoji': '👤',
-                'title': 'КУРЬЕР НАЗНАЧЕН',
-                'message': 'Курьер назначен на доставку вашего заказа',
-                'tip': 'Курьер скоро заберет ваш заказ. Будьте на связи!'
-            },
-            'picked_up': {
-                'emoji': '⚡',
-                'title': 'ЗАБРАН КУРЬЕРОМ',
-                'message': 'Курьер забрал ваш заказ и уже едет к вам!',
-                'tip': 'Курьер уже в пути! Приготовьтесь к встрече.'
-            },
-            'delivering': {
-                'emoji': '🚚',
-                'title': 'В ПУТИ',
-                'message': 'Курьер доставляет ваш заказ',
-                'tip': 'Курьер едет к вам! Будьте на связи.'
-            },
-            'ready_for_pickup': {
-                'emoji': '📦',
-                'title': 'ГОТОВ К ВЫДАЧЕ',
-                'message': 'Ваш заказ готов к выдаче',
-                'tip': 'Заберите заказ в пункте выдачи в удобное время.'
+            'created': {
+                'emoji': '🆕',
+                'title': 'НОВЫЙ ЗАКАЗ',
+                'status_text': 'Заказ создан',
+                'status_desc': 'Мы получили ваш заказ и начали его обработку',
+                'tip': 'Скоро начнем сборку вашего заказа.'
             },
             'pending': {
                 'emoji': '⏳',
                 'title': 'В ОБРАБОТКЕ',
-                'message': 'Ваш заказ обрабатывается',
-                'tip': 'Мы начали сборку вашего заказа.'
+                'status_text': 'Заказ обрабатывается',
+                'status_desc': 'Мы начали сборку вашего заказа',
+                'tip': 'Ваш заказ уже собирается на складе.'
+            },
+            'processing': {
+                'emoji': '📦',
+                'title': 'СОБИРАЕТСЯ',
+                'status_text': 'Заказ собирается',
+                'status_desc': 'Сотрудники собирают ваш заказ',
+                'tip': 'Все товары проверяются на качество.'
+            },
+            'assigned': {
+                'emoji': '👤',
+                'title': 'КУРЬЕР НАЗНАЧЕН',
+                'status_text': 'Курьер назначен',
+                'status_desc': 'Назначен курьер для доставки вашего заказа',
+                'tip': 'Курьер скоро заберет ваш заказ со склада.'
+            },
+            'picked_up': {
+                'emoji': '⚡',
+                'title': 'ЗАБРАН КУРЬЕРОМ',
+                'status_text': 'Заказ у курьера',
+                'status_desc': 'Курьер забрал ваш заказ и уже в пути',
+                'tip': 'Курьер уже едет к вам! Будьте на связи.'
+            },
+            'delivering': {
+                'emoji': '🚚',
+                'title': 'В ПУТИ',
+                'status_text': 'Заказ в пути',
+                'status_desc': 'Курьер доставляет ваш заказ по адресу',
+                'tip': 'Ожидайте прибытия курьера.'
+            },
+            'ready_for_pickup': {
+                'emoji': '✅',
+                'title': 'ГОТОВ К ВЫДАЧЕ',
+                'status_text': 'Готов к выдаче',
+                'status_desc': 'Ваш заказ готов и ждет вас в пункте выдачи',
+                'tip': 'Заберите заказ в течение 24 часов.'
+            },
+            'delivered': {
+                'emoji': '🎉',
+                'title': 'ДОСТАВЛЕН',
+                'status_text': 'Заказ доставлен',
+                'status_desc': 'Ваш заказ успешно доставлен',
+                'tip': 'Наслаждайтесь покупками! Спасибо за заказ.'
+            },
+            'completed': {
+                'emoji': '🏆',
+                'title': 'ЗАВЕРШЕН',
+                'status_text': 'Заказ завершен',
+                'status_desc': 'Заказ успешно завершен',
+                'tip': 'Ждем вас снова в нашем магазине!'
             }
         }
 
         config = status_config.get(status, {
             'emoji': '📊',
             'title': 'СТАТУС ОБНОВЛЕН',
-            'message': f'Статус вашего заказа: {status}',
+            'status_text': status,
+            'status_desc': f'Статус вашего заказа изменен на: {status}',
             'tip': 'Следите за обновлениями статуса.'
         })
+
+        # Формируем адрес
+        address_text = ""
+        if delivery_type == 'courier':
+            if order_data.get('city') and order_data.get('street'):
+                address_parts = []
+                if order_data.get('city'):
+                    address_parts.append(order_data['city'])
+                if order_data.get('street'):
+                    address_parts.append(f"ул. {order_data['street']}")
+                if order_data.get('house'):
+                    address_parts.append(f"д. {order_data['house']}")
+                if order_data.get('apartment'):
+                    address_parts.append(f"кв. {order_data['apartment']}")
+                address_text = ", ".join(address_parts)
+        else:
+            if pickup_info:
+                address_text = f"{pickup_info['name']} - {pickup_info['address']}"
+            else:
+                address_text = "Пункт выдачи будет указан"
+
+        # Формируем состав заказа (кратко)
+        order_summary = ""
+        if items and len(items) > 0:
+            total_items = sum(item.get('quantity', 1) for item in items)
+            order_summary = f"📦 *Состав заказа:* {len(items)} позиций"
+
+            # Показываем первые 3 товара
+            for i, item in enumerate(items[:3]):
+                name = item.get('name', 'Товар')
+                if len(name) > 25:
+                    name = name[:22] + "..."
+
+                if item.get('is_weight'):
+                    weight = item.get('weight', 0)
+                    order_summary += f"\n  • {name} - {weight} кг"
+                else:
+                    quantity = item.get('quantity', 1)
+                    order_summary += f"\n  • {name} × {quantity} шт"
+
+            if len(items) > 3:
+                order_summary += f"\n  • ... и ещё {len(items) - 3} товаров"
+
+        # Формируем информацию о курьере
+        courier_info = ""
+        if courier_name and status in ['assigned', 'picked_up', 'delivering', 'delivered']:
+            courier_info = f"👤 *Курьер:* {courier_name}\n"
+            if courier_phone:
+                courier_info += f"📱 *Телефон курьера:* {courier_phone}\n"
+            if status == 'assigned':
+                courier_info += "⏱️ *Ожидайте*: Курьер скоро свяжется с вами\n"
+            elif status == 'picked_up':
+                courier_info += "⚡ *Статус:* Курьер уже в пути к вам!\n"
+            elif status == 'delivering':
+                courier_info += "📍 *Статус:* Близко к вашему адресу\n"
 
         # Формируем красивое сообщение
         message = f"{config['emoji']} *{config['title']}*\n"
         message += f"━━━━━━━━━━━━━━━━━━━━\n"
-        message += f"📦 *Заказ №{order_id}*\n"
-        message += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n\n"
+        message += f"📋 *Заказ №{order_id}*\n"
+        message += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
+        message += f"🚚 *Тип доставки:* {'Курьерская доставка' if delivery_type == 'courier' else 'Самовывоз'}\n"
 
-        message += f"💬 *{config['message']}*\n\n"
+        if address_text:
+            message += f"📍 *Адрес:* {address_text}\n"
 
-        if courier_name:
-            message += f"👤 *Курьер:* {courier_name}\n"
-            if courier_phone:
-                message += f"📱 *Телефон:* {courier_phone}\n"
+        message += f"\n📊 *Статус:* {config['status_text']}\n"
+        message += f"💬 *{config['status_desc']}*\n"
+
+        if courier_info:
+            message += f"\n{courier_info}"
+
+        if order_summary:
+            message += f"\n{order_summary}\n"
+
+        # Информация о платеже
+        payment_method = order_data.get('payment_method', 'cash')
+        payment_text = "💳 *Оплата:* "
+        if payment_method == 'cash':
+            payment_text += "Наличными при получении"
+        elif payment_method == 'card':
+            payment_text += "Картой онлайн"
+        elif payment_method == 'online':
+            payment_text += "Онлайн оплата"
+
+        message += f"\n{payment_text}\n"
 
         message += f"\n💡 *{config['tip']}*\n"
         message += f"━━━━━━━━━━━━━━━━━━━━\n"
-        message += f"📞 *Вопросы?* Свяжитесь с поддержкой"
+        message += f"📞 *Вопросы?* Напишите нам в чат поддержки"
 
-        # Кнопки
-        keyboard = {
-            "inline_keyboard": [
-                [
-                    {"text": "📦 Мои заказы", "callback_data": "my_orders"},
-                    {"text": "💬 Поддержка", "callback_data": "support"}
-                ]
-            ]
-        }
+        # Кнопки в зависимости от статуса
+        keyboard_buttons = []
+
+        if status in ['ready_for_pickup', 'delivered', 'completed']:
+            keyboard_buttons.append([
+                {"text": "⭐ Оценить заказ", "callback_data": f"rate_order_{order_id}"},
+                {"text": "📦 Мои заказы", "callback_data": "my_orders"}
+            ])
+        elif status in ['assigned', 'picked_up', 'delivering']:
+            keyboard_buttons.append([
+                {"text": "📞 Связаться с курьером", "callback_data": f"contact_courier_{order_id}"},
+                {"text": "📍 Отследить", "callback_data": f"track_{order_id}"}
+            ])
+            keyboard_buttons.append([
+                {"text": "📦 Детали заказа", "callback_data": f"order_details_{order_id}"}
+            ])
+        else:
+            keyboard_buttons.append([
+                {"text": "📦 Мои заказы", "callback_data": "my_orders"},
+                {"text": "💬 Поддержка", "callback_data": "support"}
+            ])
+
+        keyboard = {"inline_keyboard": keyboard_buttons}
 
         # Отправляем сообщение
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
@@ -1432,11 +1573,10 @@ def send_photo_to_telegram(chat_id, photo_path, caption=""):
 
 
 def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_name, courier_phone, photo_url):
-    """Отправить уведомление клиенту о доставке с фото - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ"""
+    """Отправить уведомление о доставке с фото и полной информацией"""
     try:
         print(f"📤 Уведомление о доставке #{order_id} с фото")
         print(f"   👤 ID клиента: {telegram_id}")
-        print(f"   📷 URL фото: {photo_url}")
 
         if not telegram_id or telegram_id == 0:
             print("❌ Неверный telegram_id клиента")
@@ -1448,7 +1588,8 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
             order = db.execute('''
                                SELECT o.*,
                                       (o.total_price + COALESCE(o.delivery_cost, 0) -
-                                       COALESCE(o.discount_amount, 0)) as total_amount
+                                       COALESCE(o.discount_amount, 0)) as total_amount,
+                                      o.items                          as items_json
                                FROM orders o
                                WHERE o.id = ?
                                ''', (order_id,)).fetchone()
@@ -1456,72 +1597,99 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
             if order:
                 order_data = dict(order)
                 total_amount = order_data.get('total_amount', 0)
+
+                # Парсим товары
+                try:
+                    items = json.loads(order_data.get('items_json', '[]'))
+                except:
+                    items = []
             else:
                 total_amount = 0
+                items = []
+
         except Exception as e:
-            print(f"⚠️ Ошибка получения суммы заказа: {e}")
+            print(f"⚠️ Ошибка получения заказа: {e}")
             total_amount = 0
+            items = []
         finally:
             db.close()
 
-        # Формируем путь к фото
-        if photo_url.startswith('/static/uploads/'):
-            # Локальный файл
-            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_url.replace('/static/uploads/', ''))
-        elif photo_url.startswith('/'):
-            # Другой локальный путь
-            photo_path = photo_url[1:]  # Убираем первый слэш
-        else:
-            # Возможно, это уже полный путь
-            photo_path = photo_url
+        # Формируем состав заказа (кратко)
+        order_summary = ""
+        if items and len(items) > 0:
+            order_summary = f"📦 *Состав заказа:* {len(items)} позиций\n"
+            for i, item in enumerate(items[:2]):  # Показываем 2 основных товара
+                name = item.get('name', 'Товар')
+                if len(name) > 20:
+                    name = name[:17] + "..."
 
-        # Формируем красивую подпись
+                if item.get('is_weight'):
+                    weight = item.get('weight', 0)
+                    order_summary += f"  • {name} - {weight} кг\n"
+                else:
+                    quantity = item.get('quantity', 1)
+                    order_summary += f"  • {name} × {quantity} шт\n"
+
+            if len(items) > 2:
+                order_summary += f"  • ... и ещё {len(items) - 2} товаров\n"
+
+        # Формируем подпись для фото
         caption = f"""✅ *ЗАКАЗ #{order_id} ДОСТАВЛЕН!*
-
-🎉 Ваш заказ успешно доставлен!
-
-👤 *Курьер:* {courier_name or 'Не указан'}
-📱 *Телефон курьера:* {courier_phone or 'Не указан'}
-
-💰 *Итого к оплате:* {total_amount:.2f} ₽
-
-📸 *Фото подтверждения доставки*
-💝 *Спасибо за покупку!*"""
-
-        # Сначала пробуем отправить фото напрямую
-        success = send_photo_to_telegram(telegram_id, photo_path, caption)
-
-        if success:
-            print(f"   ✅ Фото с подписью отправлено клиенту {telegram_id}")
-            return True
-        else:
-            # Если не удалось отправить фото, отправляем красивое текстовое сообщение
-            print(f"   ⚠️ Не удалось отправить фото, отправляю текстовое сообщение...")
-
-            # Формируем красивое текстовое сообщение
-            message = f"""✅ *ЗАКАЗ #{order_id} ДОСТАВЛЕН!*
 
 🎉 *Поздравляем! Ваш заказ успешно доставлен!*
 
 ━━━━━━━━━━━━━━━━━━━━
-📋 *Детали заказа:*
+📋 *Детали доставки:*
 ━━━━━━━━━━━━━━━━━━━━
 👤 *Курьер:* {courier_name or 'Не указан'}
 📱 *Телефон курьера:* {courier_phone or 'Не указан'}
 💰 *Сумма к оплате:* {total_amount:.2f} ₽
 
-📸 *Фото подтверждения* сохранено в системе
-
+{order_summary}
+📸 *Фото подтверждения доставки*
 ━━━━━━━━━━━━━━━━━━━━
 💡 *Что дальше?*
-• Если у вас есть вопросы к курьеру, свяжитесь с ним по указанному телефону
-• Оцените качество доставки в разделе "Мои заказы"
+• Если у вас есть вопросы к курьеру, свяжитесь с ним
+• Оцените качество доставки
 • Ждем вас снова в нашем магазине!
 
 💝 *Спасибо за покупку!*
 ━━━━━━━━━━━━━━━━━━━━"""
 
-            # Отправляем текстовое сообщение
+        # Пробуем отправить фото
+        success = False
+        if photo_url and os.path.exists(photo_url.replace('/static/uploads/', app.config['UPLOAD_FOLDER'] + '/')):
+            try:
+                photo_path = photo_url.replace('/static/uploads/', app.config['UPLOAD_FOLDER'] + '/')
+                success = send_photo_to_telegram(telegram_id, photo_path, caption)
+            except:
+                success = False
+
+        if not success:
+            # Если фото не отправилось, отправляем красивое текстовое сообщение
+            message = f"""✅ *ЗАКАЗ #{order_id} ДОСТАВЛЕН!*
+
+🎉 *Поздравляем! Ваш заказ успешно доставлен!*
+
+━━━━━━━━━━━━━━━━━━━━
+📋 *Детали доставки:*
+━━━━━━━━━━━━━━━━━━━━
+👤 *Курьер:* {courier_name or 'Не указан'}
+📱 *Телефон курьера:* {courier_phone or 'Не указан'}
+💰 *Сумма к оплате:* {total_amount:.2f} ₽
+
+{order_summary}
+📸 *Фото подтверждения сохранено в системе*
+
+━━━━━━━━━━━━━━━━━━━━
+💡 *Что дальше?*
+• Если у вас есть вопросы к курьеру, свяжитесь с ним
+• Оцените качество доставки
+• Ждем вас снова в нашем магазине!
+
+💝 *Спасибо за покупку!*
+━━━━━━━━━━━━━━━━━━━━"""
+
             BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
             data = {
@@ -1534,6 +1702,9 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
                         [
                             {"text": "⭐ Оценить заказ", "callback_data": f"rate_{order_id}"},
                             {"text": "📦 Мои заказы", "callback_data": "my_orders"}
+                        ],
+                        [
+                            {"text": "💬 Поддержка", "callback_data": "support"}
                         ]
                     ]
                 })
@@ -1542,11 +1713,14 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
             response = requests.post(url, json=data, timeout=10)
 
             if response.status_code == 200:
-                print(f"   ✅ Красивое текстовое уведомление отправлено клиенту {telegram_id}")
+                print(f"   ✅ Текстовое уведомление отправлено клиенту {telegram_id}")
                 return True
             else:
                 print(f"   ❌ Ошибка отправки текста: {response.text}")
                 return False
+        else:
+            print(f"   ✅ Фото с подписью отправлено клиенту {telegram_id}")
+            return True
 
     except Exception as e:
         print(f"❌ Критическая ошибка отправки уведомления с фото: {e}")
