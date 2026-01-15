@@ -1178,7 +1178,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                                     courier_name=None, courier_phone=None):
     """Отправить уведомление клиенту - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
-        BOT_TOKEN = os.getenv('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         print(f"📤 Уведомление клиенту #{order_id}")
@@ -1515,7 +1515,7 @@ def send_order_notification(order_id, status, courier_id=None, photo_url=None):
 def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_name, courier_phone, photo_url):
     """Отправить уведомление клиенту о доставке с фото - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'  # Используем реальный токен
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM') # Используем реальный токен
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         print(f"📤 Уведомление о доставке #{order_id} с фото")
@@ -3494,7 +3494,7 @@ def handle_order_ready_callback(call):
 def send_admin_pickup_notification(order_id):
     """Отправить админу уведомление о заказе на самовывоз"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         ADMIN_TELEGRAM_IDS = 7331765165
 
         print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
@@ -3660,7 +3660,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
                                    total_with_delivery):
     """Отправить специальное уведомление для заказа с самовывозом"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
@@ -3805,7 +3805,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
                                    total_with_delivery):
     """Отправить специальное уведомление для заказа с самовывозом"""
     try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
@@ -3990,7 +3990,7 @@ def send_order_ready_notification(order_id):
 
         db.close()
 
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
         if not BOT_TOKEN:
             print("❌ BOT_TOKEN не установлен")
             return False
