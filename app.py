@@ -82,6 +82,182 @@ def rate_limit(max_requests=30, window=60):
     return decorator
 
 
+
+def setup_telegram_webhook():
+    """Настроить вебхук для Telegram бота"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
+
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        webhook_url = f"{WEBAPP_URL.rstrip('/')}/api/bot/webhook"
+
+        print(f"🔄 Настраиваю вебхук на {webhook_url}")
+
+        # Устанавливаем вебхук
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+        data = {
+            'url': webhook_url,
+            'max_connections': 100,
+            'allowed_updates': ['message', 'callback_query']
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                print(f"✅ Вебхук успешно настроен: {result.get('description', 'OK')}")
+                return True
+            else:
+                print(f"❌ Ошибка настройки вебхука: {result}")
+                return False
+        else:
+            print(f"❌ Ошибка HTTP при настройке вебхука: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Исключение при настройке вебхука: {e}")
+        return False
+
+
+def setup_telegram_webhook():
+    """Настроить вебхук для Telegram бота"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        # URL для вебхука
+        WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://telegram-shop-full.onrender.com')
+        webhook_url = f"{WEBHOOK_URL.rstrip('/')}/webhook/{BOT_TOKEN}"
+
+        print(f"🔄 Настраиваю вебхук: {webhook_url}")
+
+        # Устанавливаем вебхук через API Telegram
+        response = requests.post(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/setWebhook',
+            json={'url': webhook_url, 'drop_pending_updates': True},
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                print(f"✅ Вебхук успешно настроен: {result.get('description', '')}")
+
+                # Проверяем информацию о вебхуке
+                info_response = requests.get(
+                    f'https://api.telegram.org/bot{BOT_TOKEN}/getWebhookInfo',
+                    timeout=10
+                )
+
+                if info_response.status_code == 200:
+                    webhook_info = info_response.json()
+                    print(f"📊 Информация о вебхуке: {webhook_info}")
+
+                return True
+            else:
+                print(f"❌ Ошибка настройки вебхука: {result}")
+                return False
+        else:
+            print(f"❌ Ошибка HTTP: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Исключение при настройке вебхука: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def remove_telegram_webhook():
+    """Удалить вебхук"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        if not BOT_TOKEN:
+            return False
+
+        response = requests.post(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook',
+            json={'drop_pending_updates': True},
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            print("✅ Вебхук удален")
+            return True
+        return False
+    except Exception as e:
+        print(f"❌ Ошибка удаления вебхука: {e}")
+        return False
+
+
+@app.route(f'/webhook/<token>', methods=['POST'])
+def telegram_webhook(token):
+    """Обработчик вебхука от Telegram"""
+    try:
+        # Проверяем токен
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        if token != BOT_TOKEN:
+            print(f"❌ Неверный токен вебхука: {token}")
+            return jsonify({'success': False, 'error': 'Invalid token'}), 403
+
+        # Получаем данные от Telegram
+        update = request.get_json()
+        print(f"📥 Получен вебхук: {update}")
+
+        # Здесь можно обработать обновление
+        # Например, проверить тип обновления
+        if 'message' in update:
+            print(f"💬 Сообщение: {update['message']}")
+        elif 'callback_query' in update:
+            print(f"🔘 Callback: {update['callback_query']}")
+
+        # Отвечаем, что все OK
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"❌ Ошибка обработки вебхука: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ========== ЭНДПОИНТ ДЛЯ ПРОВЕРКИ ВЕБХУКА ==========
+
+@app.route('/check-webhook', methods=['GET'])
+def check_webhook_status():
+    """Проверить статус вебхука"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        if not BOT_TOKEN:
+            return jsonify({'success': False, 'error': 'BOT_TOKEN not set'}), 400
+
+        response = requests.get(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/getWebhookInfo',
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            webhook_info = response.json()
+            return jsonify({
+                'success': True,
+                'webhook_info': webhook_info
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'HTTP {response.status_code}'
+            }), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 def sanitize_input(data):
     """Очистка входных данных от опасных символов"""
     if isinstance(data, str):
@@ -122,7 +298,7 @@ def setup_webhook_on_start():
     try:
         import time
         # Ждем немного чтобы приложение успело запуститься
-        time.sleep(3)
+        time.sleep(5)
         print("🔄 Настраиваю Telegram вебхук...")
         if setup_telegram_webhook():
             print("✅ Telegram вебхук успешно настроен")
@@ -131,13 +307,15 @@ def setup_webhook_on_start():
     except Exception as e:
         print(f"❌ Ошибка настройки вебхука: {e}")
 
-# Запускаем настройку вебхука в отдельном потоке после запуска приложения
+# Запускаем настройку вебхука в отдельном потоке
 import threading
-timer = threading.Timer(5.0, setup_webhook_on_start)
-timer.start()
+webhook_timer = threading.Timer(7.0, setup_webhook_on_start)
+webhook_timer.start()
 
 # Регистрируем очистку при выходе
-atexit.register(lambda: timer.cancel())
+import atexit
+atexit.register(lambda: webhook_timer.cancel())
+atexit.register(remove_telegram_webhook)
 
 
 print(f"🔍 Текущий BOT_TOKEN: {os.getenv('BOT_TOKEN')}")
@@ -1178,7 +1356,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                                     courier_name=None, courier_phone=None):
     """Отправить красивое уведомление клиенту с полной информацией"""
     try:
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
 
         print(f"📤 Уведомление клиенту #{order_id}")
         print(f"   👤 ID: {telegram_id}")
@@ -1410,10 +1588,6 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             ])
         elif status in ['assigned', 'picked_up', 'delivering']:
             keyboard_buttons.append([
-                {"text": "📞 Связаться с курьером", "callback_data": f"contact_courier_{order_id}"},
-                {"text": "📍 Отследить", "callback_data": f"track_{order_id}"}
-            ])
-            keyboard_buttons.append([
                 {"text": "📦 Детали заказа", "callback_data": f"order_details_{order_id}"}
             ])
         else:
@@ -1546,7 +1720,7 @@ def send_order_notification(order_id, status, courier_id=None, photo_base64=None
 def send_photo_to_telegram(chat_id, photo_path, caption="", reply_markup=None):
     """Отправить фото напрямую через Telegram API"""
     try:
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
 
         if not os.path.exists(photo_path):
             print(f"❌ Файл не найден: {photo_path}")
@@ -1731,7 +1905,7 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
 💝 *Спасибо за покупку!*
 ━━━━━━━━━━━━━━━━━━━━"""
 
-            BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+            BOT_TOKEN = os.getenv('BOT_TOKEN')
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
             data = {
                 'chat_id': int(telegram_id),
@@ -1795,7 +1969,7 @@ def admin_mark_order_ready(order_id):
 def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_name, is_admin=False):
     """Отправить уведомление о новом сообщении в Telegram"""
     try:
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         if not BOT_TOKEN or not telegram_id:
             return False
 
@@ -2244,7 +2418,7 @@ def api_get_chat_messages():
 def send_courier_order_notification(order_id):
     """Отправить уведомление курьерам"""
     try:
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         if not BOT_TOKEN:
             return False
 
@@ -2526,7 +2700,7 @@ def send_order_ready_notification(order_id):
 
         db.close()
 
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         if not BOT_TOKEN:
             print("❌ BOT_TOKEN не установлен")
             return False
@@ -3414,7 +3588,7 @@ def api_create_order():
 def send_admin_order_notification(order_id):
     """Отправить уведомление админу о новом заказе"""
     try:
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         ADMIN_TELEGRAM_IDS = 7331765165
 
         if not BOT_TOKEN:
@@ -3565,7 +3739,7 @@ def handle_order_ready_callback(call):
         send_order_ready_notification(order_id)
 
         # Отправляем ответ админу
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         if BOT_TOKEN:
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
             data = {
@@ -3591,7 +3765,7 @@ def handle_order_ready_callback(call):
 def send_admin_pickup_notification(order_id):
     """Отправить админу уведомление о заказе на самовывоз"""
     try:
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         ADMIN_TELEGRAM_IDS = 7331765165
 
         print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
@@ -3757,7 +3931,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
                                    total_with_delivery):
     """Отправить специальное уведомление для заказа с самовывозом"""
     try:
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
@@ -3902,7 +4076,7 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
                                    total_with_delivery):
     """Отправить специальное уведомление для заказа с самовывозом"""
     try:
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
 
         print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
@@ -4087,7 +4261,7 @@ def send_order_ready_notification(order_id):
 
         db.close()
 
-        BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         if not BOT_TOKEN:
             print("❌ BOT_TOKEN не установлен")
             return False
@@ -5065,7 +5239,7 @@ def assign_courier():
         existing = db.execute('SELECT courier_id FROM order_assignments WHERE order_id = ?', (order_id,)).fetchone()
         if existing:
             db.close()
-            return jsonify({'success': False, 'error': 'Курьер уже назначен'}), 400
+            return jsonify({'success': False, 'error': '1уже назначен'}), 400
 
         # Получаем случайного активного курьера
         courier = db.execute('''
@@ -7248,7 +7422,7 @@ def handle_order_completed_callback_webhook(call):
                     }, timeout=5)
 
         # Ответ админу
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         if BOT_TOKEN:
             # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
@@ -7289,7 +7463,7 @@ def handle_order_ready_callback_webhook(call):
         send_order_ready_notification(order_id)
 
         # Ответ админу
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
         if BOT_TOKEN:
             # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
@@ -7372,47 +7546,6 @@ def telegram_webhook():
     except Exception as e:
         print(f"❌ Ошибка в обработчике вебхука: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-def setup_telegram_webhook():
-    """Настроить вебхук для Telegram бота"""
-    try:
-        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
-        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
-
-        if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
-            return False
-
-        webhook_url = f"{WEBAPP_URL.rstrip('/')}/api/bot/webhook"
-
-        print(f"🔄 Настраиваю вебхук на {webhook_url}")
-
-        # Устанавливаем вебхук
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
-        data = {
-            'url': webhook_url,
-            'max_connections': 100,
-            'allowed_updates': ['message', 'callback_query']
-        }
-
-        response = requests.post(url, json=data, timeout=10)
-
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('ok'):
-                print(f"✅ Вебхук успешно настроен: {result.get('description', 'OK')}")
-                return True
-            else:
-                print(f"❌ Ошибка настройки вебхука: {result}")
-                return False
-        else:
-            print(f"❌ Ошибка HTTP при настройке вебхука: {response.status_code}")
-            return False
-
-    except Exception as e:
-        print(f"❌ Исключение при настройке вебхука: {e}")
-        return False
 
 
 

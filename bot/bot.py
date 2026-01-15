@@ -246,7 +246,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.extend([
             [
                 InlineKeyboardButton("👨‍💼 АДМИН САЙТ", web_app=WebAppInfo(url=admin_url)),
-                InlineKeyboardButton("🚚 КУРЬЕР САЙТ", url=courier_url)  # обычная ссылка
+                InlineKeyboardButton("🚚 КУРЬЕР САЙТ", web_app=WebAppInfo(url=courier_url))  # обычная ссылка
             ]
         ])
 
@@ -2304,7 +2304,6 @@ async def handle_support_callback_async(query, order_id='0'):
             disable_web_page_preview=True,
             reply_markup=InlineKeyboardMarkup([
                 [
-                    InlineKeyboardButton("📞 Позвонить", url="tel:+79295449588"),
                     InlineKeyboardButton("✉️ Написать", url="https://t.me/KERIMLIKERIM")
                 ],
                 [
@@ -2401,7 +2400,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❓ *Помощь*\n\n"
             "*Основные команды:*\n"
             "/start - Запустить бота\n"
-            "/track <номер> - Отследить заказ\n"
             "/myorders - Мои заказы\n\n"
             "*Кнопки:*\n"
             "🛒 ОТКРЫТЬ МАГАЗИН - Открыть интернет-магазин\n"
@@ -3054,8 +3052,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(
         "👋 Для навигации используйте команды:\n\n"
         "/start - Главное меню\n"
-        "/admin - Панель администратора\n"
-        "/track <номер> - Отследить заказ\n"
         "/myorders - Мои заказы\n\n"
         "Или используйте кнопки в меню."
     )
@@ -3071,8 +3067,8 @@ async def delete_courier_command(update: Update, context: ContextTypes.DEFAULT_T
 
     if not context.args:
         await update.message.reply_text(
-            "📝 Использование: /delete_courier <id>\n"
-            "Пример: /delete_courier 1"
+            "📝 Использование: /dc <id>\n"
+            "Пример: /dc 1"
         )
         return
 
