@@ -1405,7 +1405,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         if status in ['ready_for_pickup', 'delivered', 'completed']:
             keyboard_buttons.append([
-                {"text": "⭐ Оценить заказ", "url": "t.me/faceqet"},
+                {"text": "⭐ Оценить заказ", "url": "https://t.me/smofshop/5"},
                 {"text": "📦 Мои заказы", "callback_data": "my_orders"}
             ])
         elif status in ['assigned', 'picked_up', 'delivering']:
@@ -1671,7 +1671,7 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "⭐ Оценить заказ", "url": "t.me/faceqet"},
+                    {"text": "⭐ Оценить заказ", "url": "https://t.me/smofshop/5"},
                     {"text": "📦 Мои заказы", "callback_data": "my_orders"}
                 ],
                 [
@@ -7372,6 +7372,48 @@ def telegram_webhook():
     except Exception as e:
         print(f"❌ Ошибка в обработчике вебхука: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def setup_telegram_webhook():
+    """Настроить вебхук для Telegram бота"""
+    try:
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
+
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        webhook_url = f"{WEBAPP_URL.rstrip('/')}/api/bot/webhook"
+
+        print(f"🔄 Настраиваю вебхук на {webhook_url}")
+
+        # Устанавливаем вебхук
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+        data = {
+            'url': webhook_url,
+            'max_connections': 100,
+            'allowed_updates': ['message', 'callback_query']
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                print(f"✅ Вебхук успешно настроен: {result.get('description', 'OK')}")
+                return True
+            else:
+                print(f"❌ Ошибка настройки вебхука: {result}")
+                return False
+        else:
+            print(f"❌ Ошибка HTTP при настройке вебхука: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Исключение при настройке вебхука: {e}")
+        return False
+
 
 
 # ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
