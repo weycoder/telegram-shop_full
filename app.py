@@ -7501,54 +7501,6 @@ def handle_order_ready_callback_webhook(call):
         return jsonify({'ok': False, 'error': str(e)})
 
 
-@app.route('/api/telegram-webhook', methods=['POST'])
-def telegram_webhook():
-    """Обработчик вебхуков от Telegram"""
-    try:
-        data = request.get_json()
-        print(f"📥 Telegram webhook received")
-
-        # Обработка callback query
-        if 'callback_query' in data:
-            call = data['callback_query']
-            call_data = call.get('data', '')
-
-            print(f"🔄 Processing callback: {call_data}")
-
-            # Обработка кнопки "Заказ готов" для самовывоза
-            if call_data.startswith('order_ready_'):
-                order_id = int(call_data.replace('order_ready_', ''))
-                return handle_order_ready_callback(order_id, call)
-
-            # Обработка кнопки "Заказ выдан"
-            elif call_data.startswith('order_completed_'):
-                order_id = int(call_data.replace('order_completed_', ''))
-                return handle_order_completed_callback(order_id, call)
-
-            # Обработка кнопки "Взять заказ" для курьеров
-            elif call_data.startswith('courier_take_'):
-                order_id = int(call_data.replace('courier_take_', ''))
-                return handle_courier_take_callback(order_id, call)
-
-            # Обработка кнопки "Поддержка"
-            elif call_data.startswith('support_'):
-                order_id = call_data.replace('support_', '')
-                if order_id == 'support':  # Просто кнопка "Поддержка" без ID заказа
-                    order_id = '0'
-                return handle_support_callback(call, order_id)
-
-            # Обработка других callback'ов
-            elif call_data == 'support':
-                return handle_support_callback(call, '0')
-
-        return jsonify({'ok': True})
-
-    except Exception as e:
-        print(f"❌ Ошибка в обработчике вебхука: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-
 # ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
 if __name__ == '__main__':
     # Настройки безопасности
