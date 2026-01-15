@@ -4559,9 +4559,9 @@ def api_update_order_status():
                          WHERE id = ?
                          ''', (order_id,))
 
-            # Обновляем assignment
+            # Обновляем assignment - ИСПРАВЛЕНО: courier_assignments → order_assignments
             conn.execute('''
-                         UPDATE courier_assignments
+                         UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
                          SET status       = 'delivered',
                              photo_proof  = ?,
                              delivered_at = CURRENT_TIMESTAMP
@@ -4572,9 +4572,9 @@ def api_update_order_status():
         elif status == 'picked_up':
             # Обновляем только статус
             conn.execute('''
-                         UPDATE courier_assignments
+                         UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
                          SET status       = 'picked_up',
-                             picked_up_at = CURRENT_TIMESTAMP
+                             delivery_started = CURRENT_TIMESTAMP  # ← ИСПРАВЛЕНО: picked_up_at → delivery_started
                          WHERE order_id = ?
                            AND courier_id = ?
                          ''', (order_id, courier_id))
@@ -4582,7 +4582,7 @@ def api_update_order_status():
         else:
             # Простое обновление статуса
             conn.execute('''
-                         UPDATE courier_assignments
+                         UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
                          SET status = ?
                          WHERE order_id = ?
                            AND courier_id = ?
@@ -5234,9 +5234,9 @@ def api_complete_delivery():
                      WHERE id = ?
                      ''', (delivered_at, delivery_notes, order_id))
 
-        # Затем обновляем assignment
+        # Затем обновляем assignment - ИСПРАВЛЕНО: courier_assignments → order_assignments
         conn.execute('''
-                     UPDATE courier_assignments
+                     UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
                      SET status       = 'delivered',
                          delivered_at = ?,
                          photo_proof  = ?
