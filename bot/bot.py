@@ -3088,10 +3088,9 @@ async def delete_courier_command(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
- # ========== ЗАПУСК БОТА ==========
 
-async def main_async():
-    """Асинхронная функция запуска бота"""
+def main():
+    """Запуск бота с polling"""
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не установлен!")
         return
@@ -3108,7 +3107,6 @@ async def main_async():
 
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
-
     # Добавляем обработчики
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("track", track_order))
@@ -3128,28 +3126,8 @@ async def main_async():
     print(f"🔗 API Base URL: {API_BASE_URL}")
     print("=" * 50)
 
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    # Ожидаем остановки
-    stop_event = asyncio.Event()
-    await stop_event.wait()
-
-
-def main():
-    """Запуск бота с учетом изменений в Python 3.14"""
-    # В Python 3.14 нужно явно создавать event loop
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(main_async())
-    except KeyboardInterrupt:
-        logger.info("🤖 Бот остановлен пользователем")
-    except Exception as e:
-        logger.error(f"❌ Ошибка запуска бота: {e}")
-    finally:
-        if loop:
-            loop.close()
+    # Запускаем polling
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == '__main__':
