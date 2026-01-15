@@ -1185,6 +1185,26 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             print("❌ BOT_TOKEN не установлен")
             return False
 
+        # Если статус 'delivered' - проверяем есть ли фото
+        if status == 'delivered':
+            db = get_db()
+            try:
+                assignment = db.execute('SELECT photo_proof FROM order_assignments WHERE order_id = ?', (order_id,)).fetchone()
+                if assignment and assignment['photo_proof']:
+                    # Есть фото - отправляем отдельное уведомление
+                    photo_url = assignment['photo_proof']
+                    return send_order_delivered_with_photo_notification(
+                        telegram_id=telegram_id,
+                        order_id=order_id,
+                        courier_name=courier_name,
+                        courier_phone=courier_phone,
+                        photo_url=photo_url
+                    )
+            except Exception as e:
+                print(f"⚠️ Ошибка проверки фото: {e}")
+            finally:
+                db.close()
+
         # Получаем данные заказа с ВСЕМИ полями адреса
         db = get_db()
         try:
@@ -1395,7 +1415,7 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
 
 
-def send_order_notification(order_id, status, courier_id=None):
+def send_order_notification(order_id, status, courier_id=None, photo_url=None):
     """Универсальная функция отправки уведомлений о заказе"""
     try:
         db = get_db()
@@ -1436,22 +1456,135 @@ def send_order_notification(order_id, status, courier_id=None):
 
         db.close()
 
-        # Отправляем уведомление клиенту
-        return send_order_details_notification(
-            telegram_id=order_dict['user_id'],
-            order_id=order_id,
-            items=items_list,
-            status=status,
-            delivery_type=order_dict.get('delivery_type', 'courier'),
-            courier_name=courier_name,
-            courier_phone=courier_phone
-        )
+        # Если это доставка и есть фото - отправляем уведомление с фото
+        if status == 'delivered' and photo_url:
+            return send_order_delivered_with_photo_notification(
+                telegram_id=order_dict['user_id'],
+                order_id=order_id,
+                courier_name=courier_name,
+                courier_phone=courier_phone,
+                photo_url=photo_url
+            )
+        else:
+            # Отправляем обычное уведомление
+            return send_order_details_notification(
+                telegram_id=order_dict['user_id'],
+                order_id=order_id,
+                items=items_list,
+                status=status,
+                delivery_type=order_dict.get('delivery_type', 'courier'),
+                courier_name=courier_name,
+                courier_phone=courier_phone
+            )
 
     except Exception as e:
         print(f"❌ Ошибка в send_order_notification: {e}")
         import traceback
         traceback.print_exc()
         return False
+
+
+def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_name, courier_phone, photo_url):
+    """Отправить уведомление клиенту о доставке с фото"""
+    try:
+        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
+
+        print(f"📤 Уведомление о доставке #{order_id} с фото")
+        print(f"   👤 ID: {telegram_id}")
+        print(f"   📷 Фото: {photo_url}")
+
+        if not telegram_id or telegram_id == 0:
+            print("❌ Неверный telegram_id")
+            return False
+
+        if not BOT_TOKEN:
+            print("❌ BOT_TOKEN не установлен")
+            return False
+
+        # Получаем полный URL для фото
+        full_photo_url = f"{WEBAPP_URL.rstrip('/')}{photo_url}" if photo_url.startswith('/') else photo_url
+
+        # Формируем сообщение
+        message = f"""✅ *ЗАКАЗ #{order_id} ДОСТАВЛЕН!*
+
+🎉 Ваш заказ успешно доставлен!
+
+👤 *Курьер:* {courier_name}
+📱 *Телефон курьера:* {courier_phone}
+
+📸 *Фото подтверждения доставки:*
+Фотография прикреплена к этому сообщению.
+
+💝 *Спасибо за покупку!*
+Надеемся, всё понравилось. Ждём вас снова!"""
+
+        # URL для веб-приложения
+        webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
+
+        # Кнопки
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "⭐ Оценить заказ", "callback_data": f"rate_order_{order_id}"},
+                    {"text": "📦 Мои заказы", "callback_data": "my_orders"}
+                ],
+                [
+                    {
+                        "text": "🛒 Открыть магазин",
+                        "web_app": {"url": webapp_url}
+                    }
+                ]
+            ]
+        }
+
+        # Сначала отправляем фото с подписью
+        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto'
+        photo_data = {
+            'chat_id': int(telegram_id),
+            'photo': full_photo_url,
+            'caption': message,
+            'parse_mode': 'Markdown',
+            'reply_markup': json.dumps(keyboard)
+        }
+
+        print(f"   📤 Отправка фото клиенту {telegram_id}...")
+        response = requests.post(url, json=photo_data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"   ✅ Уведомление с фото отправлено клиенту {telegram_id}")
+            return True
+        else:
+            print(f"   ❌ Ошибка отправки фото: {response.text}")
+
+            # Если не удалось отправить фото, отправляем текстовое сообщение
+            text_url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+            text_data = {
+                'chat_id': int(telegram_id),
+                'text': f"✅ *ЗАКАЗ #{order_id} ДОСТАВЛЕН!*\n\n" +
+                        f"🎉 Ваш заказ успешно доставлен!\n\n" +
+                        f"👤 *Курьер:* {courier_name}\n" +
+                        f"📱 *Телефон:* {courier_phone}\n\n" +
+                        f"📸 *Фото подтверждения:* {full_photo_url}\n\n" +
+                        f"💝 Спасибо за покупку!",
+                'parse_mode': 'Markdown',
+                'reply_markup': json.dumps(keyboard)
+            }
+
+            text_response = requests.post(text_url, json=text_data, timeout=10)
+            if text_response.status_code == 200:
+                print(f"   ✅ Текстовое уведомление отправлено клиенту {telegram_id}")
+                return True
+            else:
+                print(f"   ❌ Ошибка отправки текста: {text_response.text}")
+                return False
+
+    except Exception as e:
+        print(f"❌ Ошибка отправки уведомления с фото: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 
 @app.route('/api/admin/orders/<int:order_id>/ready', methods=['PUT'])
 def admin_mark_order_ready(order_id):

@@ -1190,14 +1190,20 @@ class CourierApp {
                     assignment_id: this.currentOrderId,
                     photo_data: this.currentPhoto.data,
                     notes: notes
-                })я
+                })
             });
 
             const result = await response.json();
 
             if (result.success) {
-                this.showNotification('✅ Доставка подтверждена!', 'success');
+                this.showNotification('✅ Доставка подтверждена! Клиент получит уведомление с фото.', 'success');
                 await this.loadOrders();
+
+                // Закрываем модальное окно
+                const modal = document.getElementById('deliveryModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                }
             } else {
                 throw new Error(result.error);
             }
