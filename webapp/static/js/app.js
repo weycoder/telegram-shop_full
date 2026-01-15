@@ -2994,7 +2994,12 @@ async editOrder(orderId) {
                                 block: 'center'
                             });
                         }
-                    }, 300);
+                        this.addPhoneInputMask(); // Добавляем маску ввода телефона
+                        const firstInput = document.getElementById('recipientName');
+                        if (firstInput) {
+                            firstInput.focus();
+                        }
+                    }, 100);
                 });
 
                 // Автоматическое скрытие клавиатуры при нажатии Enter
@@ -3017,18 +3022,13 @@ async editOrder(orderId) {
             const firstInput = document.getElementById('recipientName');
             if (firstInput) {
                 firstInput.focus();
+                firstInput.focus();
             }
         }, 100);
     }
 
     async saveAddress() {
         try {
-
-           const phoneInput = document.getElementById('recipientPhone');
-            if (!this.validatePhone(phoneInput.value.trim())) {
-                this.showFieldError('phoneError', 'Введите корректный номер телефона');
-                hasError = true;
-            }
             const addressData = {
                 user_id: this.userId,
                 city: document.getElementById('city').value.trim(),
@@ -3040,7 +3040,7 @@ async editOrder(orderId) {
                 floor: document.getElementById('floor').value.trim(),
                 doorcode: document.getElementById('doorcode').value.trim(),
                 recipient_name: document.getElementById('recipientName').value.trim(),
-                phone: document.getElementById('recipientPhone').value.trim(),
+                phone: document.getElementById('recipientPhone').value.trim(), // ✅ правильно: recipientPhone
                 comment: document.getElementById('comment')?.value.trim() || ''
             };
 
@@ -3054,14 +3054,34 @@ async editOrder(orderId) {
                 this.hideFieldError('recipientNameError');
             }
 
-            if (!addressData.phone) {
-                this.showFieldError('phoneError', 'Поле обязательно для заполнения');
-                hasError = true;
-            } else if (!this.validatePhone(addressData.phone)) {
-                this.showFieldError('phoneError', 'Введите корректный номер телефона');
-                hasError = true;
+            // ✅ ИСПРАВЛЕНА ВАЛИДАЦИЯ ТЕЛЕФОНА:
+            const phoneInput = document.getElementById('recipientPhone'); // ✅ правильно: recipientPhone
+            if (phoneInput) {
+                const phoneValue = phoneInput.value.trim();
+
+                // Проверяем наличие значения
+                if (!phoneValue) {
+                    this.showFieldError('phoneError', 'Поле обязательно для заполнения');
+                    hasError = true;
+                } else {
+                    // ✅ ИСПРАВЛЕНА ПРОВЕРКА ФОРМАТА (теперь без +7 в значении)
+                    const phonePattern = /^[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$/;
+                    if (!phonePattern.test(phoneValue)) {
+                        this.showFieldError('phoneError', 'Введите корректный номер телефона (формат: (999) 123-45-67)');
+                        hasError = true;
+                    } else {
+                        this.hideFieldError('phoneError');
+
+                        // ✅ Сохраняем полный номер с +7
+                        addressData.phone = '+7 ' + phoneValue;
+                    }
+                }
             } else {
-                this.hideFieldError('phoneError');
+                // Если поле не найдено, проверяем наличие данных в addressData
+                if (!addressData.phone) {
+                    this.showFieldError('phoneError', 'Поле обязательно для заполнения');
+                    hasError = true;
+                }
             }
 
             if (!addressData.city) {
@@ -3152,36 +3172,6 @@ async editOrder(orderId) {
     }
 
 
-    addPhoneInputMask() {
-        const phoneInput = document.getElementById('recipientPhone');
-        if (!phoneInput) return;
-
-        phoneInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-
-            // Убираем префикс +7 если он уже есть
-            if (value.startsWith('7')) {
-                value = value.substring(1);
-            }
-
-            // Форматирование: (999) 123-45-67
-            if (value.length > 0) {
-                if (value.length <= 3) {
-                    value = '(' + value;
-                } else if (value.length <= 6) {
-                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3);
-                } else if (value.length <= 8) {
-                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' + value.substring(6);
-                } else {
-                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' +
-                           value.substring(6, 8) + '-' + value.substring(8, 10);
-                }
-            }
-
-            e.target.value = value;
-        });
-    }
-
     hideFieldError(elementId) {
         const element = document.getElementById(elementId);
         if (element) {
@@ -3222,22 +3212,48 @@ async editOrder(orderId) {
         }
     }
 
-        // Вспомогательные методы для валидации
-    validatePhone(phoneInput) {
-        const phone = phoneInput.value.trim();
-        const phoneError = document.getElementById('phoneError');
+    validatePhone(phoneValue) {
+        // Проверяем наличие значения
+        if (!phoneValue) return false;
 
-        // Добавляем +7 к значению для проверки
-        const fullPhone = '+7' + phone;
-        const phonePattern = /^\+7[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$/;
+        // Убеждаемся, что значение строковое
+        phoneValue = String(phoneValue).trim();
 
-        if (!phonePattern.test(fullPhone)) {
-            phoneError.style.display = 'block';
-            return false;
-        }
+        // ✅ ИСПРАВЛЕНА ПРОВЕРКА (теперь без +7 в значении, так как оно в отдельном блоке)
+        const phonePattern = /^[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$/;
 
-        phoneError.style.display = 'none';
-        return true;
+        return phonePattern.test(phoneValue);
+    }
+
+    // Обновите также метод addPhoneInputMask():
+    addPhoneInputMask() {
+        const phoneInput = document.getElementById('recipientPhone'); // ✅ правильно: recipientPhone
+        if (!phoneInput) return;
+
+        phoneInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+
+            // Убираем префикс +7 если он уже есть (на всякий случай)
+            if (value.startsWith('7')) {
+                value = value.substring(1);
+            }
+
+            // Форматирование: (999) 123-45-67
+            if (value.length > 0) {
+                if (value.length <= 3) {
+                    value = '(' + value;
+                } else if (value.length <= 6) {
+                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3);
+                } else if (value.length <= 8) {
+                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' + value.substring(6);
+                } else {
+                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' +
+                           value.substring(6, 8) + '-' + value.substring(8, 10);
+                }
+            }
+
+            e.target.value = value;
+        });
     }
 
 
