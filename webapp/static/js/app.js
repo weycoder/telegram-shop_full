@@ -3025,7 +3025,7 @@ async editOrder(orderId) {
         try {
 
            const phoneInput = document.getElementById('recipientPhone');
-            if (!this.validatePhoneWithPlus7(phoneInput.value.trim())) {
+            if (!this.validatePhone(phoneInput.value.trim())) {
                 this.showFieldError('phoneError', 'Введите корректный номер телефона');
                 hasError = true;
             }
