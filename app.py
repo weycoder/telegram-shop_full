@@ -5235,6 +5235,47 @@ def admin_update_product():
         db.close()
 
 
+@app.route('/api/courier/complete-delivery', methods=['POST'])
+def api_complete_delivery():
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        courier_id = data.get('courier_id')
+        photo_data = data.get('photo_data')
+        delivery_notes = data.get('delivery_notes')
+        delivered_at = data.get('delivered_at')
+
+        # Обновляем заказ
+        conn = get_db_connection()
+
+        # Сначала обновляем основную таблицу заказов
+        conn.execute('''
+                     UPDATE orders
+                     SET status         = 'delivered',
+                         delivered_at   = ?,
+                         delivery_notes = ?
+                     WHERE id = ?
+                     ''', (delivered_at, delivery_notes, order_id))
+
+        # Затем обновляем assignment
+        conn.execute('''
+                     UPDATE courier_assignments
+                     SET status       = 'delivered',
+                         delivered_at = ?,
+                         photo_proof  = ?
+                     WHERE order_id = ?
+                       AND courier_id = ?
+                     ''', (delivered_at, photo_data, order_id, courier_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True, 'message': 'Доставка подтверждена'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/products/weight', methods=['POST'])
 def create_weight_product():
     """Создать весовой товар"""
