@@ -1096,41 +1096,37 @@ class CourierApp {
     }
 
     // Обработка выбора фото
-    handlePhotoSelection(file) {
+    function handlePhotoSelection(e) {
+        const file = e.target.files[0];
         if (!file) return;
 
+        // Проверяем тип файла
         if (!file.type.startsWith('image/')) {
-            this.showNotification('❌ Выберите изображение', 'error');
+            alert('❌ Выберите изображение');
             return;
         }
 
+        // Проверяем размер (макс 5MB)
         if (file.size > 5 * 1024 * 1024) {
-            this.showNotification('❌ Файл слишком большой (макс 5MB)', 'error');
+            alert('❌ Файл слишком большой (макс 5MB)');
             return;
         }
 
         const reader = new FileReader();
 
-        reader.onload = (e) => {
-            this.currentPhoto = {
+        reader.onload = function(e) {
+            currentPhoto = {
                 data: e.target.result,
                 file: file
             };
 
+            // Показываем превью
             const preview = document.getElementById('photo-preview');
-            if (preview) {
-                preview.innerHTML = `<img src="${e.target.result}" alt="Выбранное фото">`;
-                preview.style.display = 'block';
-            }
+            preview.innerHTML = `<img src="${e.target.result}" alt="Выбранное фото">`;
+            preview.style.display = 'block';
 
-            const confirmBtn = document.getElementById('confirmDeliveryBtn');
-            if (confirmBtn) {
-                confirmBtn.disabled = false;
-            }
-        };
-
-        reader.onerror = () => {
-            this.showNotification('❌ Ошибка чтения файла', 'error');
+            // Активируем кнопку подтверждения
+            document.getElementById('confirmDeliveryBtn').disabled = false;
         };
 
         reader.readAsDataURL(file);
