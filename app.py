@@ -4551,14 +4551,6 @@ def api_update_order_status():
         conn = get_db_connection()
 
         if status == 'delivered':
-            # Обновляем заказ в основной таблице
-            conn.execute('''
-                         UPDATE orders
-                         SET status       = 'delivered',
-                             delivered_at = CURRENT_TIMESTAMP
-                         WHERE id = ?
-                         ''', (order_id,))
-
             # Обновляем assignment - ИСПРАВЛЕНО: courier_assignments → order_assignments
             conn.execute('''
                          UPDATE order_assignments
