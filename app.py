@@ -1363,11 +1363,18 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         if payment_method == 'cash':
             payment_text += "Наличными при получении"
         elif payment_method == 'card':
-            payment_text += "Картой онлайн"
+            payment_text += "Картой при получение"
         elif payment_method == 'online':
             payment_text += "Онлайн оплата"
 
         message += f"\n{payment_text}\n"
+        if order_data.get('cash_received', 0) > 0:
+            message += f"💵 *Наличные:* от вас {order_data.get('cash_received', 0)} ₽"
+            if order_data.get('cash_change', 0) > 0:
+                message += f", сдача {order_data.get('cash_change', 0)} ₽"
+            message += "\n"
+
+
 
         message += f"\n💡 *{config['tip']}*\n"
         message += f"━━━━━━━━━━━━━━━━━━━━\n"

@@ -1960,7 +1960,7 @@ async def courier_take_order(user, query, order_id):
                             f"4. Подтвердите доставку с фото",
                             parse_mode='Markdown',
                             reply_markup=InlineKeyboardMarkup([[
-                                InlineKeyboardButton("🚀 КУРЬЕР ПАНЕЛЬ", url="https://telegram-shop-full.onrender.com/courier"),
+                                InlineKeyboardButton("🚀 КУРЬЕР ПАНЕЛЬ", web_app=WebAppInfo(url="https://telegram-shop-full.onrender.com/courier")),
                                 InlineKeyboardButton("📦 Детали заказа", callback_data=f"courier_details_{order_id}")
                             ]])
                         )
@@ -3088,9 +3088,10 @@ async def delete_courier_command(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+ # ========== ЗАПУСК БОТА ==========
 
-def main():
-    """Запуск бота с polling"""
+async def main_async():
+    """Асинхронная функция запуска бота"""
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не установлен!")
         return
@@ -3107,6 +3108,7 @@ def main():
 
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
+
     # Добавляем обработчики
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("track", track_order))
@@ -3126,8 +3128,28 @@ def main():
     print(f"🔗 API Base URL: {API_BASE_URL}")
     print("=" * 50)
 
-    # Запускаем polling
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    # Ожидаем остановки
+    stop_event = asyncio.Event()
+    await stop_event.wait()
+
+
+def main():
+    """Запуск бота с учетом изменений в Python 3.14"""
+    # В Python 3.14 нужно явно создавать event loop
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(main_async())
+    except KeyboardInterrupt:
+        logger.info("🤖 Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска бота: {e}")
+    finally:
+        if loop:
+            loop.close()
 
 
 if __name__ == '__main__':

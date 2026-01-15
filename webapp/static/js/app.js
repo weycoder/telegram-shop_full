@@ -2687,22 +2687,33 @@ async editOrder(orderId) {
                                     Телефон <span style="color: #e53e3e;">*</span>
                                 </label>
                             </div>
-                            <input type="tel"
-                                   id="recipientPhone"
-                                   placeholder="+7 (999) 123-45-67"
-                                   required
-                                   pattern="^\+7\s?[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$"
-                                   style="
-                                       width: 100%;
-                                       padding: 12px;
-                                       border: 2px solid #e2e8f0;
-                                       border-radius: 8px;
-                                       font-size: 16px;
-                                   "
-                                   onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
-                                   onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+                            <div style="display: flex; align-items: center; border: 2px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                                <div style="
+                                    background-color: #f7fafc;
+                                    padding: 12px 12px;
+                                    border-right: 2px solid #e2e8f0;
+                                    font-size: 16px;
+                                    color: #4a5568;
+                                    user-select: none;
+                                    min-width: 40px;
+                                ">+7</div>
+                                <input type="tel"
+                                       id="recipientPhone"
+                                       placeholder="(999) 123-45-67"
+                                       required
+                                       pattern="^[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$"
+                                       style="
+                                           width: 100%;
+                                           padding: 12px;
+                                           border: none;
+                                           font-size: 16px;
+                                           outline: none;
+                                       "
+                                       onfocus="this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'; this.parentElement.style.borderColor='#667eea'"
+                                       onblur="this.style.boxShadow='none'; this.parentElement.style.borderColor='#e2e8f0'">
+                            </div>
                             <div id="phoneError" style="color: #e53e3e; font-size: 12px; margin-top: 4px; display: none;">
-                                Введите корректный номер телефона (формат: +7 XXX XXX-XX-XX)
+                                Введите корректный номер телефона (формат: (999) 123-45-67)
                             </div>
                         </div>
                     </div>
@@ -3012,6 +3023,12 @@ async editOrder(orderId) {
 
     async saveAddress() {
         try {
+
+           const phoneInput = document.getElementById('recipientPhone');
+            if (!this.validatePhoneWithPlus7(phoneInput.value.trim())) {
+                this.showFieldError('phoneError', 'Введите корректный номер телефона');
+                hasError = true;
+            }
             const addressData = {
                 user_id: this.userId,
                 city: document.getElementById('city').value.trim(),
@@ -3134,6 +3151,37 @@ async editOrder(orderId) {
         }
     }
 
+
+    addPhoneInputMask() {
+        const phoneInput = document.getElementById('recipientPhone');
+        if (!phoneInput) return;
+
+        phoneInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+
+            // Убираем префикс +7 если он уже есть
+            if (value.startsWith('7')) {
+                value = value.substring(1);
+            }
+
+            // Форматирование: (999) 123-45-67
+            if (value.length > 0) {
+                if (value.length <= 3) {
+                    value = '(' + value;
+                } else if (value.length <= 6) {
+                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3);
+                } else if (value.length <= 8) {
+                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' + value.substring(6);
+                } else {
+                    value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' +
+                           value.substring(6, 8) + '-' + value.substring(8, 10);
+                }
+            }
+
+            e.target.value = value;
+        });
+    }
+
     hideFieldError(elementId) {
         const element = document.getElementById(elementId);
         if (element) {
@@ -3175,11 +3223,35 @@ async editOrder(orderId) {
     }
 
         // Вспомогательные методы для валидации
-    validatePhone(phone) {
-        // Простая валидация российского номера
-        const phoneRegex = /^\+7\s?[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$/;
-        return phoneRegex.test(phone);
+    validatePhone(phoneInput) {
+        const phone = phoneInput.value.trim();
+        const phoneError = document.getElementById('phoneError');
+
+        // Добавляем +7 к значению для проверки
+        const fullPhone = '+7' + phone;
+        const phonePattern = /^\+7[\(]?\d{3}[\)]?\s?\d{3}[\-]?\d{2}[\-]?\d{2}$/;
+
+        if (!phonePattern.test(fullPhone)) {
+            phoneError.style.display = 'block';
+            return false;
+        }
+
+        phoneError.style.display = 'none';
+        return true;
     }
+
+
+    // При сохранении формы
+    validateForm() {
+        const phoneInput = document.getElementById('recipientPhone');
+
+        // Собираем полный номер с +7
+        const phoneValue = '+7' + phoneInput.value.trim();
+
+        // Сохраняем полный номер в скрытом поле или передаем в data
+        return true;
+    }
+
 
     removeGuestAddress(index) {
         try {
