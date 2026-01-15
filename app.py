@@ -39,6 +39,13 @@ if not os.path.exists(UPLOAD_PATH):
     os.makedirs(UPLOAD_PATH)
     print(f"📁 Создана папка для загрузок: {UPLOAD_PATH}")
 
+
+def get_db_connection():
+    conn = sqlite3.connect('shop.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 # ========== ХЕЛПЕР ДЛЯ БЕЗОПАСНЫХ ЗАПРОСОВ ==========
 # app.py - исправленный декоратор
 def rate_limit(max_requests=30, window=60):
@@ -4532,92 +4539,62 @@ def get_courier_orders():
 
 
 @app.route('/api/courier/update-status', methods=['POST'])
-def update_delivery_status():
-    """Обновить статус доставки"""
-    db = None
+def api_update_order_status():
     try:
-        data = request.json
+        data = request.get_json()
         order_id = data.get('order_id')
         courier_id = data.get('courier_id')
         status = data.get('status')
         photo_data = data.get('photo_data')
-        notes = data.get('notes', '')
+        notes = data.get('notes')
 
-        db = get_db()
+        conn = get_db_connection()
 
-        # Проверяем назначение
-        assignment = db.execute('SELECT * FROM order_assignments WHERE order_id = ? AND courier_id = ?',
-                                (order_id, courier_id)).fetchone()
+        if status == 'delivered':
+            # Обновляем заказ в основной таблице
+            conn.execute('''
+                         UPDATE orders
+                         SET status       = 'delivered',
+                             delivered_at = CURRENT_TIMESTAMP
+                         WHERE id = ?
+                         ''', (order_id,))
 
-        if not assignment:
-            return jsonify({'success': False, 'error': 'Назначение не найдено'}), 404
+            # Обновляем assignment
+            conn.execute('''
+                         UPDATE courier_assignments
+                         SET status       = 'delivered',
+                             photo_proof  = ?,
+                             delivered_at = CURRENT_TIMESTAMP
+                         WHERE order_id = ?
+                           AND courier_id = ?
+                         ''', (photo_data, order_id, courier_id))
 
-        # Сохраняем фото, если есть
-        photo_url = None
-        if photo_data and status == 'delivered':
-            try:
-                if ',' in photo_data:
-                    photo_data = photo_data.split(',')[1]
+        elif status == 'picked_up':
+            # Обновляем только статус
+            conn.execute('''
+                         UPDATE courier_assignments
+                         SET status       = 'picked_up',
+                             picked_up_at = CURRENT_TIMESTAMP
+                         WHERE order_id = ?
+                           AND courier_id = ?
+                         ''', (order_id, courier_id))
 
-                image_data = base64.b64decode(photo_data)
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"delivery_{order_id}_{timestamp}.jpg"
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-                with open(filepath, 'wb') as f:
-                    f.write(image_data)
-
-                photo_url = f"/static/uploads/{filename}"
-                print(f"✅ Фото доставки сохранено: {filename}")
-            except Exception as e:
-                print(f"⚠️ Ошибка сохранения фото: {e}")
-
-        # Обновляем статус
-        if status == 'picked_up':
-            db.execute(
-                'UPDATE order_assignments SET status = ?, delivery_started = CURRENT_TIMESTAMP WHERE order_id = ? AND courier_id = ?',
-                (status, order_id, courier_id))
-            # Для пользователя меняем статус на 'delivering'
-            db.execute('UPDATE orders SET status = "delivering" WHERE id = ?', (order_id,))
-
-        elif status == 'delivered':
-            db.execute(
-                'UPDATE order_assignments SET status = ?, delivered_at = CURRENT_TIMESTAMP, photo_proof = ?, delivery_notes = ? WHERE order_id = ? AND courier_id = ?',
-                (status, photo_url, notes, order_id, courier_id))
-            db.execute('UPDATE orders SET status = "delivered" WHERE id = ?', (order_id,))
-            db.execute('''
-                           UPDATE orders
-                           SET status       = 'completed',
-                               completed_at = CURRENT_TIMESTAMP,
-                               courier_id   = ?
-                           WHERE id = ?
-                             AND status = 'delivering'
-                       ''', (courier_id, order_id))
         else:
-            db.execute('UPDATE order_assignments SET status = ? WHERE order_id = ? AND courier_id = ?',
-                       (status, order_id, courier_id))
+            # Простое обновление статуса
+            conn.execute('''
+                         UPDATE courier_assignments
+                         SET status = ?
+                         WHERE order_id = ?
+                           AND courier_id = ?
+                         ''', (status, order_id, courier_id))
 
-        db.commit()
+        conn.commit()
+        conn.close()
 
-        # Получаем информацию о курьере
-        courier = db.execute('SELECT full_name, phone FROM couriers WHERE id = ?', (courier_id,)).fetchone()
-        courier_name = courier['full_name'] if courier else None
-        courier_phone = courier['phone'] if courier else None
-
-        # Закрываем базу перед отправкой уведомления
-        if db:
-            db.close()
-
-        # Отправляем уведомление в бот с правильным статусом
-        # Если статус 'picked_up', отправляем 'picked_up' для специального текста
-        send_order_notification(order_id, status if status == 'picked_up' else status, courier_id)
-
-        return jsonify({'success': True, 'photo_url': photo_url})
+        return jsonify({'success': True, 'message': f'Статус обновлен на {status}'})
 
     except Exception as e:
-        print(f"❌ Ошибка обновления статуса: {e}")
-        if db:
-            db.close()
+        print(f"Error updating status: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
@@ -5292,20 +5269,20 @@ def create_weight_product():
                                                   min_weight, max_weight, step_weight, stock, stock_weight)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
-                                data.get('name', ''),
-                                data.get('description', ''),
-                                0,  # Цена будет рассчитываться динамически
-                                data.get('image_url', ''),
-                                data.get('category', ''),
+            data.get('name', ''),
+            data.get('description', ''),
+            0,  # Цена будет рассчитываться динамически
+            data.get('image_url', ''),
+            data.get('category', ''),
                                 'weight',  # Тип товара
-                                data.get('unit', 'кг'),
-                                data.get('weight_unit', 'кг'),
-                                data.get('price_per_kg', 0),
-                                data.get('min_weight', 0.1),
-                                data.get('max_weight', 5.0),
-                                data.get('step_weight', 0.1),
-                                data.get('stock', 0),
-                                data.get('stock_weight', 0)
+            data.get('unit', 'кг'),
+            data.get('weight_unit', 'кг'),
+            data.get('price_per_kg', 0),
+            data.get('min_weight', 0.1),
+            data.get('max_weight', 5.0),
+            data.get('step_weight', 0.1),
+            data.get('stock', 0),
+            data.get('stock_weight', 0)
                             ))
 
         product_id = cursor.lastrowid

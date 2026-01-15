@@ -1312,15 +1312,15 @@
             }
 
             try {
-                const response = await fetch('/api/courier/complete-delivery', {
+                const response = await fetch('/api/courier/update-status', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         order_id: currentOrderId,
                         courier_id: currentCourier.id,
+                        status: 'delivered',
                         photo_data: currentPhoto.data,
-                        delivery_notes: notes,
-                        delivered_at: new Date().toISOString()  // Добавляем дату доставки
+                        notes: notes
                     })
                 });
 
@@ -1341,7 +1341,7 @@
                 }
             } catch (error) {
                 console.error('Error completing delivery:', error);
-                alert('Ошибка подтверждения доставки: ' + error.message);
+                alert('Ошибка подтверждения доставки');
             }
         }
 
