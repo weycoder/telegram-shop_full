@@ -4561,7 +4561,7 @@ def api_update_order_status():
 
             # Обновляем assignment - ИСПРАВЛЕНО: courier_assignments → order_assignments
             conn.execute('''
-                         UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
+                         UPDATE order_assignments
                          SET status       = 'delivered',
                              photo_proof  = ?,
                              delivered_at = CURRENT_TIMESTAMP
@@ -4572,9 +4572,9 @@ def api_update_order_status():
         elif status == 'picked_up':
             # Обновляем только статус
             conn.execute('''
-                         UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
+                         UPDATE order_assignments 
                          SET status       = 'picked_up',
-                             delivery_started = CURRENT_TIMESTAMP  # ← ИСПРАВЛЕНО: picked_up_at → delivery_started
+                             delivery_started = CURRENT_TIMESTAMP 
                          WHERE order_id = ?
                            AND courier_id = ?
                          ''', (order_id, courier_id))
@@ -4582,7 +4582,7 @@ def api_update_order_status():
         else:
             # Простое обновление статуса
             conn.execute('''
-                         UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
+                         UPDATE order_assignments
                          SET status = ?
                          WHERE order_id = ?
                            AND courier_id = ?
@@ -5236,7 +5236,7 @@ def api_complete_delivery():
 
         # Затем обновляем assignment - ИСПРАВЛЕНО: courier_assignments → order_assignments
         conn.execute('''
-                     UPDATE order_assignments  # ← ИСПРАВЛЕНО ЗДЕСЬ
+                     UPDATE order_assignments 
                      SET status       = 'delivered',
                          delivered_at = ?,
                          photo_proof  = ?
