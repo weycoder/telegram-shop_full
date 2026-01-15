@@ -1462,10 +1462,11 @@ def send_order_notification(order_id, status, courier_id=None, photo_url=None):
 
         db.close()
 
-        print(f"📤 Отправка уведомления для заказа #{order_id}, статус: {status}")
+        print(f"🔔 send_order_notification вызвана для заказа #{order_id}, статус: {status}")
         print(f"   Есть фото: {photo_url}")
+        print(f"   Курьер: {courier_name}")
 
-        # Если это доставка и есть фото - отправляем уведомление с фото
+        # Определяем, какое уведомление отправлять
         if status == 'delivered' and photo_url:
             print(f"   🖼️ Отправляю уведомление с фото для заказа #{order_id}")
             success = send_order_delivered_with_photo_notification(
@@ -1493,8 +1494,8 @@ def send_order_notification(order_id, status, courier_id=None, photo_url=None):
 
             return success
         else:
-            # Отправляем обычное уведомление
-            print(f"   📝 Отправляю обычное уведомление для заказа #{order_id}")
+            # Отправляем обычное уведомление для всех статусов
+            print(f"   📝 Отправляю обычное уведомление для заказа #{order_id}, статус: {status}")
             return send_order_details_notification(
                 telegram_id=order_dict['user_id'],
                 order_id=order_id,
@@ -3330,8 +3331,8 @@ def send_admin_order_notification(order_id):
                                   json_extract(o.delivery_address, '$.city')           as city,
                                   json_extract(o.delivery_address, '$.street')         as street,
                                   json_extract(o.delivery_address, '$.house')          as house,
-                                  json_extract(o.delivery_address, '$.building')       as building,  # ДОБАВЬТЕ
-                                  json_extract(o.delivery_address, '$.entrance')       as entrance,  # ДОБАВЬТЕ
+                                  json_extract(o.delivery_address, '$.building')       as building, 
+                                  json_extract(o.delivery_address, '$.entrance')       as entrance, 
                                   json_extract(o.delivery_address, '$.apartment')      as apartment,
                                   json_extract(o.delivery_address, '$.floor')          as floor,
                                   json_extract(o.delivery_address, '$.doorcode')       as doorcode,
@@ -4621,8 +4622,10 @@ def api_update_order_status():
 
         conn = get_db_connection()
 
+        print(f"🔄 Обновление статуса заказа #{order_id} на {status}")
+
         if status == 'delivered':
-            # Обновляем assignment - ИСПРАВЛЕНО: courier_assignments → order_assignments
+            # Обновляем assignment
             conn.execute('''
                          UPDATE order_assignments
                          SET status       = 'delivered',
@@ -4632,15 +4635,54 @@ def api_update_order_status():
                            AND courier_id = ?
                          ''', (photo_data, order_id, courier_id))
 
+            # Обновляем статус заказа
+            conn.execute('UPDATE orders SET status = ? WHERE id = ?',
+                         ('delivered', order_id))
+
+            conn.commit()
+            conn.close()
+
+            # Отправляем уведомление с фото
+            send_order_notification(order_id, 'delivered', courier_id, photo_data)
+
         elif status == 'picked_up':
             # Обновляем только статус
             conn.execute('''
-                         UPDATE order_assignments 
-                         SET status       = 'picked_up',
-                             delivery_started = CURRENT_TIMESTAMP 
+                         UPDATE order_assignments
+                         SET status           = 'picked_up',
+                             delivery_started = CURRENT_TIMESTAMP
                          WHERE order_id = ?
                            AND courier_id = ?
                          ''', (order_id, courier_id))
+
+            # Обновляем статус заказа
+            conn.execute('UPDATE orders SET status = ? WHERE id = ?',
+                         ('picked_up', order_id))
+
+            conn.commit()
+            conn.close()
+
+            # Отправляем уведомление о том, что курьер забрал заказ
+            send_order_notification(order_id, 'picked_up', courier_id)
+
+        elif status == 'delivering':
+            # Статус "в пути"
+            conn.execute('''
+                         UPDATE order_assignments
+                         SET status = 'delivering'
+                         WHERE order_id = ?
+                           AND courier_id = ?
+                         ''', (order_id, courier_id))
+
+            # Обновляем статус заказа
+            conn.execute('UPDATE orders SET status = ? WHERE id = ?',
+                         ('delivering', order_id))
+
+            conn.commit()
+            conn.close()
+
+            # Отправляем уведомление о том, что заказ в пути
+            send_order_notification(order_id, 'delivering', courier_id)
 
         else:
             # Простое обновление статуса
@@ -4651,13 +4693,19 @@ def api_update_order_status():
                            AND courier_id = ?
                          ''', (status, order_id, courier_id))
 
-        conn.commit()
-        conn.close()
+            # Обновляем статус заказа
+            conn.execute('UPDATE orders SET status = ? WHERE id = ?',
+                         (status, order_id))
+
+            conn.commit()
+            conn.close()
 
         return jsonify({'success': True, 'message': f'Статус обновлен на {status}'})
 
     except Exception as e:
-        print(f"Error updating status: {e}")
+        print(f"❌ Ошибка обновления статуса: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
