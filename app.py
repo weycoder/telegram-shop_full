@@ -2429,7 +2429,7 @@ def send_order_ready_notification(order_id):
 
         db.close()
 
-        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         if not BOT_TOKEN:
             print("❌ BOT_TOKEN не установлен")
             return False
@@ -3990,7 +3990,7 @@ def send_order_ready_notification(order_id):
 
         db.close()
 
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         if not BOT_TOKEN:
             print("❌ BOT_TOKEN не установлен")
             return False
@@ -7070,7 +7070,7 @@ def handle_order_completed_callback_webhook(call):
                     }, timeout=5)
 
         # Ответ админу
-        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         if BOT_TOKEN:
             # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
@@ -7111,7 +7111,7 @@ def handle_order_ready_callback_webhook(call):
         send_order_ready_notification(order_id)
 
         # Ответ админу
-        BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
+        BOT_TOKEN = ('8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
         if BOT_TOKEN:
             # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
