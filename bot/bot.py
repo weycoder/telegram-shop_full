@@ -313,8 +313,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Функции для покупателя (только если не курьер и не админ)
     if not is_admin and not is_courier:
         text += "• 📦 Отслеживание заказов\n"
-        text += "• 💬 Чат с поддержкой\n"
-        text += "• 🎫 Использование промокодов\n"
 
     text += "\n*Вы будете получать уведомления:*\n"
     text += "✅ Когда заказ принят\n"
@@ -2265,6 +2263,68 @@ async def show_order_details(user, query, order_id):
         )
 
 
+async def handle_support_callback_async(query, order_id='0'):
+    """Асинхронный обработчик кнопки поддержки"""
+    try:
+        support_message = f"""🤝 *СЛУЖБА ПОДДЕРЖКИ*
+
+━━━━━━━━━━━━━━━━━━━━
+📞 *Телефон поддержки:*
++7 (929) 544 9588
+
+⏰ *Время работы:*
+Круглосуточно, 24/7
+
+━━━━━━━━━━━━━━━━━━━━
+💬 *Чем мы можем помочь?*
+
+• Вопросы по заказу #{order_id}
+• Проблемы с доставкой
+• Возврат товаров
+• Консультация по товарам
+• Жалобы и предложения
+
+━━━━━━━━━━━━━━━━━━━━
+📱 *Альтернативные способы связи:*
+• Telegram: @KERIMLIKERIM
+• Email: kkerimli.91@mail.ru
+
+━━━━━━━━━━━━━━━━━━━━
+⚡ *Среднее время ответа:*
+• По телефону: 1-2 минуты
+• В чате: 5-10 минут
+• По email: 24 часа
+
+━━━━━━━━━━━━━━━━━━━━
+💡 *Совет:* Для быстрого решения вопроса приготовьте номер вашего заказа."""
+
+        await query.edit_message_text(
+            support_message,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📞 Позвонить", url="tel:+79295449588"),
+                    InlineKeyboardButton("✉️ Написать", url="https://t.me/KERIMLIKERIM")
+                ],
+                [
+                    InlineKeyboardButton("📦 Мои заказы", callback_data="my_orders"),
+                    InlineKeyboardButton("🏠 В начало", callback_data="back_to_start")
+                ]
+            ])
+        )
+
+        # Подтверждаем нажатие кнопки
+        await query.answer("Информация о поддержке показана")
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки кнопки поддержки: {e}")
+        await query.edit_message_text(
+            "❌ Ошибка при получении информации о поддержке",
+            parse_mode='Markdown'
+        )
+
+
 async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /chat_<order_id> для ответа в чате"""
     user = update.effective_user
@@ -2611,6 +2671,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await admin_delete_courier_execute(update, context, courier_id)
         return
 
+    elif data == "support":
+        await handle_support_callback_async(query)
+        return
+
     elif data.startswith("admin_open_chat_"):
         order_id = data.replace("admin_open_chat_", "")
         await admin_open_chat(update, context, order_id)
@@ -2657,7 +2721,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_couriers_stats":
         await admin_couriers_stats(update, context)
         return
-
+    elif data.startswith("support_"):
+        order_id = data.replace("support_", "")
+        await handle_support_callback_async(query, order_id)
+        return
     elif data == "admin_products":
         await admin_products(update, context)
         return

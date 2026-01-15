@@ -1398,14 +1398,14 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
 
         message += f"\n💡 *{config['tip']}*\n"
         message += f"━━━━━━━━━━━━━━━━━━━━\n"
-        message += f"📞 *Вопросы?* Напишите нам в чат поддержки"
+        message += f"📞 *Есть вопросы?* Нажмите кнопку 'Поддержка' ниже"
 
         # Кнопки в зависимости от статуса
         keyboard_buttons = []
 
         if status in ['ready_for_pickup', 'delivered', 'completed']:
             keyboard_buttons.append([
-                {"text": "⭐ Оценить заказ", "callback_data": f"rate_order_{order_id}"},
+                {"text": "⭐ Оценить заказ", "url": "t.me/faceqet"},
                 {"text": "📦 Мои заказы", "callback_data": "my_orders"}
             ])
         elif status in ['assigned', 'picked_up', 'delivering']:
@@ -1418,9 +1418,13 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             ])
         else:
             keyboard_buttons.append([
-                {"text": "📦 Мои заказы", "callback_data": "my_orders"},
-                {"text": "💬 Поддержка", "callback_data": "support"}
+                {"text": "📦 Мои заказы", "callback_data": "my_orders"}
             ])
+
+        # ВСЕГДА добавляем кнопку поддержки
+        keyboard_buttons.append([
+            {"text": "💬 Поддержка", "callback_data": f"support_{order_id}"}
+        ])
 
         keyboard = {"inline_keyboard": keyboard_buttons}
 
@@ -1539,7 +1543,7 @@ def send_order_notification(order_id, status, courier_id=None, photo_base64=None
         return False
 
 
-def send_photo_to_telegram(chat_id, photo_path, caption=""):
+def send_photo_to_telegram(chat_id, photo_path, caption="", reply_markup=None):
     """Отправить фото напрямую через Telegram API"""
     try:
         BOT_TOKEN = '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM'
@@ -1557,6 +1561,9 @@ def send_photo_to_telegram(chat_id, photo_path, caption=""):
                 'caption': caption[:1024],
                 'parse_mode': 'Markdown'
             }
+
+            if reply_markup:
+                data['reply_markup'] = json.dumps(reply_markup)
 
             response = requests.post(url, files=files, data=data, timeout=30)
 
@@ -1656,13 +1663,47 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
 💝 *Спасибо за покупку!*
 ━━━━━━━━━━━━━━━━━━━━"""
 
+        # Получаем URL для Web App
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com')
+        webapp_full_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
+
+        # Клавиатура с кнопками
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "⭐ Оценить заказ", "url": "t.me/faceqet"},
+                    {"text": "📦 Мои заказы", "callback_data": "my_orders"}
+                ],
+                [
+                    {
+                        "text": "🛒 ОТКРЫТЬ МАГАЗИН",
+                        "web_app": {"url": webapp_full_url}
+                    }
+                ],
+                [
+                    {"text": "💬 Поддержка", "callback_data": f"support_{order_id}"}
+                ]
+            ]
+        }
+
         # Пробуем отправить фото
         success = False
-        if photo_url and os.path.exists(photo_url.replace('/static/uploads/', app.config['UPLOAD_FOLDER'] + '/')):
+        if photo_url:
             try:
-                photo_path = photo_url.replace('/static/uploads/', app.config['UPLOAD_FOLDER'] + '/')
-                success = send_photo_to_telegram(telegram_id, photo_path, caption)
-            except:
+                # Формируем полный путь к фото
+                if photo_url.startswith('/static/uploads/'):
+                    photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_url.replace('/static/uploads/', ''))
+                else:
+                    photo_path = photo_url
+
+                # Проверяем существование файла
+                if os.path.exists(photo_path):
+                    success = send_photo_to_telegram(telegram_id, photo_path, caption, keyboard)
+                else:
+                    print(f"   ⚠️ Файл не найден: {photo_path}")
+                    success = False
+            except Exception as photo_error:
+                print(f"   ⚠️ Ошибка отправки фото: {photo_error}")
                 success = False
 
         if not success:
@@ -1697,17 +1738,7 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
                 'text': message,
                 'parse_mode': 'Markdown',
                 'disable_web_page_preview': True,
-                'reply_markup': json.dumps({
-                    "inline_keyboard": [
-                        [
-                            {"text": "⭐ Оценить заказ", "callback_data": f"rate_{order_id}"},
-                            {"text": "📦 Мои заказы", "callback_data": "my_orders"}
-                        ],
-                        [
-                            {"text": "💬 Поддержка", "callback_data": "support"}
-                        ]
-                    ]
-                })
+                'reply_markup': json.dumps(keyboard)
             }
 
             response = requests.post(url, json=data, timeout=10)
@@ -1727,7 +1758,8 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
         import traceback
         traceback.print_exc()
         return False
-    
+
+
 
 @app.route('/api/admin/orders/<int:order_id>/ready', methods=['PUT'])
 def admin_mark_order_ready(order_id):
@@ -7294,13 +7326,13 @@ def handle_order_ready_callback_webhook(call):
         print(f"❌ Ошибка в handle_order_ready_callback_webhook: {e}")
         return jsonify({'ok': False, 'error': str(e)})
 
-# ========== НАСТРОЙКА TELEGRAM WEBHOOK ==========
+
 @app.route('/api/telegram-webhook', methods=['POST'])
 def telegram_webhook():
     """Обработчик вебхуков от Telegram"""
     try:
         data = request.get_json()
-        print(f"📥 Telegram webhook received: {json.dumps(data, ensure_ascii=False)[:500]}...")
+        print(f"📥 Telegram webhook received")
 
         # Обработка callback query
         if 'callback_query' in data:
@@ -7309,32 +7341,36 @@ def telegram_webhook():
 
             print(f"🔄 Processing callback: {call_data}")
 
-            # Обработка нажатия на кнопку "Заказ готов" для самовывоза
+            # Обработка кнопки "Заказ готов" для самовывоза
             if call_data.startswith('order_ready_'):
-                return handle_order_ready_callback_webhook(call)
+                order_id = int(call_data.replace('order_ready_', ''))
+                return handle_order_ready_callback(order_id, call)
 
-            # Обработка нажатия на кнопку "Заказ выдан" для самовывоза
+            # Обработка кнопки "Заказ выдан"
             elif call_data.startswith('order_completed_'):
-                return handle_order_completed_callback_webhook(call)
+                order_id = int(call_data.replace('order_completed_', ''))
+                return handle_order_completed_callback(order_id, call)
 
-        # Обработка обычных сообщений (если нужно)
-        elif 'message' in data:
-            message = data['message']
-            text = message.get('text', '')
-            chat_id = message['chat']['id']
+            # Обработка кнопки "Взять заказ" для курьеров
+            elif call_data.startswith('courier_take_'):
+                order_id = int(call_data.replace('courier_take_', ''))
+                return handle_courier_take_callback(order_id, call)
 
-            print(f"💬 Message from {chat_id}: {text}")
+            # Обработка кнопки "Поддержка"
+            elif call_data.startswith('support_'):
+                order_id = call_data.replace('support_', '')
+                if order_id == 'support':  # Просто кнопка "Поддержка" без ID заказа
+                    order_id = '0'
+                return handle_support_callback(call, order_id)
 
-            # Обработка команд
-            if text.startswith('/'):
-                return handle_telegram_command(chat_id, text)
+            # Обработка других callback'ов
+            elif call_data == 'support':
+                return handle_support_callback(call, '0')
 
         return jsonify({'ok': True})
 
     except Exception as e:
         print(f"❌ Ошибка в обработчике вебхука: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
