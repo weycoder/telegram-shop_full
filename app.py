@@ -10,7 +10,7 @@ import telegram
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_cors import CORS
 import base64
-from functools import wraps 
+from functools import wraps
 import math
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -37,7 +37,6 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 UPLOAD_PATH = app.config['UPLOAD_FOLDER']
 if not os.path.exists(UPLOAD_PATH):
     os.makedirs(UPLOAD_PATH)
-    print(f"📁 Создана папка для загрузок: {UPLOAD_PATH}")
 
 
 def get_db_connection():
@@ -47,31 +46,24 @@ def get_db_connection():
 
 
 # ========== ХЕЛПЕР ДЛЯ БЕЗОПАСНЫХ ЗАПРОСОВ ==========
-# app.py - исправленный декоратор
 def rate_limit(max_requests=30, window=60):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            # Проверяем, существует ли _ip_blocks
             if '_ip_blocks' not in globals():
                 globals()['_ip_blocks'] = {}
 
             ip = request.remote_addr
             current_time = time.time()
 
-            # Инициализируем счетчик для IP если его нет
             if ip not in _ip_blocks:
                 _ip_blocks[ip] = {'count': 1, 'window_start': current_time}
             else:
-                # Проверяем не истекло ли окно времени
                 if current_time - _ip_blocks[ip]['window_start'] > window:
-                    # Сбрасываем счетчик
                     _ip_blocks[ip] = {'count': 1, 'window_start': current_time}
                 else:
-                    # Увеличиваем счетчик
                     _ip_blocks[ip]['count'] += 1
 
-            # Проверяем не превышен ли лимит
             if _ip_blocks[ip]['count'] > max_requests:
                 return jsonify({'error': 'Превышен лимит запросов. Попробуйте позже.'}), 429
 
@@ -85,9 +77,7 @@ def rate_limit(max_requests=30, window=60):
 def sanitize_input(data):
     """Очистка входных данных от опасных символов"""
     if isinstance(data, str):
-        # Удаляем опасные SQL символы
         data = data.replace("'", "''").replace('"', '""')
-        # Удаляем опасные HTML/JS символы
         data = data.replace('<', '&lt;').replace('>', '&gt;')
         data = data.replace('&', '&amp;')
     elif isinstance(data, dict):
@@ -99,6 +89,7 @@ def sanitize_input(data):
 
 def validate_json_request(f):
     """Валидация JSON запросов"""
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if request.method in ['POST', 'PUT', 'PATCH']:
@@ -112,8 +103,10 @@ def validate_json_request(f):
 
     return decorated_function
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 # ========== БАЗА ДАННЫХ ==========
 def get_db():
@@ -126,17 +119,14 @@ def init_db():
     with app.app_context():
         db = get_db()
         cursor = db.cursor()
-        # ПРОВЕРЯЕМ, СУЩЕСТВУЕТ ЛИ УЖЕ БАЗА
         try:
-            # Проверяем существование таблицы orders
             cursor.execute("SELECT 1 FROM orders LIMIT 1")
-            print("✅ База данных уже существует и содержит данные")
             db.close()
             return
         except sqlite3.OperationalError:
-            print("🆕 База данных не найдена или пустая. Создаем структуру...")
+            pass
 
-        # ========== СНАЧАЛА СОЗДАЕМ ВСЕ ТАБЛИЦЫ С ПРАВИЛЬНОЙ СТРУКТУРОЙ ==========
+        # ========== СОЗДАЕМ ВСЕ ТАБЛИЦЫ С ПРАВИЛЬНОЙ СТРУКТУРОЙ ==========
 
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS chat_messages
@@ -182,7 +172,6 @@ def init_db():
                            )
                        ''')
 
-        # 15. Активные чаты
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS active_chats
                        (
@@ -239,7 +228,6 @@ def init_db():
                            )
                        ''')
 
-        # 16. Telegram ID курьеров
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS courier_telegram
                        (
@@ -279,7 +267,6 @@ def init_db():
                            )
                        ''')
 
-        # 1. Курьеры
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS couriers
                        (
@@ -318,7 +305,6 @@ def init_db():
                        )
                        ''')
 
-        # 2. Заказы (сначала, чтобы другие таблицы могли ссылаться)
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS orders
                        (
@@ -368,14 +354,26 @@ def init_db():
                            promo_code_id
                            INTEGER,
                            discount_amount
-                           DECIMAL(10,2) DEFAULT 0,
+                           DECIMAL
+                       (
+                           10,
+                           2
+                       ) DEFAULT 0,
                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                           cash_received DECIMAL(10,2),
-                           cash_change DECIMAL(10,2),
-                           cash_details TEXT)
+                           cash_received DECIMAL
+                       (
+                           10,
+                           2
+                       ),
+                           cash_change DECIMAL
+                       (
+                           10,
+                           2
+                       ),
+                           cash_details TEXT
+                           )
                        ''')
 
-        # 3. Назначения заказов
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS order_assignments
                        (
@@ -428,7 +426,6 @@ def init_db():
                            )
                        ''')
 
-        # 4. Уведомления
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS pending_notifications
                        (
@@ -464,7 +461,6 @@ def init_db():
                        )
                        ''')
 
-        # 5. СКИДКИ (очень важно - создаем ДО продуктов)
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS discounts
                        (
@@ -517,7 +513,6 @@ def init_db():
                            )
                        ''')
 
-        # 6. ПРОМОКОДЫ
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS promo_codes
                        (
@@ -563,7 +558,6 @@ def init_db():
                            )
                        ''')
 
-        # 7. КАТЕГОРИИ товаров
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS product_categories
                        (
@@ -621,7 +615,6 @@ def init_db():
                            )
                        ''')
 
-        # 8. ТОВАРЫ (с поддержкой весовых товаров)
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS products
                        (
@@ -692,7 +685,6 @@ def init_db():
                            )
                        ''')
 
-        # 9. Адреса пользователей
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS user_addresses
                        (
@@ -754,7 +746,6 @@ def init_db():
                            )
                        ''')
 
-        # 10. Токены для уведомлений
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS user_push_tokens
                        (
@@ -780,7 +771,6 @@ def init_db():
                        )
                        ''')
 
-        # 11. Точки самовывоза
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS pickup_points
                        (
@@ -812,7 +802,6 @@ def init_db():
                        )
                        ''')
 
-        # 12. Пользователи Telegram
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS telegram_users
                        (
@@ -843,7 +832,6 @@ def init_db():
                        )
                        ''')
 
-        # 13. Логи уведомлений
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS notification_logs
                        (
@@ -881,10 +869,9 @@ def init_db():
 
         # ========== ДОБАВЛЯЕМ ТЕСТОВЫЕ ДАННЫЕ ==========
 
-        # 2. Категории
+        # Категории
         if cursor.execute("SELECT COUNT(*) FROM product_categories").fetchone()[0] == 0:
             test_categories = [
-                # id, name, parent_id, discount_id, sort_order, description, icon, color, seo_title, seo_description, seo_keywords
                 ('Телефоны', None, None, 1, 'Мобильные телефоны и смартфоны', 'fas fa-mobile-alt', '#4CAF50',
                  'Купить телефон недорого', 'Лучшие телефоны по выгодным ценам', 'телефоны, смартфоны, купить телефон'),
                 ('Ноутбуки', None, None, 2, 'Ноутбуки и ультрабуки', 'fas fa-laptop', '#2196F3',
@@ -911,19 +898,15 @@ def init_db():
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                ''', test_categories)
 
-        # 5. Товары (штучные и весовые)
+        # Товары (штучные и весовые)
         if cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 0:
             test_products = [
-                # ШТУЧНЫЕ ТОВАРЫ
-                # name, description, price, image_url, category, stock, product_type, unit, weight_unit, price_per_kg, min_weight, max_weight, step_weight, stock_weight
                 ('Наушники Sony WH-1000XM5', 'Беспровные с шумоподавлением, 30 часов работы', 34999,
                  'https://sony.scene7.com/is/image/sonyglobalsolutions/WH-1000XM5-B_primary-image',
                  'Аксессуары', 20, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
                 ('MacBook Air M2', 'Ультратонкий ноутбук Apple, 13.6 дюймов', 129999,
                  'https://store.storeimages.cdn-apple.com/4668/as-images.apple.com/is/macbook-air-midnight-select-20220606',
                  'Ноутбуки', 8, 'piece', 'шт', 'шт', 0, 0, 0, 0, 0),
-
-                # ВЕСОВЫЕ ТОВАРЫ
                 ('Яблоки Голден', 'Сладкие желтые яблоки', 0,
                  'https://cdn.pixabay.com/photo/2014/02/01/17/28/apple-256261_1280.jpg',
                  'Фрукты', 0, 'weight', 'кг', 'кг', 199.90, 0.1, 5.0, 0.1, 50.0),
@@ -942,7 +925,7 @@ def init_db():
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                ''', test_products)
 
-        # 6. Точки самовывоза
+        # Точки самовывоза
         if cursor.execute("SELECT COUNT(*) FROM pickup_points").fetchone()[0] == 0:
             pickup_points = [
                 ('Смоф Щербинка', 'ул. Любучанский переулок 1к3 ', '09:00-22:00', '+7 (929) 544-95-88', None, None)
@@ -952,9 +935,7 @@ def init_db():
                                VALUES (?, ?, ?, ?, ?, ?)
                                ''', pickup_points)
 
-        # ========== ОБНОВЛЯЕМ СВЯЗИ МЕЖДУ ТАБЛИЦАМИ ==========
-
-        # Обновляем товары, чтобы связать их с категориями
+        # Обновляем связи между таблицами
         categories_map = {
             'Телефоны': 1,
             'Ноутбуки': 2,
@@ -973,6 +954,7 @@ def init_db():
 
         db.commit()
         db.close()
+
 
 init_db()
 
@@ -1034,11 +1016,11 @@ def init_security():
 
     db.commit()
     db.close()
-    print("✅ Таблицы безопасности созданы")
 
 
 # Вызовите после init_db()
 init_security()
+
 
 @app.route('/api/bot/get-orders/<int:telegram_id>', methods=['GET'])
 def api_bot_get_orders(telegram_id):
@@ -1068,7 +1050,6 @@ def api_bot_get_orders(telegram_id):
         for order in orders:
             order_dict = dict(order)
 
-            # Парсим адрес для красивого отображения
             if order_dict.get('delivery_address'):
                 try:
                     addr_data = json.loads(order_dict['delivery_address'])
@@ -1096,7 +1077,6 @@ def api_bot_get_orders(telegram_id):
         return jsonify({'success': True, 'orders': orders_list})
 
     except Exception as e:
-        print(f"❌ Ошибка получения заказов для бота: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -1125,13 +1105,11 @@ def api_bot_get_order_detail(order_id, telegram_id):
 
         order_dict = dict(order)
 
-        # Парсим items
         try:
             order_dict['items_list'] = json.loads(order_dict['items'])
         except:
             order_dict['items_list'] = []
 
-        # Парсим адрес
         if order_dict.get('delivery_address'):
             try:
                 order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
@@ -1141,7 +1119,6 @@ def api_bot_get_order_detail(order_id, telegram_id):
         return jsonify({'success': True, 'order': order_dict})
 
     except Exception as e:
-        print(f"❌ Ошибка получения деталей заказа: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -1153,22 +1130,14 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
 
-        print(f"📤 Уведомление клиенту #{order_id}")
-        print(f"   👤 ID: {telegram_id}")
-        print(f"   📊 Статус: {status}")
-
         if not telegram_id or telegram_id == 0:
-            print("❌ Неверный telegram_id")
             return False
 
         if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Получаем полные детали заказа
         db = get_db()
         try:
-            # Получаем полную информацию о заказе с адресом и способом оплаты
             order = db.execute('''
                                SELECT o.*,
                                       (o.total_price + COALESCE(o.delivery_cost, 0) -
@@ -1182,13 +1151,11 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                                ''', (order_id,)).fetchone()
 
             if not order:
-                print(f"❌ Заказ #{order_id} не найден")
                 db.close()
                 return False
 
             order_data = dict(order)
 
-            # Получаем информацию о пункте выдачи если это самовывоз
             pickup_info = None
             if delivery_type == 'pickup' and order_data.get('pickup_point'):
                 try:
@@ -1202,13 +1169,11 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                     pass
 
         except Exception as e:
-            print(f"❌ Ошибка получения заказа: {e}")
             db.close()
             return False
         finally:
             db.close()
 
-        # Определяем эмодзи и текст статуса
         status_config = {
             'created': {
                 'emoji': '🆕',
@@ -1283,7 +1248,6 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             'tip': 'Следите за обновлениями статуса.'
         })
 
-        # Формируем адрес
         address_text = ""
         if delivery_type == 'courier':
             if order_data.get('city') and order_data.get('street'):
@@ -1303,13 +1267,11 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             else:
                 address_text = "Пункт выдачи будет указан"
 
-        # Формируем состав заказа (кратко)
         order_summary = ""
         if items and len(items) > 0:
             total_items = sum(item.get('quantity', 1) for item in items)
             order_summary = f"📦 *Состав заказа:* {len(items)} позиций"
 
-            # Показываем первые 3 товара
             for i, item in enumerate(items[:3]):
                 name = item.get('name', 'Товар')
                 if len(name) > 25:
@@ -1325,7 +1287,6 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             if len(items) > 3:
                 order_summary += f"\n  • ... и ещё {len(items) - 3} товаров"
 
-        # Формируем информацию о курьере
         courier_info = ""
         if courier_name and status in ['assigned', 'picked_up', 'delivering', 'delivered']:
             courier_info = f"👤 *Курьер:* {courier_name}\n"
@@ -1338,7 +1299,6 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             elif status == 'delivering':
                 courier_info += "📍 *Статус:* Близко к вашему адресу\n"
 
-        # Формируем красивое сообщение
         message = f"{config['emoji']} *{config['title']}*\n"
         message += f"━━━━━━━━━━━━━━━━━━━━\n"
         message += f"📋 *Заказ №{order_id}*\n"
@@ -1357,7 +1317,6 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
         if order_summary:
             message += f"\n{order_summary}\n"
 
-        # Информация о платеже
         payment_method = order_data.get('payment_method', 'cash')
         payment_text = "💳 *Оплата:* "
         if payment_method == 'cash':
@@ -1374,13 +1333,10 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                 message += f", сдача {order_data.get('cash_change', 0)} ₽"
             message += "\n"
 
-
-
         message += f"\n💡 *{config['tip']}*\n"
         message += f"━━━━━━━━━━━━━━━━━━━━\n"
         message += f"📞 *Есть вопросы?* Нажмите кнопку 'Поддержка' ниже"
 
-        # Кнопки в зависимости от статуса
         keyboard_buttons = []
 
         if status in ['ready_for_pickup', 'delivered', 'completed']:
@@ -1397,14 +1353,12 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
                 {"text": "📦 Мои заказы", "callback_data": "my_orders"}
             ])
 
-        # ВСЕГДА добавляем кнопку поддержки
         keyboard_buttons.append([
             {"text": "💬 Поддержка", "callback_data": f"support_{order_id}"}
         ])
 
         keyboard = {"inline_keyboard": keyboard_buttons}
 
-        # Отправляем сообщение
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
@@ -1414,28 +1368,22 @@ def send_order_details_notification(telegram_id, order_id, items, status, delive
             'reply_markup': json.dumps(keyboard)
         }
 
-        print(f"   📤 Отправка клиенту {telegram_id}...")
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"   ✅ Уведомление отправлено клиенту {telegram_id}")
             return True
         else:
-            print(f"   ❌ Ошибка: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
+
 def send_order_notification(order_id, status, courier_id=None, photo_base64=None):
-    """Универсальная функция отправки уведомлений - ИСПРАВЛЕННАЯ"""
+    """Универсальная функция отправки уведомлений"""
     try:
         db = get_db()
 
-        # Получаем информацию о заказе
         order = db.execute('''
                            SELECT o.*, c.full_name as courier_name, c.phone as courier_phone
                            FROM orders o
@@ -1446,13 +1394,11 @@ def send_order_notification(order_id, status, courier_id=None, photo_base64=None
 
         if not order:
             db.close()
-            print(f"⚠️ Заказ #{order_id} не найден")
             return False
 
         order_data = dict(order)
         user_id = order_data.get('user_id')
 
-        # Если передан courier_id, получаем информацию о курьере
         courier_name = order_data.get('courier_name')
         courier_phone = order_data.get('courier_phone')
 
@@ -1464,21 +1410,15 @@ def send_order_notification(order_id, status, courier_id=None, photo_base64=None
 
         db.close()
 
-        # Отправляем уведомление клиенту
         if user_id and user_id > 0:
-            # Если статус 'delivered' и есть фото
             if status == 'delivered' and photo_base64:
-                # Сохраняем фото если нужно
                 if photo_base64.startswith('data:image'):
-                    # Сохраняем base64 в файл
                     import base64
                     import uuid
 
-                    # Убираем префикс data:image/...
                     if ',' in photo_base64:
                         photo_base64 = photo_base64.split(',')[1]
 
-                    # Декодируем и сохраняем
                     photo_bytes = base64.b64decode(photo_base64)
                     filename = f"{uuid.uuid4().hex}.jpg"
                     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -1490,7 +1430,6 @@ def send_order_notification(order_id, status, courier_id=None, photo_base64=None
                 else:
                     photo_url = photo_base64
 
-                # Отправляем уведомление с фото
                 send_order_delivered_with_photo_notification(
                     telegram_id=user_id,
                     order_id=order_id,
@@ -1499,7 +1438,6 @@ def send_order_notification(order_id, status, courier_id=None, photo_base64=None
                     photo_url=photo_url
                 )
             else:
-                # Отправляем обычное уведомление
                 send_order_details_notification(
                     telegram_id=user_id,
                     order_id=order_id,
@@ -1513,9 +1451,6 @@ def send_order_notification(order_id, status, courier_id=None, photo_base64=None
         return True
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 
@@ -1525,7 +1460,6 @@ def send_photo_to_telegram(chat_id, photo_path, caption="", reply_markup=None):
         BOT_TOKEN = os.getenv('BOT_TOKEN')
 
         if not os.path.exists(photo_path):
-            print(f"❌ Файл не найден: {photo_path}")
             return False
 
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto'
@@ -1544,28 +1478,20 @@ def send_photo_to_telegram(chat_id, photo_path, caption="", reply_markup=None):
             response = requests.post(url, files=files, data=data, timeout=30)
 
         if response.status_code == 200:
-            print(f"✅ Фото успешно отправлено в чат {chat_id}")
             return True
         else:
-            print(f"❌ Ошибка отправки фото: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Исключение при отправке фото: {e}")
         return False
 
 
 def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_name, courier_phone, photo_url):
     """Отправить уведомление о доставке с фото и полной информацией"""
     try:
-        print(f"📤 Уведомление о доставке #{order_id} с фото")
-        print(f"   👤 ID клиента: {telegram_id}")
-
         if not telegram_id or telegram_id == 0:
-            print("❌ Неверный telegram_id клиента")
             return False
 
-        # Получаем детали заказа
         db = get_db()
         try:
             order = db.execute('''
@@ -1581,7 +1507,6 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
                 order_data = dict(order)
                 total_amount = order_data.get('total_amount', 0)
 
-                # Парсим товары
                 try:
                     items = json.loads(order_data.get('items_json', '[]'))
                 except:
@@ -1591,17 +1516,15 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
                 items = []
 
         except Exception as e:
-            print(f"⚠️ Ошибка получения заказа: {e}")
             total_amount = 0
             items = []
         finally:
             db.close()
 
-        # Формируем состав заказа (кратко)
         order_summary = ""
         if items and len(items) > 0:
             order_summary = f"📦 *Состав заказа:* {len(items)} позиций\n"
-            for i, item in enumerate(items[:2]):  # Показываем 2 основных товара
+            for i, item in enumerate(items[:2]):
                 name = item.get('name', 'Товар')
                 if len(name) > 20:
                     name = name[:17] + "..."
@@ -1616,7 +1539,6 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
             if len(items) > 2:
                 order_summary += f"  • ... и ещё {len(items) - 2} товаров\n"
 
-        # Формируем подпись для фото
         caption = f"""✅ *ЗАКАЗ #{order_id} ДОСТАВЛЕН!*
 
 🎉 *Поздравляем! Ваш заказ успешно доставлен!*
@@ -1639,11 +1561,9 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
 💝 *Спасибо за покупку!*
 ━━━━━━━━━━━━━━━━━━━━"""
 
-        # Получаем URL для Web App
-        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com')
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://smof-shop.ru')
         webapp_full_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
 
-        # Клавиатура с кнопками
         keyboard = {
             "inline_keyboard": [
                 [
@@ -1662,28 +1582,22 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
             ]
         }
 
-        # Пробуем отправить фото
         success = False
         if photo_url:
             try:
-                # Формируем полный путь к фото
                 if photo_url.startswith('/static/uploads/'):
                     photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_url.replace('/static/uploads/', ''))
                 else:
                     photo_path = photo_url
 
-                # Проверяем существование файла
                 if os.path.exists(photo_path):
                     success = send_photo_to_telegram(telegram_id, photo_path, caption, keyboard)
                 else:
-                    print(f"   ⚠️ Файл не найден: {photo_path}")
                     success = False
-            except Exception as photo_error:
-                print(f"   ⚠️ Ошибка отправки фото: {photo_error}")
+            except Exception:
                 success = False
 
         if not success:
-            # Если фото не отправилось, отправляем красивое текстовое сообщение
             message = f"""✅ *ЗАКАЗ #{order_id} ДОСТАВЛЕН!*
 
 🎉 *Поздравляем! Ваш заказ успешно доставлен!*
@@ -1720,21 +1634,14 @@ def send_order_delivered_with_photo_notification(telegram_id, order_id, courier_
             response = requests.post(url, json=data, timeout=10)
 
             if response.status_code == 200:
-                print(f"   ✅ Текстовое уведомление отправлено клиенту {telegram_id}")
                 return True
             else:
-                print(f"   ❌ Ошибка отправки текста: {response.text}")
                 return False
         else:
-            print(f"   ✅ Фото с подписью отправлено клиенту {telegram_id}")
             return True
 
     except Exception as e:
-        print(f"❌ Критическая ошибка отправки уведомления с фото: {e}")
-        import traceback
-        traceback.print_exc()
         return False
-
 
 
 @app.route('/api/admin/orders/<int:order_id>/ready', methods=['PUT'])
@@ -1742,23 +1649,19 @@ def admin_mark_order_ready(order_id):
     """Пометить заказ как готовый к выдаче (для самовывоза)"""
     db = get_db()
     try:
-        # Получаем заказ
         order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
         if not order:
             return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
 
         order_dict = dict(order)
 
-        # Проверяем что это самовывоз
         if order_dict.get('delivery_type') != 'pickup':
             return jsonify({'success': False, 'error': 'Это не заказ на самовывоз'}), 400
 
-        # Обновляем статус
         db.execute('UPDATE orders SET status = ? WHERE id = ?',
                    ('ready_for_pickup', order_id))
         db.commit()
 
-        # Отправляем уведомление клиенту
         send_order_notification(order_id, 'ready_for_pickup')
 
         return jsonify({'success': True, 'message': 'Заказ помечен как готовый к выдаче'})
@@ -1768,6 +1671,7 @@ def admin_mark_order_ready(order_id):
     finally:
         db.close()
 
+
 def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_name, is_admin=False):
     """Отправить уведомление о новом сообщении в Telegram"""
     try:
@@ -1775,23 +1679,19 @@ def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_na
         if not BOT_TOKEN or not telegram_id:
             return False
 
-        # Определяем тип отправителя
         if is_admin:
             sender_prefix = "👨‍💼 АДМИНИСТРАТОР"
         else:
             sender_prefix = "👤 КЛИЕНТ"
 
-        # Обрезаем длинное сообщение
         short_message = message[:200] + "..." if len(message) > 200 else message
 
-        # Формируем сообщение
         text = f"💬 *НОВОЕ СООБЩЕНИЕ В ЧАТЕ*\n\n"
         text += f"📦 *Заказ:* #{order_id}\n"
         text += f"{sender_prefix} ({sender_name}):\n"
         text += f"_{short_message}_\n\n"
         text += f"📝 *Ответить:* /chat_{order_id}"
 
-        # Кнопки для быстрого ответа
         keyboard = {
             "inline_keyboard": [
                 [
@@ -1801,7 +1701,6 @@ def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_na
             ]
         }
 
-        # Отправляем сообщение
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
@@ -1812,14 +1711,11 @@ def send_chat_notification_to_telegram(telegram_id, order_id, message, sender_na
 
         response = requests.post(url, json=data, timeout=10)
         if response.status_code == 200:
-            print(f"✅ Уведомление чата отправлено пользователю {telegram_id}")
             return True
         else:
-            print(f"❌ Ошибка отправки уведомления чата: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления чата: {e}")
         return False
 
 
@@ -1839,18 +1735,15 @@ def api_send_chat_message():
         if not order_id or not user_id or not message:
             return jsonify({'success': False, 'error': 'Не указаны обязательные поля'}), 400
 
-        # Получаем информацию о заказе
         order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
         if not order:
             return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
 
         order_dict = dict(order)
 
-        # Определяем отправителя
         is_admin = sender_type == 'admin'
         sender_name = "Администратор" if is_admin else order_dict.get('username', 'Клиент')
 
-        # Сохраняем сообщение в БД
         cursor = db.execute('''
                             INSERT INTO chat_messages (order_id, user_id, message, sender_type, file_url, file_type)
                             VALUES (?, ?, ?, ?, ?, ?)
@@ -1858,17 +1751,14 @@ def api_send_chat_message():
 
         message_id = cursor.lastrowid
 
-        # Обновляем или создаем активный чат
         chat = db.execute('SELECT * FROM active_chats WHERE order_id = ?', (order_id,)).fetchone()
 
         if not chat:
-            # Создаем новый активный чат
             db.execute('''
                        INSERT INTO active_chats (order_id, customer_id, last_message_at)
                        VALUES (?, ?, CURRENT_TIMESTAMP)
                        ''', (order_id, order_dict['user_id']))
         else:
-            # Обновляем счетчик непрочитанных
             if sender_type == 'customer':
                 db.execute('''
                            UPDATE active_chats
@@ -1886,9 +1776,7 @@ def api_send_chat_message():
 
         db.commit()
 
-        # Отправляем уведомление получателю
         if sender_type == 'customer':
-            # Клиент написал - уведомляем администратора
             admin_telegram_id = os.getenv('ADMIN_IDS')
             if admin_telegram_id:
                 send_chat_notification_to_telegram(
@@ -1899,7 +1787,6 @@ def api_send_chat_message():
                     is_admin=False
                 )
         elif sender_type == 'admin':
-            # Администратор написал - уведомляем клиента
             send_chat_notification_to_telegram(
                 order_dict['user_id'],
                 order_id,
@@ -1915,7 +1802,6 @@ def api_send_chat_message():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка отправки сообщения чата: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -1929,7 +1815,6 @@ def api_admin_couriers():
     db = get_db()
     try:
         if request.method == 'GET':
-            # Получить всех курьеров
             couriers = db.execute('''
                                   SELECT c.*,
                                          CASE WHEN ct.telegram_id IS NOT NULL THEN 1 ELSE 0 END as has_telegram,
@@ -1954,10 +1839,8 @@ def api_admin_couriers():
             })
 
         elif request.method == 'POST':
-            # Создать нового курьера
             data = request.json
 
-            # Валидация
             if not data.get('username'):
                 return jsonify({'success': False, 'error': 'Введите логин курьера'}), 400
             if not data.get('password'):
@@ -1967,13 +1850,11 @@ def api_admin_couriers():
             if not data.get('phone'):
                 return jsonify({'success': False, 'error': 'Введите телефон курьера'}), 400
 
-            # Проверяем уникальность логина
             existing = db.execute('SELECT id FROM couriers WHERE username = ?',
                                   (data['username'],)).fetchone()
             if existing:
                 return jsonify({'success': False, 'error': 'Курьер с таким логином уже существует'}), 400
 
-            # Создаем курьера
             cursor = db.execute('''
                                 INSERT INTO couriers (username, password, full_name, phone, vehicle_type, is_active)
                                 VALUES (?, ?, ?, ?, ?, ?)
@@ -1996,19 +1877,16 @@ def api_admin_couriers():
             })
 
         elif request.method == 'PUT':
-            # Обновить курьера
             courier_id = request.args.get('id', type=int)
             data = request.json
 
             if not courier_id:
                 return jsonify({'success': False, 'error': 'Не указан ID курьера'}), 400
 
-            # Проверяем существование курьера
             courier = db.execute('SELECT id FROM couriers WHERE id = ?', (courier_id,)).fetchone()
             if not courier:
                 return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
 
-            # Обновляем данные
             db.execute('''
                        UPDATE couriers
                        SET full_name    = ?,
@@ -2032,18 +1910,15 @@ def api_admin_couriers():
             })
 
         elif request.method == 'DELETE':
-            # Удалить курьера
             courier_id = request.args.get('id', type=int)
 
             if not courier_id:
                 return jsonify({'success': False, 'error': 'Не указан ID курьера'}), 400
 
-            # Проверяем существование курьера
             courier = db.execute('SELECT id FROM couriers WHERE id = ?', (courier_id,)).fetchone()
             if not courier:
                 return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
 
-            # Проверяем, есть ли активные заказы у курьера
             active_orders = db.execute('''
                                        SELECT COUNT(*)
                                        FROM order_assignments
@@ -2057,7 +1932,6 @@ def api_admin_couriers():
                     'error': 'Нельзя удалить курьера с активными заказами'
                 }), 400
 
-            # Удаляем курьера
             db.execute('DELETE FROM couriers WHERE id = ?', (courier_id,))
             db.execute('DELETE FROM courier_telegram WHERE courier_id = ?', (courier_id,))
             db.commit()
@@ -2068,7 +1942,6 @@ def api_admin_couriers():
             })
 
     except Exception as e:
-        print(f"❌ Ошибка управления курьерами: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -2089,7 +1962,6 @@ def api_admin_courier_detail(courier_id):
         if not courier:
             return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
 
-        # Получаем статистику курьера
         stats = db.execute('''
                            SELECT COUNT(CASE WHEN oa.status = 'delivered' THEN 1 END)  as completed_orders,
                                   COUNT(CASE WHEN oa.status != 'delivered' THEN 1 END) as active_orders,
@@ -2112,7 +1984,6 @@ def api_admin_courier_detail(courier_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения информации о курьере: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -2143,10 +2014,10 @@ def api_courier_profile():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения профиля курьера: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
+
 
 @app.route('/api/chat/messages', methods=['GET'])
 def api_get_chat_messages():
@@ -2159,7 +2030,6 @@ def api_get_chat_messages():
         if not order_id:
             return jsonify({'success': False, 'error': 'Не указан ID заказа'}), 400
 
-        # Получаем сообщения
         messages = db.execute('''
                               SELECT cm.*,
                                      CASE
@@ -2173,7 +2043,6 @@ def api_get_chat_messages():
                               ORDER BY cm.created_at ASC
                               ''', (order_id,)).fetchall()
 
-        # Помечаем сообщения как прочитанные
         if user_id:
             db.execute('''
                        UPDATE chat_messages
@@ -2182,7 +2051,6 @@ def api_get_chat_messages():
                          AND sender_type != 'customer'
                        ''', (order_id,))
 
-            # Сбрасываем счетчик непрочитанных для этого пользователя
             if user_id == db.execute('SELECT customer_id FROM active_chats WHERE order_id = ?', (order_id,)).fetchone()[
                 'customer_id']:
                 db.execute('UPDATE active_chats SET unread_customer = 0 WHERE order_id = ?', (order_id,))
@@ -2192,7 +2060,6 @@ def api_get_chat_messages():
         messages_list = []
         for msg in messages:
             msg_dict = dict(msg)
-            # Форматируем дату
             if msg_dict.get('created_at'):
                 try:
                     dt = datetime.strptime(msg_dict['created_at'], '%Y-%m-%d %H:%M:%S')
@@ -2211,7 +2078,6 @@ def api_get_chat_messages():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения сообщений чата: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -2225,7 +2091,6 @@ def send_courier_order_notification(order_id):
             return False
 
         db = get_db()
-        # 🚨 ИСПРАВЛЕНИЕ: Добавляем извлечение building и entrance
         order = db.execute('''
                            SELECT o.*,
                                   json_extract(o.delivery_address, '$.city')           as city,
@@ -2249,7 +2114,6 @@ def send_courier_order_notification(order_id):
 
         order_dict = dict(order)
 
-        # АДРЕС ДЛЯ ОТОБРАЖЕНИЯ
         address_parts = []
         if order_dict.get('city'):
             address_parts.append(order_dict['city'])
@@ -2266,7 +2130,6 @@ def send_courier_order_notification(order_id):
 
         address_full = ', '.join(address_parts) if address_parts else "Адрес не указан"
 
-        # АДРЕС ДЛЯ НАВИГАТОРА (без кв)
         nav_parts = []
         if order_dict.get('city'):
             nav_parts.append(order_dict['city'])
@@ -2281,14 +2144,12 @@ def send_courier_order_notification(order_id):
 
         nav_address = ', '.join(nav_parts)
 
-        # ДЕТАЛИ
         address_details = []
         if order_dict.get('floor'):
             address_details.append(f"Этаж: {order_dict['floor']}")
         if order_dict.get('doorcode'):
             address_details.append(f"Домофон: {order_dict['doorcode']}")
 
-        # СООБЩЕНИЕ
         text = f"🚚 *НОВЫЙ ЗАКАЗ ДЛЯ ДОСТАВКИ*\n\n"
         text += f"📦 *Заказ:* #{order_id}\n"
         text += f"👤 *Получатель:* {order_dict.get('recipient_name_full', order_dict.get('recipient_name', order_dict.get('username', 'Клиент')))}\n"
@@ -2303,7 +2164,6 @@ def send_courier_order_notification(order_id):
         if order_dict.get('address_comment'):
             text += f"\n📝 *Комментарий к заказу:* {order_dict['address_comment']}\n"
 
-        # ПРОДОЛЖАЕМ
         items_list = json.loads(order_dict['items']) if order_dict.get('items') else []
         text += f"\n📦 *Товаров:* {len(items_list)} шт\n"
         text += f"💰 *Сумма заказа:* {order_dict.get('total_price', 0)} ₽\n"
@@ -2320,7 +2180,6 @@ def send_courier_order_notification(order_id):
 
         text += f"\n⏰ *Создан:* {order_dict.get('created_at', '')[:16]}\n"
 
-        # КНОПКИ
         keyboard = {
             "inline_keyboard": [
                 [
@@ -2336,7 +2195,6 @@ def send_courier_order_notification(order_id):
                  "url": f"https://yandex.ru/maps/?text={nav_address.replace(' ', '+')}"}
             ])
 
-        # ОТПРАВКА КУРЬЕРАМ
         couriers = db.execute('''
                               SELECT c.id, c.full_name, ct.telegram_id
                               FROM couriers c
@@ -2368,8 +2226,8 @@ def send_courier_order_notification(order_id):
         return success_count > 0
 
     except Exception as e:
-        print(f"❌ Ошибка отправки курьерам: {e}")
         return False
+
 
 @app.route('/api/courier/register-telegram', methods=['POST'])
 def api_register_courier_telegram():
@@ -2386,12 +2244,10 @@ def api_register_courier_telegram():
         if not courier_id or not telegram_id:
             return jsonify({'success': False, 'error': 'Не указаны обязательные поля'}), 400
 
-        # Проверяем существование курьера
         courier = db.execute('SELECT id FROM couriers WHERE id = ?', (courier_id,)).fetchone()
         if not courier:
             return jsonify({'success': False, 'error': 'Курьер не найден'}), 404
 
-        # Регистрируем или обновляем Telegram ID
         existing = db.execute('SELECT id FROM courier_telegram WHERE courier_id = ? OR telegram_id = ?',
                               (courier_id, telegram_id)).fetchone()
 
@@ -2418,7 +2274,6 @@ def api_register_courier_telegram():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка регистрации Telegram ID курьера: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -2445,7 +2300,6 @@ def api_get_courier_telegram(courier_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения Telegram ID курьера: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -2456,7 +2310,6 @@ def send_order_ready_notification(order_id):
     try:
         db = get_db()
 
-        # Получаем информацию о заказе
         order = db.execute('''
                            SELECT o.*,
                                   (o.total_price + COALESCE(o.delivery_cost, 0) -
@@ -2466,7 +2319,6 @@ def send_order_ready_notification(order_id):
                            ''', (order_id,)).fetchone()
 
         if not order:
-            print(f"❌ Заказ #{order_id} не найден")
             db.close()
             return False
 
@@ -2474,11 +2326,9 @@ def send_order_ready_notification(order_id):
         telegram_id = order_data.get('user_id')
 
         if not telegram_id or telegram_id == 0:
-            print(f"❌ У заказа #{order_id} нет telegram_id")
             db.close()
             return False
 
-        # Получаем информацию о пункте выдачи
         pickup_display = order_data.get('pickup_point', '')
         if order_data.get('pickup_point'):
             try:
@@ -2498,16 +2348,14 @@ def send_order_ready_notification(order_id):
                     if len(parts) >= 2:
                         pickup_display = f"{parts[1]} - {parts[2] if len(parts) > 2 else ''}"
             except Exception as e:
-                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+                pass
 
         db.close()
 
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Формируем сообщение
         message = f"""✅ *ВАШ ЗАКАЗ ГОТОВ К ВЫДАЧЕ!*
 
 📦 *Заказ №{order_id}*
@@ -2519,13 +2367,11 @@ def send_order_ready_notification(order_id):
 ⚠️ *ВАЖНО:*
 • Заказ будет ждать вас в течение 24 часов
 • При себе необходимо иметь номер заказа ({order_id})
-• Оплата производится на месте (если не оплачено онлайн)
 
 ⏰ *Рекомендуем забрать заказ как можно скорее!*
 
 🎉 *Спасибо за покупку!*"""
 
-        # Кнопки для клиента
         keyboard = {
             "inline_keyboard": [
                 [
@@ -2537,7 +2383,6 @@ def send_order_ready_notification(order_id):
             ]
         }
 
-        # Отправляем уведомление
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
@@ -2546,54 +2391,43 @@ def send_order_ready_notification(order_id):
             'reply_markup': json.dumps(keyboard)
         }
 
-        print(f"📤 Отправка уведомления о готовности заказа #{order_id} клиенту {telegram_id}")
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"✅ Уведомление о готовности отправлено клиенту {telegram_id}")
             return True
         else:
-            print(f"❌ Ошибка отправки уведомления о готовности: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления о готовности: {e}")
-        import traceback
-        traceback.print_exc()
         return False
+
 
 def assign_order_to_courier(order_id, delivery_type):
     """Автоматически назначить заказ курьеру"""
     db = get_db()
     try:
-        # Получаем случайного активного курьера
         couriers = db.execute(
             'SELECT id, full_name FROM couriers WHERE is_active = 1 ORDER BY RANDOM() LIMIT 1'
         ).fetchall()
 
         if not couriers:
-            print(f"⚠️ Нет активных курьеров для заказа #{order_id}")
             return None
 
         courier_id = couriers[0]['id']
         courier_name = couriers[0]['full_name']
 
-        # Создаем назначение
         db.execute('''
                    INSERT INTO order_assignments (order_id, courier_id, status)
                    VALUES (?, ?, 'assigned')
                    ''', (order_id, courier_id))
 
         db.commit()
-        print(f"✅ Заказ #{order_id} назначен курьеру #{courier_id} ({courier_name})")
 
-        # Отправляем уведомление о назначении курьера
         send_order_notification(order_id, 'assigned', courier_id)
 
         return courier_id
 
     except Exception as e:
-        print(f"❌ Ошибка назначения курьера: {e}")
         return None
     finally:
         db.close()
@@ -2625,34 +2459,32 @@ def get_products():
     """Получить товары для клиентского магазина"""
     db = get_db()
     try:
-        # Получаем параметр категории из запроса
         category = request.args.get('category', 'all')
 
-        # Базовый запрос
         query = '''
                 SELECT id, \
                        name, \
-                       description, \
-                       CASE \
-                           WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg \
-                           ELSE price \
-                           END as price, \
-                       CASE \
-                           WHEN image_url IS NOT NULL AND image_url != '' THEN image_url \
-                           ELSE 'https://via.placeholder.com/300x200?text=No+Image' \
-                           END as image_url, \
-                       category, \
-                       CASE \
-                           WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight \
-                           ELSE stock \
-                           END as stock, \
-                       product_type, \
-                       unit, \
-                       weight_unit, \
-                       price_per_kg, \
-                       min_weight, \
-                       max_weight, \
-                       step_weight, \
+                       description,
+                       CASE
+                           WHEN product_type = 'weight' AND price_per_kg > 0 THEN price_per_kg
+                           ELSE price
+                           END as price,
+                       CASE
+                           WHEN image_url IS NOT NULL AND image_url != '' THEN image_url
+                           ELSE 'https://via.placeholder.com/300x200?text=No+Image'
+                           END as image_url,
+                       category,
+                       CASE
+                           WHEN product_type = 'weight' AND stock_weight > 0 THEN stock_weight
+                           ELSE stock
+                           END as stock,
+                       product_type,
+                       unit,
+                       weight_unit,
+                       price_per_kg,
+                       min_weight,
+                       max_weight,
+                       step_weight,
                        stock_weight
                 FROM products
                 WHERE (
@@ -2662,13 +2494,11 @@ def get_products():
                           ) \
                 '''
 
-        # Добавляем фильтр по категории если нужно
         params = []
         if category and category != 'all':
             query += ' AND category = ?'
             params.append(category)
 
-        # Сортируем по дате добавления
         query += ' ORDER BY created_at DESC'
 
         products = db.execute(query, params).fetchall()
@@ -2677,13 +2507,9 @@ def get_products():
         for product in products:
             product_dict = dict(product)
 
-            # Для весовых товаров устанавливаем правильные единицы измерения
             if product_dict.get('product_type') == 'weight':
-                # Устанавливаем display_price как price_per_kg для отображения
                 product_dict['display_price'] = product_dict.get('price_per_kg', product_dict['price'])
-                # Устанавливаем display_stock как stock_weight
                 product_dict['display_stock'] = product_dict.get('stock_weight', 0)
-                # Для удобства фронтенда
                 product_dict['is_weight'] = True
                 product_dict['price_per_kg'] = product_dict.get('price_per_kg', 0)
             else:
@@ -2697,25 +2523,6 @@ def get_products():
         return jsonify(result)
 
     except Exception as e:
-        print(f"❌ Ошибка получения товаров: {e}")
-        import traceback
-        traceback.print_exc()
-        if db:
-            db.close()
-        return jsonify([])
-
-    except Exception as e:
-        print(f"❌ Ошибка получения товаров: {e}")
-        import traceback
-        traceback.print_exc()
-        if db:
-            db.close()
-        return jsonify([])
-
-    except Exception as e:
-        print(f"❌ Ошибка получения товаров: {e}")
-        import traceback
-        traceback.print_exc()
         if db:
             db.close()
         return jsonify([])
@@ -2751,11 +2558,9 @@ def api_product_detail(product_id):
 
         product_dict = dict(product)
 
-        # Добавляем недостающие поля
         product_dict['display_price'] = product_dict['price']
         product_dict['display_stock'] = product_dict['stock']
 
-        # Для весовых товаров
         if product_dict['product_type'] == 'weight':
             product_dict['is_weight'] = True
             if product_dict['price_per_kg']:
@@ -2766,11 +2571,9 @@ def api_product_detail(product_id):
             product_dict['is_weight'] = False
             product_dict['weight_unit'] = None
 
-        # Если нет изображения - ставим заглушку
         if not product_dict.get('image_url'):
             product_dict['image_url'] = 'https://via.placeholder.com/300x200?text=No+Image'
 
-        # Гарантируем, что все нужные поля есть
         required_fields = ['stock', 'stock_weight', 'min_weight', 'max_weight', 'step_weight']
         for field in required_fields:
             if field not in product_dict:
@@ -2780,7 +2583,6 @@ def api_product_detail(product_id):
         return jsonify(product_dict)
 
     except Exception as e:
-        print(f"❌ Ошибка получения товара {product_id}: {e}")
         if db:
             db.close()
         return jsonify({'error': str(e)}), 500
@@ -2792,11 +2594,7 @@ def check_product_availability(product_id):
     db = get_db()
     try:
         product = db.execute('''
-                             SELECT id,
-                                    name,
-                                    product_type,
-                                    stock,
-                                    stock_weight
+                             SELECT id, name, product_type, stock, stock_weight
                              FROM products
                              WHERE id = ?
                              ''', (product_id,)).fetchone()
@@ -2825,11 +2623,9 @@ def check_product_availability(product_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка проверки наличия товара {product_id}: {e}")
         if db:
             db.close()
         return jsonify({'available': False, 'error': str(e)})
-
 
 
 @app.route('/api/categories')
@@ -2837,7 +2633,6 @@ def api_categories():
     """Получить список категорий"""
     db = get_db()
     try:
-        # Получаем только категории, в которых есть товары
         categories = db.execute('''
                                 SELECT DISTINCT category
                                 FROM products
@@ -2851,17 +2646,16 @@ def api_categories():
                                 ORDER BY category
                                 ''').fetchall()
 
-        # Преобразуем в список названий
         category_list = [row['category'] for row in categories if row['category']]
 
         db.close()
         return jsonify(category_list)
 
     except Exception as e:
-        print(f"❌ Ошибка получения категорий: {e}")
         if db:
             db.close()
         return jsonify([])
+
 
 @app.route('/api/categories/tree', methods=['GET'])
 def get_categories_tree():
@@ -2869,21 +2663,18 @@ def get_categories_tree():
     db = get_db()
     try:
         categories = db.execute('''
-            SELECT pc.*,
-                   d.name as discount_name
-            FROM product_categories pc
-            LEFT JOIN discounts d ON pc.discount_id = d.id
-            ORDER BY pc.sort_order, pc.name
-        ''').fetchall()
+                                SELECT pc.*, d.name as discount_name
+                                FROM product_categories pc
+                                         LEFT JOIN discounts d ON pc.discount_id = d.id
+                                ORDER BY pc.sort_order, pc.name
+                                ''').fetchall()
 
-        # Строим дерево
         categories_dict = {}
         root_categories = []
 
         for cat in categories:
             cat_dict = dict(cat)
             cat_dict['children'] = []
-            # Получаем количество товаров в категории
             product_count = db.execute(
                 'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
                 (cat_dict['name'], cat_dict['id'])
@@ -2903,7 +2694,6 @@ def get_categories_tree():
         return jsonify(root_categories)
     except Exception as e:
         db.close()
-        print(f"❌ Ошибка получения дерева категорий: {e}")
         return jsonify([])
 
 
@@ -2921,8 +2711,6 @@ def api_create_order():
         delivery_address = data.get('delivery_address', '{}')
         promo_code = data.get('promo_code')
 
-        # ========== ВАЛИДАЦИЯ ДАННЫХ ==========
-        # Проверяем обязательные поля
         if not data.get('items') or len(data['items']) == 0:
             return jsonify({'success': False, 'error': 'Корзина пуста'}), 400
 
@@ -2936,12 +2724,6 @@ def api_create_order():
         if delivery_type == 'pickup' and not data.get('pickup_point'):
             return jsonify({'success': False, 'error': 'Для самовывоза выберите пункт выдачи'}), 400
 
-        print("=" * 80)
-        print("🎯 ПОЛНЫЙ ДЕБАГ ВХОДНЫХ ДАННЫХ:")
-        print(json.dumps(data, indent=2, ensure_ascii=False))
-        print("=" * 80)
-
-        # ========== ПРОВЕРКА ПРОМОКОДА ==========
         discount_amount = 0.0
         promo_code_id = None
         promo_dict = None
@@ -2966,7 +2748,7 @@ def api_create_order():
                     promo_dict = dict(promo_result)
 
                     if promo_dict['usage_limit'] and promo_dict['used_count'] >= promo_dict['usage_limit']:
-                        print(f"⚠️ Промокод {promo_code} достиг лимита использований")
+                        pass
                     else:
                         items_total = 0.0
                         for item in data['items']:
@@ -2979,7 +2761,7 @@ def api_create_order():
                                 items_total += price * quantity
 
                         if promo_dict['min_order_amount'] and items_total < float(promo_dict['min_order_amount']):
-                            print(f"⚠️ Промокод {promo_code} требует мин. сумму {promo_dict['min_order_amount']}")
+                            pass
                         else:
                             promo_code_id = promo_dict['id']
 
@@ -2989,13 +2771,9 @@ def api_create_order():
                                 discount_amount = float(promo_dict['value'])
                             elif promo_dict['discount_type'] == 'free_delivery':
                                 discount_amount = 0
-
-                            print(f"✅ Применен промокод {promo_code}, скидка: {discount_amount} руб")
             except Exception as e:
-                print(f"⚠️ Ошибка обработки промокода: {e}")
                 discount_amount = 0.0
 
-        # ========== РАСЧЕТ СТОИМОСТИ ==========
         try:
             order_total = 0.0
 
@@ -3009,38 +2787,24 @@ def api_create_order():
                     item_total = price * quantity
                     order_total += item_total
 
-            print(f"\n💰 ИТОГО ТОВАРЫ: {order_total} ₽")
-
             if discount_amount > 0:
                 order_total = max(0, order_total - discount_amount)
-                print(f"💰 Применена скидка по промокоду: {discount_amount} руб")
-                print(f"💰 Сумма после скидки: {order_total} руб")
 
         except Exception as e:
-            print(f"❌ Ошибка расчета: {e}")
-            import traceback
-            traceback.print_exc()
             order_total = 0.0
 
-        # ========== РАСЧЕТ ДОСТАВКИ ==========
         delivery_cost = 0.0
 
         if delivery_type == 'courier':
-            print(f"💰 Проверяем доставку: заказ {order_total} руб")
-
             if promo_code and promo_dict and promo_dict['discount_type'] == 'free_delivery':
-                print(f"✅ Доставка бесплатная по промокоду {promo_code}")
+                pass
             elif order_total < 1000.0:
                 delivery_cost = 100.0
-                print(f"💰 Доставка платная: +{delivery_cost} руб")
             else:
-                print(f"✅ Доставка бесплатная (сумма заказа: {order_total} руб)")
+                pass
 
         total_with_delivery = order_total + delivery_cost
-        print(
-            f"📊 Итоговая сумма: {total_with_delivery} руб (товары: {order_total} руб + доставка: {delivery_cost} руб)")
 
-        # ========== ОПЛАТА НАЛИЧНЫМИ ==========
         cash_payment = data.get('cash_payment', {}) or {}
         cash_received = cash_payment.get('received', 0)
         cash_change = cash_payment.get('change', 0)
@@ -3055,18 +2819,10 @@ def api_create_order():
         if payment_method == 'cash' and cash_received == 0:
             cash_received = math.ceil(total_with_delivery / 500) * 500
             cash_change = cash_received - total_with_delivery
-            print(f"💵 Авторасчет наличных: получено={cash_received}, сдача={cash_change}")
 
         cash_details = json.dumps(cash_payment, ensure_ascii=False) if cash_payment else None
 
-        # ========== ОБРАБОТКА АДРЕСА - ИСПРАВЛЕННАЯ ВЕРСИЯ ==========
         address_obj = {}
-
-        # Выводим для отладки
-        print("📦 delivery_address содержимое:")
-        print(f"Тип: {type(delivery_address)}")
-        print(f"Значение: {delivery_address}")
-        print("=" * 80)
 
         if isinstance(delivery_address, str):
             try:
@@ -3075,17 +2831,12 @@ def api_create_order():
                 else:
                     address_obj = {}
             except json.JSONDecodeError as e:
-                print(f"⚠️ Не удалось распарсить delivery_address как JSON: {e}")
-                print(f"   Содержимое: {delivery_address}")
                 address_obj = {}
         elif isinstance(delivery_address, dict):
             address_obj = delivery_address
         else:
             address_obj = {}
 
-        print(f"📋 Распаршенный адрес: {json.dumps(address_obj, ensure_ascii=False, indent=2)}")
-
-        # Извлекаем информацию из адреса
         recipient_name = ""
         phone_number = ""
         address_comment = ""
@@ -3095,7 +2846,6 @@ def api_create_order():
             phone_number = address_obj.get('phone', '') or address_obj.get('phone_number', '')
             address_comment = address_obj.get('comment', '') or address_obj.get('address_comment', '')
 
-        # ОБЯЗАТЕЛЬНЫЕ ПОЛЯ ДЛЯ АДРЕСА (только адресные данные)
         if delivery_type == 'courier':
             required_address_fields = ['city', 'street', 'house']
             missing_fields = []
@@ -3116,34 +2866,22 @@ def api_create_order():
                     'error': f'Для доставки заполните: {", ".join(errors)}'
                 }), 400
 
-        # ПОИСК ИМЕНИ ПОЛУЧАТЕЛЯ (может быть в разных местах)
-        print("🔍 Поиск recipient_name в данных:")
-
-        # 1. Проверяем отдельное поле recipient_name в данных
         if not recipient_name:
             recipient_name = data.get('recipient_name', '')
-            print(f"   В data.recipient_name: {recipient_name}")
 
-        # 2. Проверяем delivery_data если есть
         if not recipient_name:
             delivery_data = data.get('delivery_data', {})
             if isinstance(delivery_data, dict):
                 recipient_name = delivery_data.get('recipient_name', '')
-                print(f"   В data.delivery_data: {recipient_name}")
 
-        # 3. Проверяем в delivery_details
         if not recipient_name:
             delivery_details = data.get('delivery_details', {})
             if isinstance(delivery_details, dict):
                 recipient_name = delivery_details.get('recipient_name', '')
-                print(f"   В data.delivery_details: {recipient_name}")
 
-        # 4. Берем из username если ничего не нашли
         if not recipient_name:
             recipient_name = data.get('username', 'Гость')
-            print(f"   Используем username: {recipient_name}")
 
-        # ПОИСК ТЕЛЕФОНА
         if not phone_number:
             phone_number = data.get('phone_number', '')
             if not phone_number:
@@ -3152,18 +2890,12 @@ def api_create_order():
         if not phone_number:
             phone_number = 'Не указан'
 
-        # Проверяем что имя получателя есть
         if not recipient_name or recipient_name == 'Гость':
             return jsonify({
                 'success': False,
                 'error': 'Укажите имя получателя'
             }), 400
 
-        print(f"✅ Найден recipient_name: {recipient_name}")
-        print(f"✅ Найден phone_number: {phone_number}")
-        print(f"✅ Комментарий: {address_comment}")
-
-        # ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ ПОЛЯ В ОБЪЕКТ АДРЕСА
         full_address_obj = address_obj.copy() if isinstance(address_obj, dict) else {}
 
         if 'recipient_name' not in full_address_obj:
@@ -3175,14 +2907,10 @@ def api_create_order():
         if 'comment' not in full_address_obj and address_comment:
             full_address_obj['comment'] = address_comment
 
-        print(f"📦 Финальный объект адреса для сохранения: {json.dumps(full_address_obj, ensure_ascii=False, indent=2)}")
-
-        # ========== ОБРАБОТКА ПОЛЬЗОВАТЕЛЯ ==========
         user_id = data.get('user_id', 0)
         username = data.get('username', 'Гость')
 
         if user_id == 0:
-            print("⚠️ ВНИМАНИЕ: user_id = 0! Пробуем альтернативные методы...")
             telegram_data = request.headers.get('X-Telegram-Init-Data')
             if telegram_data:
                 try:
@@ -3192,26 +2920,19 @@ def api_create_order():
                         user_json = json.loads(parsed['user'][0])
                         user_id = user_json.get('id', 0)
                         username = user_json.get('username', username)
-                        print(f"✅ Найден telegram_id из Web App: {user_id}")
                 except Exception as e:
-                    print(f"⚠️ Не удалось распарсить Telegram данные: {e}")
+                    pass
 
             if user_id == 0 and username != 'Гость':
                 user_record = db.execute('SELECT telegram_id FROM telegram_users WHERE username = ?',
                                          (username,)).fetchone()
                 if user_record:
                     user_id = user_record['telegram_id']
-                    print(f"✅ Найден user_id по username: {user_id}")
 
             if user_id == 0:
                 import random
                 user_id = random.randint(100000000, 999999999)
-                print(f"⚠️ Сгенерирован временный user_id: {user_id}")
 
-        print(f"👤 Используемый user_id: {user_id}")
-        print(f"👤 Используемый username: {username}")
-
-        # ========== СОХРАНЕНИЕ ЗАКАЗА ==========
         cursor = db.execute('''
                             INSERT INTO orders (user_id, username, items, total_price, delivery_cost, status,
                                                 delivery_type, delivery_address, pickup_point,
@@ -3239,20 +2960,15 @@ def api_create_order():
                                 discount_amount
                             ))
 
-        # ========== ОБНОВЛЕНИЕ ПРОМОКОДА ==========
         if promo_code_id:
             try:
                 db.execute('UPDATE promo_codes SET used_count = used_count + 1 WHERE id = ?',
                            (promo_code_id,))
-                print(f"✅ Обновлен счетчик использований промокода #{promo_code_id}")
             except Exception as e:
-                print(f"⚠️ Не удалось обновить счетчик промокода: {e}")
+                pass
 
-        # Получаем ID созданного заказа
         order_id = cursor.lastrowid
-        print(f"✅ Заказ создан с ID: {order_id}")
 
-        # Обновляем остатки товаров
         for item in data['items']:
             try:
                 quantity = int(item.get('quantity', 1))
@@ -3268,23 +2984,18 @@ def api_create_order():
                         db.execute('UPDATE products SET stock = stock - ? WHERE id = ?',
                                    (quantity, product_id))
             except Exception as e:
-                print(f"⚠️ Ошибка обновления остатков для товара {item.get('id')}: {e}")
+                pass
 
         db.commit()
 
-        # Создаем активный чат для нового заказа
         try:
             db.execute('INSERT OR IGNORE INTO active_chats (order_id, customer_id, status) VALUES (?, ?, "active")',
                        (order_id, user_id))
             db.commit()
-            print(f"✅ Создан активный чат для заказа #{order_id}")
         except Exception as e:
-            print(f"⚠️ Не удалось создать чат: {e}")
+            pass
 
-        # ========== ОБРАБОТКА УВЕДОМЛЕНИЙ ==========
         if delivery_type == 'pickup':
-            print(f"📦 ЗАКАЗ #{order_id} - САМОВЫВОЗ")
-
             if user_id and user_id > 0:
                 try:
                     send_pickup_order_notification(
@@ -3298,16 +3009,14 @@ def api_create_order():
                         total_with_delivery=total_with_delivery
                     )
                 except Exception as e:
-                    print(f"   ❌ Ошибка отправки уведомления клиенту (самовывоз): {e}")
+                    pass
 
             try:
                 send_admin_pickup_notification(order_id)
             except Exception as e:
-                print(f"   ❌ Ошибка отправки уведомления админу (самовывоз): {e}")
+                pass
 
         else:
-            print(f"🚚 ЗАКАЗ #{order_id} - КУРЬЕРСКАЯ ДОСТАВКА")
-
             if user_id and user_id > 0:
                 try:
                     send_order_details_notification(
@@ -3318,44 +3027,18 @@ def api_create_order():
                         delivery_type=delivery_type
                     )
                 except Exception as e:
-                    print(f"   ❌ Ошибка отправки клиенту (доставка): {e}")
+                    pass
 
             try:
                 send_admin_order_notification(order_id)
             except Exception as e:
-                print(f"   ❌ Ошибка отправки админу: {e}")
+                pass
 
             if delivery_type == 'courier':
                 try:
                     send_courier_order_notification(order_id)
                 except Exception as e:
-                    print(f"   ❌ Ошибка отправки курьерам: {e}")
-
-        print(f"✅ Создан заказ #{order_id} для user_id={user_id}")
-        print(f"💰 Итоговая сумма: {total_with_delivery} руб")
-        print(f"📊 Скидка по промокоду: {discount_amount} руб")
-        print(f"💵 Наличные: получено {cash_received} руб, сдача {cash_change} руб")
-
-        print("\n📋 ИНФОРМАЦИЯ О ЗАКАЗЕ:")
-        print(f"   Получатель: {recipient_name}")
-        print(f"   Телефон: {phone_number}")
-        print(f"   Тип доставки: {delivery_type}")
-
-        if delivery_type == 'courier':
-            print(
-                f"   Адрес: {full_address_obj.get('city', '')}, ул. {full_address_obj.get('street', '')}, д. {full_address_obj.get('house', '')}")
-            if full_address_obj.get('building'):
-                print(f"   Корпус: {full_address_obj['building']}")
-            if full_address_obj.get('entrance'):
-                print(f"   Подъезд: {full_address_obj['entrance']}")
-            if full_address_obj.get('apartment'):
-                print(f"   Квартира: {full_address_obj['apartment']}")
-            if full_address_obj.get('comment'):
-                print(f"   Комментарий: {full_address_obj['comment']}")
-        else:
-            print(f"   Пункт выдачи: {data.get('pickup_point', 'Не указан')}")
-
-        print("=" * 80)
+                    pass
 
         return jsonify({
             'success': True,
@@ -3367,15 +3050,10 @@ def api_create_order():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка создания заказа: {e}")
-        import traceback
-        traceback.print_exc()
-
         try:
             if order_id:
                 db.execute('DELETE FROM orders WHERE id = ?', (order_id,))
                 db.commit()
-                print(f"⚠️ Заказ #{order_id} удален из-за ошибки")
         except:
             pass
 
@@ -3397,14 +3075,13 @@ def send_admin_order_notification(order_id):
             return False
 
         db = get_db()
-        # 🚨 ИСПРАВЬТЕ И ЭТОТ ЗАПРОС:
         order = db.execute('''
                            SELECT o.*,
                                   json_extract(o.delivery_address, '$.city')           as city,
                                   json_extract(o.delivery_address, '$.street')         as street,
                                   json_extract(o.delivery_address, '$.house')          as house,
-                                  json_extract(o.delivery_address, '$.building')       as building, 
-                                  json_extract(o.delivery_address, '$.entrance')       as entrance, 
+                                  json_extract(o.delivery_address, '$.building')       as building,
+                                  json_extract(o.delivery_address, '$.entrance')       as entrance,
                                   json_extract(o.delivery_address, '$.apartment')      as apartment,
                                   json_extract(o.delivery_address, '$.floor')          as floor,
                                   json_extract(o.delivery_address, '$.doorcode')       as doorcode,
@@ -3424,7 +3101,6 @@ def send_admin_order_notification(order_id):
         order_data = dict(order)
         db.close()
 
-        # ФОРМИРУЕМ АДРЕС
         address_parts = []
         if order_data.get('city'):
             address_parts.append(order_data['city'])
@@ -3441,14 +3117,12 @@ def send_admin_order_notification(order_id):
 
         address_full = ', '.join(address_parts) if address_parts else "Адрес не указан"
 
-        # ДЕТАЛИ АДРЕСА
         address_details = []
         if order_data.get('floor'):
             address_details.append(f"Этаж: {order_data['floor']}")
         if order_data.get('doorcode'):
             address_details.append(f"Домофон: {order_data['doorcode']}")
 
-        # ТЕКСТ СООБЩЕНИЯ
         text = f"🆕 *НОВЫЙ ЗАКАЗ #{order_id}*\n\n"
         text += f"👤 *Получатель:* {order_data.get('recipient_name_full', order_data.get('recipient_name', order_data.get('username', 'Гость')))}\n"
         text += f"📱 *Телефон:* {order_data.get('phone_full', order_data.get('phone_number', 'Не указан'))}\n"
@@ -3462,13 +3136,11 @@ def send_admin_order_notification(order_id):
                 for detail in address_details:
                     text += f"• {detail}\n"
 
-            # КОММЕНТАРИЙ ЕСЛИ ЕСТЬ
             if order_data.get('address_comment'):
                 text += f"\n📝 *Комментарий к заказу:* {order_data['address_comment']}\n"
         else:
             text += f"🏪 *Тип:* Самовывоз\n"
 
-        # ПРОДОЛЖАЕМ СООБЩЕНИЕ
         text += f"\n📦 *Товаров:* {len(json.loads(order_data['items'])) if order_data.get('items') else 0} шт\n"
         text += f"💰 *Сумма:* {order_data.get('total_amount', 0):.2f} ₽\n"
         text += f"💳 *Оплата:* {order_data.get('payment_method', 'cash')}\n"
@@ -3484,7 +3156,6 @@ def send_admin_order_notification(order_id):
 
         text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
 
-        # КНОПКИ
         keyboard = {
             "inline_keyboard": [
                 [
@@ -3494,7 +3165,6 @@ def send_admin_order_notification(order_id):
             ]
         }
 
-        # ОТПРАВКА
         admin_ids = []
         if isinstance(ADMIN_TELEGRAM_IDS, (int, float)):
             admin_ids = [int(ADMIN_TELEGRAM_IDS)]
@@ -3520,9 +3190,7 @@ def send_admin_order_notification(order_id):
         return success_count > 0
 
     except Exception as e:
-        print(f"❌ Ошибка отправки админу: {e}")
         return False
-
 
 
 def handle_order_ready_callback(call):
@@ -3530,17 +3198,14 @@ def handle_order_ready_callback(call):
     try:
         order_id = int(call.data.replace('order_ready_', ''))
 
-        # Обновляем статус заказа
         db = get_db()
         db.execute('UPDATE orders SET status = ? WHERE id = ?',
                    ('ready_for_pickup', order_id))
         db.commit()
         db.close()
 
-        # Отправляем уведомление клиенту
         send_order_ready_notification(order_id)
 
-        # Отправляем ответ админу
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         if BOT_TOKEN:
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
@@ -3551,7 +3216,6 @@ def handle_order_ready_callback(call):
             }
             requests.post(url, json=data)
 
-            # Обновляем сообщение админа
             url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
             data = {
                 'chat_id': call.message.chat.id,
@@ -3562,7 +3226,8 @@ def handle_order_ready_callback(call):
             requests.post(url, json=data)
 
     except Exception as e:
-        print(f"❌ Ошибка обработки callback 'order_ready': {e}")
+        pass
+
 
 def send_admin_pickup_notification(order_id):
     """Отправить админу уведомление о заказе на самовывоз"""
@@ -3570,39 +3235,29 @@ def send_admin_pickup_notification(order_id):
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         ADMIN_TELEGRAM_IDS = 7331765165
 
-        print(f"👨‍💼 ОТПРАВКА АДМИНУ УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ #{order_id}")
-
         if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Получаем ID админов
         admin_ids = []
         if ADMIN_TELEGRAM_IDS:
             try:
-                # Если ADMIN_TELEGRAM_IDS это строка (несколько ID через запятую)
                 if isinstance(ADMIN_TELEGRAM_IDS, str):
                     for admin_id in ADMIN_TELEGRAM_IDS.split(','):
                         admin_id = admin_id.strip()
                         if admin_id and admin_id.isdigit():
                             admin_ids.append(int(admin_id))
-                # Если это уже число (один ID)
                 elif isinstance(ADMIN_TELEGRAM_IDS, (int, float)):
                     admin_ids.append(int(ADMIN_TELEGRAM_IDS))
-                # Если это список
                 elif isinstance(ADMIN_TELEGRAM_IDS, list):
                     admin_ids = [int(id) for id in ADMIN_TELEGRAM_IDS if str(id).isdigit()]
             except Exception as e:
-                print(f"⚠️ Ошибка обработки ADMIN_IDS: {e}")
                 return False
 
         if not admin_ids:
-            print("⚠️ Нет валидных ID админов для отправки уведомлений")
             return False
 
         db = get_db()
 
-        # Получаем информацию о заказе
         order = db.execute('''
                            SELECT o.*,
                                   (o.total_price + COALESCE(o.delivery_cost, 0) -
@@ -3612,17 +3267,14 @@ def send_admin_pickup_notification(order_id):
                            ''', (order_id,)).fetchone()
 
         if not order:
-            print(f"❌ Заказ #{order_id} не найден")
             db.close()
             return False
 
         order_data = dict(order)
 
-        # Получаем информацию о пункте выдачи
         pickup_display = order_data.get('pickup_point', '')
         if order_data.get('pickup_point'):
             try:
-                # Проверяем, является ли pickup_point числом (ID пункта выдачи)
                 pickup_point_value = order_data['pickup_point']
                 if str(pickup_point_value).isdigit():
                     pickup_info = db.execute(
@@ -3635,7 +3287,6 @@ def send_admin_pickup_notification(order_id):
                             pickup_display += f"\n   ⌚ Часы работы: {pickup_info['working_hours']}"
                         if pickup_info.get('phone'):
                             pickup_display += f"\n   📞 Телефон: {pickup_info['phone']}"
-                        # ИСПРАВЛЕНИЕ: Если это Row объект, получаем значения по ключу
                         elif isinstance(pickup_info, sqlite3.Row):
                             pickup_display = f"{pickup_info['name']}\n   📍 Адрес: {pickup_info['address']}"
                             if pickup_info['working_hours']:
@@ -3647,14 +3298,10 @@ def send_admin_pickup_notification(order_id):
                     if len(parts) >= 2:
                         pickup_display = f"{parts[1]}\n   📍 Адрес: {parts[2] if len(parts) > 2 else ''}"
             except Exception as e:
-                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
-                # Добавим более детальную информацию об ошибке
-                import traceback
-                traceback.print_exc()
+                pass
 
         db.close()
 
-        # Парсим товары
         items_list = []
         items_count = 0
         if order_data.get('items'):
@@ -3664,7 +3311,6 @@ def send_admin_pickup_notification(order_id):
             except:
                 items_list = []
 
-        # Формируем сообщение для админа
         text = f"🏪 *НОВЫЙ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*\n\n"
         text += f"👤 *Клиент:* {order_data.get('username', 'Гость')}\n"
         text += f"📱 *Телефон:* {order_data.get('phone_number', 'Не указан')}\n"
@@ -3684,7 +3330,6 @@ def send_admin_pickup_notification(order_id):
         text += f"⏰ *Создан:* {order_data.get('created_at', '')[:16]}\n"
         text += f"\n⚡ *Заказ готовится к выдаче!*"
 
-        # Кнопки для админа (добавил кнопку "ГОТОВ")
         keyboard = {
             "inline_keyboard": [
                 [
@@ -3696,7 +3341,6 @@ def send_admin_pickup_notification(order_id):
             ]
         }
 
-        # Отправляем всем админам
         success_count = 0
         for admin_id in admin_ids:
             try:
@@ -3708,169 +3352,19 @@ def send_admin_pickup_notification(order_id):
                     'reply_markup': json.dumps(keyboard)
                 }
 
-                print(f"   Отправка админу {admin_id}...")
                 response = requests.post(url, json=data, timeout=10)
 
                 if response.status_code == 200:
-                    print(f"   ✅ Уведомление отправлено админу {admin_id}")
                     success_count += 1
                 else:
-                    print(f"   ❌ Ошибка отправки админу {admin_id}: {response.text}")
+                    pass
 
             except Exception as e:
-                print(f"   ❌ Исключение при отправке админу {admin_id}: {e}")
+                pass
 
-        print(f"📨 Итог: отправлено {success_count}/{len(admin_ids)} админам")
         return success_count > 0
 
     except Exception as e:
-        print(f"❌ Критическая ошибка в send_admin_pickup_notification: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, order_total, discount_amount, username,
-                                   total_with_delivery):
-    """Отправить специальное уведомление для заказа с самовывозом"""
-    try:
-        BOT_TOKEN = os.getenv('BOT_TOKEN')
-        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
-
-        print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
-
-        if not telegram_id or telegram_id == 0:
-            print("❌ Неверный telegram_id клиента")
-            return False
-
-        if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
-            return False
-
-        # Получаем информацию о пункте выдачи из базы данных
-        db = get_db()
-        pickup_info = None
-        if pickup_point:
-            try:
-                # Если pickup_point это ID (число), получаем данные из базы
-                if pickup_point.isdigit():
-                    pickup_info = db.execute(
-                        'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
-                        (int(pickup_point),)
-                    ).fetchone()
-                else:
-                    # Иначе используем как есть (текст)
-                    pickup_info = {'name': pickup_point, 'address': pickup_point}
-            except Exception as e:
-                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
-                pickup_info = None
-        db.close()
-
-        # Форматируем информацию о пункте выдачи
-        pickup_text = ""
-        if pickup_info:
-            if isinstance(pickup_info, dict):
-                # Если это словарь (уже имеет данные)
-                pickup_text = f"📍 *Пункт выдачи:* {pickup_info.get('name', pickup_point)}\n"
-                if pickup_info.get('address'):
-                    pickup_text += f"   Адрес: {pickup_info['address']}\n"
-                if pickup_info.get('working_hours'):
-                    pickup_text += f"   Часы работы: {pickup_info['working_hours']}\n"
-                if pickup_info.get('phone'):
-                    pickup_text += f"   Телефон: {pickup_info['phone']}\n"
-            else:
-                # Если это объект Row из SQLite
-                pickup_text = f"📍 *Пункт выдачи:* {pickup_info['name']}\n"
-                if pickup_info['address']:
-                    pickup_text += f"   Адрес: {pickup_info['address']}\n"
-                if pickup_info['working_hours']:
-                    pickup_text += f"   Часы работы: {pickup_info['working_hours']}\n"
-                if pickup_info['phone']:
-                    pickup_text += f"   Телефон: {pickup_info['phone']}\n"
-        else:
-            pickup_text = f"📍 *Пункт выдачи:* {pickup_point}\n"
-
-        # Форматируем товары
-        items_text = "📦 *Ваш заказ:*\n"
-        total_items_value = 0
-
-        for item in items:
-            name = item.get('name', 'Товар')
-            safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
-
-            if item.get('is_weight'):
-                weight = item.get('weight', 0)
-                price = item.get('price', 0)
-                items_text += f"• *{safe_name}* = *{price} ₽*\n"
-                total_items_value += price
-            else:
-                quantity = item.get('quantity', 1)
-                price = item.get('price', 0)
-                item_total = price * quantity
-                items_text += f"• *{safe_name}* × {quantity} шт - *{item_total} ₽*\n"
-                total_items_value += item_total
-
-        # Скидка
-        discount_info = ""
-        if discount_amount > 0:
-            discount_info = f"\n🎁 *Скидка:* -{discount_amount} ₽\n"
-
-        # Итоговая сумма
-        final_total = total_with_delivery
-
-        # Формируем сообщение
-        message = f"""🏪 *ВАШ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*
-        
-{items_text}
-{discount_info}
-━━━━━━━━━━━━━━━━━━━━
-💰 *ИТОГО: {final_total:.2f} ₽*
-
-{pickup_text}
-⏰ *Статус:* Ожидает сборки
-📝 *Заберите заказ в течение 30 минут после уведомления о готовности*
-
-🎯 *Заказ будет собран в ближайшее время! Мы уведомим вас, когда он будет готов к выдаче.*"""
-
-        # URL для веб-приложения
-        webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
-
-        # Кнопки для клиента
-        keyboard = {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "🛒 ОТКРЫТЬ МАГАЗИН",
-                        "web_app": {"url": webapp_url}
-                    }],
-
-                    [{"text": "📦 МОИ ЗАКАЗЫ", "callback_data": "my_orders"}]
-            ]
-        }
-
-        # Отправляем
-        url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
-        data = {
-            'chat_id': int(telegram_id),
-            'text': message,
-            'parse_mode': 'Markdown',
-            'disable_web_page_preview': True,
-            'reply_markup': json.dumps(keyboard)
-        }
-
-        print(f"   Отправка клиенту {telegram_id}...")
-        response = requests.post(url, json=data, timeout=10)
-
-        if response.status_code == 200:
-            print(f"   ✅ Уведомление о самовывозе отправлено клиенту {telegram_id}")
-            return True
-        else:
-            print(f"   ❌ Ошибка отправки клиенту: {response.text}")
-            return False
-
-    except Exception as e:
-        print(f"❌ Ошибка отправки уведомления о самовывозе: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 
@@ -3879,57 +3373,44 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
     """Отправить специальное уведомление для заказа с самовывозом"""
     try:
         BOT_TOKEN = os.getenv('BOT_TOKEN')
-        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
-
-        print(f"📦 ОТПРАВКА УВЕДОМЛЕНИЯ О САМОВЫВОЗЕ ЗАКАЗА #{order_id}")
+        WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://smof-shop.ru/')
 
         if not telegram_id or telegram_id == 0:
-            print("❌ Неверный telegram_id клиента")
             return False
 
         if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Получаем информацию о пункте выдачи из базы данных
         db = get_db()
         pickup_info = None
-        pickup_display = pickup_point  # По умолчанию используем то, что пришло
+        pickup_display = pickup_point
 
         if pickup_point:
             try:
-                # Если pickup_point это ID (число), получаем данные из базы
                 if str(pickup_point).isdigit():
                     pickup_info = db.execute(
                         'SELECT name, address, working_hours, phone FROM pickup_points WHERE id = ?',
                         (int(pickup_point),)
                     ).fetchone()
                     if pickup_info:
-                        # Форматируем для отображения
                         pickup_display = f"{pickup_info['name']} - {pickup_info['address']}"
-                # Если это строка с форматом "id|name|address", парсим её
                 elif '|' in pickup_point:
                     parts = pickup_point.split('|')
                     if len(parts) >= 2:
                         pickup_display = f"{parts[1]} - {parts[2] if len(parts) > 2 else ''}"
             except Exception as e:
-                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
                 pickup_info = None
 
         db.close()
 
-        # Форматируем товары (правильно)
         items_text = "📦 *Ваш заказ:*\n"
         total_items_value = 0
 
         for item in items:
             name = item.get('name', 'Товар')
-            # Убираем лишние повторы в названии
             if ' (' in name and ')' in name:
-                # Убираем дублирование в названии типа "Бананы (3.00 кг) (3.00 кг)"
                 name_parts = name.split(' (')
                 if len(name_parts) > 1:
-                    # Берем только первую часть до первой скобки
                     name = name_parts[0].strip()
 
             safe_name = name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
@@ -3946,15 +3427,12 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
                 items_text += f"• *{safe_name}* × {quantity} шт = *{item_total} ₽*\n"
                 total_items_value += item_total
 
-        # Скидка
         discount_info = ""
         if discount_amount > 0:
             discount_info = f"\n🎁 *Скидка:* -{discount_amount} ₽\n"
 
-        # Итоговая сумма
         final_total = total_with_delivery
 
-        # Формируем сообщение
         message = f"""🏪 *ВАШ ЗАКАЗ НА САМОВЫВОЗ #{order_id}*
 
 {items_text}
@@ -3969,10 +3447,8 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
 
 🎯 *Заказ будет собран в ближайшее время! Мы уведомим вас, когда он будет готов к выдаче.*"""
 
-        # URL для веб-приложения
         webapp_url = f"{WEBAPP_URL.rstrip('/')}/webapp?user_id={telegram_id}"
 
-        # Кнопки для клиента
         keyboard = {
             "inline_keyboard": [
                 [
@@ -3985,7 +3461,6 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
             ]
         }
 
-        # Отправляем
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
@@ -3995,20 +3470,14 @@ def send_pickup_order_notification(telegram_id, order_id, items, pickup_point, o
             'reply_markup': json.dumps(keyboard)
         }
 
-        print(f"   Отправка клиенту {telegram_id}...")
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"   ✅ Уведомление о самовывозе отправлено клиенту {telegram_id}")
             return True
         else:
-            print(f"   ❌ Ошибка отправки клиенту: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления о самовывозе: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 
@@ -4017,7 +3486,6 @@ def send_order_ready_notification(order_id):
     try:
         db = get_db()
 
-        # Получаем информацию о заказе
         order = db.execute('''
                            SELECT o.*,
                                   (o.total_price + COALESCE(o.delivery_cost, 0) -
@@ -4027,7 +3495,6 @@ def send_order_ready_notification(order_id):
                            ''', (order_id,)).fetchone()
 
         if not order:
-            print(f"❌ Заказ #{order_id} не найден")
             db.close()
             return False
 
@@ -4035,11 +3502,9 @@ def send_order_ready_notification(order_id):
         telegram_id = order_data.get('user_id')
 
         if not telegram_id or telegram_id == 0:
-            print(f"❌ У заказа #{order_id} нет telegram_id")
             db.close()
             return False
 
-        # Получаем информацию о пункте выдачи
         pickup_display = order_data.get('pickup_point', '')
         if order_data.get('pickup_point'):
             try:
@@ -4059,16 +3524,14 @@ def send_order_ready_notification(order_id):
                     if len(parts) >= 2:
                         pickup_display = f"{parts[1]} - {parts[2] if len(parts) > 2 else ''}"
             except Exception as e:
-                print(f"⚠️ Ошибка получения информации о пункте выдачи: {e}")
+                pass
 
         db.close()
 
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         if not BOT_TOKEN:
-            print("❌ BOT_TOKEN не установлен")
             return False
 
-        # Формируем сообщение
         message = f"""✅ *ВАШ ЗАКАЗ ГОТОВ К ВЫДАЧЕ!*
 
 📦 *Заказ №{order_id}*
@@ -4086,52 +3549,42 @@ def send_order_ready_notification(order_id):
 
 🎉 *Спасибо за покупку!*"""
 
-        # Отправляем уведомление
         url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
         data = {
             'chat_id': int(telegram_id),
             'text': message,
             'parse_mode': 'Markdown'}
 
-        print(f"📤 Отправка уведомления о готовности заказа #{order_id} клиенту {telegram_id}")
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"✅ Уведомление о готовности отправлено клиенту {telegram_id}")
             return True
         else:
-            print(f"❌ Ошибка отправки уведомления о готовности: {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Ошибка отправки уведомления о готовности: {e}")
-        import traceback
-        traceback.print_exc()
         return False
+
 
 @app.route('/api/admin/orders/<int:order_id>/ready-for-pickup', methods=['POST'])
 def admin_mark_order_ready_for_pickup(order_id):
     """Пометить заказ как готовый к выдаче (самовывоз)"""
     db = get_db()
     try:
-        # Получаем заказ
         order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
         if not order:
             return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
 
         order_dict = dict(order)
 
-        # Проверяем что это самовывоз
         if order_dict.get('delivery_type') != 'pickup':
             return jsonify({'success': False, 'error': 'Это не заказ на самовывоз'}), 400
 
-        # Обновляем статус заказа
         db.execute('UPDATE orders SET status = ? WHERE id = ?',
                    ('ready_for_pickup', order_id))
 
         db.commit()
 
-        # Отправляем уведомление клиенту что заказ готов
         send_order_ready_notification(order_id)
 
         return jsonify({
@@ -4140,7 +3593,6 @@ def admin_mark_order_ready_for_pickup(order_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка пометки заказа как готового: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -4168,23 +3620,21 @@ def get_pickup_points_with_details():
         result = []
         for point in points:
             point_dict = dict(point)
-            # Форматируем для фронтенда
             point_dict['display_name'] = f"{point_dict['name']} - {point_dict['address']}"
             result.append(point_dict)
 
         return jsonify(result)
     except Exception as e:
-        print(f"❌ Ошибка получения точек самовывоза: {e}")
         return jsonify([])
     finally:
         db.close()
+
 
 @app.route('/api/admin/chats', methods=['GET'])
 def api_admin_chats():
     """Получить список активных чатов для администратора"""
     db = get_db()
     try:
-        # Получаем активные чаты с непрочитанными сообщениями
         chats = db.execute('''
                            SELECT ac.*,
                                   o.username                       as customer_name,
@@ -4211,7 +3661,6 @@ def api_admin_chats():
         for chat in chats:
             chat_dict = dict(chat)
 
-            # Форматируем последнее сообщение
             if chat_dict.get('last_message') and len(chat_dict['last_message']) > 50:
                 chat_dict['last_message_short'] = chat_dict['last_message'][:50] + '...'
 
@@ -4223,7 +3672,6 @@ def api_admin_chats():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения чатов администратора: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -4252,7 +3700,6 @@ def api_admin_chat_messages(order_id):
                               ORDER BY cm.created_at ASC
                               ''', (order_id,)).fetchall()
 
-        # Помечаем сообщения как прочитанные
         db.execute('UPDATE chat_messages SET is_read = 1 WHERE order_id = ? AND sender_type = "customer"',
                    (order_id,))
         db.execute('UPDATE active_chats SET unread_admin = 0 WHERE order_id = ?', (order_id,))
@@ -4261,7 +3708,6 @@ def api_admin_chat_messages(order_id):
         messages_list = []
         for msg in messages:
             msg_dict = dict(msg)
-            # Форматируем дату
             if msg_dict.get('created_at'):
                 try:
                     dt = datetime.strptime(msg_dict['created_at'], '%Y-%m-%d %H:%M:%S')
@@ -4279,13 +3725,10 @@ def api_admin_chat_messages(order_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения сообщений чата: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
 
-
-# ========== API ДЛЯ РЕГИСТРАЦИИ КУРЬЕРА В ТЕЛЕГРАМ ==========
 
 @app.route('/api/courier/telegram/by-telegram/<int:telegram_id>', methods=['GET'])
 def api_get_courier_by_telegram(telegram_id):
@@ -4308,10 +3751,10 @@ def api_get_courier_by_telegram(telegram_id):
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения курьера по Telegram ID: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
+
 
 @app.route('/api/admin/chat/send', methods=['POST'])
 def api_admin_send_message():
@@ -4325,20 +3768,17 @@ def api_admin_send_message():
         if not order_id or not message:
             return jsonify({'success': False, 'error': 'Не указаны обязательные поля'}), 400
 
-        # Получаем информацию о заказе
         order = db.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
         if not order:
             return jsonify({'success': False, 'error': 'Заказ не найден'}), 404
 
         order_dict = dict(order)
 
-        # Сохраняем сообщение от администратора
         db.execute('''
                    INSERT INTO chat_messages (order_id, user_id, message, sender_type)
                    VALUES (?, 0, ?, 'admin')
                    ''', (order_id, message))
 
-        # Обновляем счетчик непрочитанных для клиента
         db.execute('''
                    UPDATE active_chats
                    SET last_message_at = CURRENT_TIMESTAMP,
@@ -4348,7 +3788,6 @@ def api_admin_send_message():
 
         db.commit()
 
-        # Отправляем уведомление клиенту
         send_chat_notification_to_telegram(
             order_dict['user_id'],
             order_id,
@@ -4363,7 +3802,6 @@ def api_admin_send_message():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка отправки сообщения администратора: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -4375,7 +3813,6 @@ def get_available_orders():
     try:
         db = get_db()
 
-        # Заказы с доставкой курьером, которые еще не назначены
         available_orders = db.execute('''
                                       SELECT o.id,
                                              o.username,
@@ -4387,16 +3824,16 @@ def get_available_orders():
                                              o.recipient_name,
                                              o.phone_number,
                                              o.created_at,
-                                             o.payment_method,   
-                                             o.cash_received,    
-                                             o.cash_change,    
+                                             o.payment_method,
+                                             o.cash_received,
+                                             o.cash_change,
                                              (o.total_price + COALESCE(o.delivery_cost, 0)) as total_with_delivery
                                       FROM orders o
                                                LEFT JOIN order_assignments a ON o.id = a.order_id
                                       WHERE o.delivery_type = 'courier'
                                         AND o.status = 'pending'
-                                        AND a.id IS NULL                       -- Не назначен
-                                        AND DATE (o.created_at) = DATE ('now') -- Сегодняшние заказы
+                                        AND a.id IS NULL
+                                        AND DATE (o.created_at) = DATE ('now')
                                       ORDER BY o.created_at DESC
                                       ''').fetchall()
 
@@ -4404,13 +3841,11 @@ def get_available_orders():
         for order in available_orders:
             order_dict = dict(order)
 
-            # Парсим JSON поля
             try:
                 order_dict['items_list'] = json.loads(order_dict['items'])
             except:
                 order_dict['items_list'] = []
 
-            # Парсим адрес доставки
             if order_dict.get('delivery_address'):
                 try:
                     order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
@@ -4419,7 +3854,6 @@ def get_available_orders():
             else:
                 order_dict['delivery_address_obj'] = {}
 
-            # Парсим cash_details если есть
             if order_dict.get('cash_details'):
                 try:
                     order_dict['cash_details_obj'] = json.loads(order_dict['cash_details'])
@@ -4432,9 +3866,6 @@ def get_available_orders():
         return jsonify({'success': True, 'available_orders': processed_orders})
 
     except Exception as e:
-        print(f"❌ Ошибка получения доступных заказов: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -4451,33 +3882,26 @@ def courier_take_order():
 
         db = get_db()
 
-        # Проверяем, не взят ли уже заказ
         existing = db.execute('SELECT id FROM order_assignments WHERE order_id = ?', (order_id,)).fetchone()
         if existing:
             db.close()
             return jsonify({'success': False, 'error': 'Заказ уже взят другим курьером'}), 400
 
-        # Назначаем заказ курьеру
         db.execute('''
                    INSERT INTO order_assignments (order_id, courier_id, status, assigned_at)
                    VALUES (?, ?, 'assigned', CURRENT_TIMESTAMP)
                    ''', (order_id, courier_id))
 
-        # Обновляем статус заказа
         db.execute('UPDATE orders SET status = ? WHERE id = ?', ('processing', order_id))
 
         db.commit()
         db.close()
 
-        print(f"✅ Заказ #{order_id} взят курьером #{courier_id}")
-
-        # Отправляем уведомление покупателю
         send_order_notification(order_id, 'assigned', courier_id)
 
         return jsonify({'success': True, 'message': 'Заказ успешно взят в доставку'})
 
     except Exception as e:
-        print(f"❌ Ошибка взятия заказа: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -4545,19 +3969,18 @@ def get_courier_orders():
 
         db = get_db()
 
-        # Активные заказы - ДОБАВИМ ВСЕ НЕОБХОДИМЫЕ ПОЛЯ
         active_orders = db.execute('''
                                    SELECT o.id,
                                           o.user_id,
                                           o.username,
                                           o.items,
                                           o.total_price,
-                                          o.delivery_cost,  
+                                          o.delivery_cost,
                                           o.status as order_status,
                                           o.delivery_type,
                                           o.delivery_address,
                                           o.pickup_point,
-                                          o.payment_method, 
+                                          o.payment_method,
                                           o.recipient_name,
                                           o.phone_number,
                                           o.created_at,
@@ -4567,9 +3990,9 @@ def get_courier_orders():
                                           a.delivered_at,
                                           a.photo_proof,
                                           a.delivery_notes,
-                                          o.cash_received, 
-                                          o.cash_change,   
-                                          o.cash_details   
+                                          o.cash_received,
+                                          o.cash_change,
+                                          o.cash_details
                                    FROM orders o
                                             JOIN order_assignments a ON o.id = a.order_id
                                    WHERE a.courier_id = ?
@@ -4578,19 +4001,18 @@ def get_courier_orders():
                                    ORDER BY a.assigned_at DESC
                                    ''', (courier_id,)).fetchall()
 
-        # Завершенные заказы
         completed_orders = db.execute('''
                                       SELECT o.id,
                                              o.user_id,
                                              o.username,
                                              o.items,
                                              o.total_price,
-                                             o.delivery_cost,  
+                                             o.delivery_cost,
                                              o.status as order_status,
                                              o.delivery_type,
                                              o.delivery_address,
                                              o.pickup_point,
-                                             o.payment_method,  
+                                             o.payment_method,
                                              o.recipient_name,
                                              o.phone_number,
                                              o.created_at,
@@ -4599,9 +4021,9 @@ def get_courier_orders():
                                              a.delivered_at,
                                              a.photo_proof,
                                              a.delivery_notes,
-                                             o.cash_received, 
-                                             o.cash_change,   
-                                             o.cash_details 
+                                             o.cash_received,
+                                             o.cash_change,
+                                             o.cash_details
                                       FROM orders o
                                                JOIN order_assignments a ON o.id = a.order_id
                                       WHERE a.courier_id = ?
@@ -4609,26 +4031,25 @@ def get_courier_orders():
                                       ORDER BY a.delivered_at DESC LIMIT 50
                                       ''', (courier_id,)).fetchall()
 
-        # Заказы на сегодня
         today_orders = db.execute('''
                                   SELECT o.id,
                                          o.user_id,
                                          o.username,
                                          o.items,
                                          o.total_price,
-                                         o.delivery_cost,  
+                                         o.delivery_cost,
                                          o.status as order_status,
                                          o.delivery_type,
                                          o.delivery_address,
                                          o.pickup_point,
-                                         o.payment_method, 
+                                         o.payment_method,
                                          o.recipient_name,
                                          o.phone_number,
                                          o.created_at,
                                          a.status as assignment_status,
-                                         o.cash_received,  
-                                         o.cash_change,   
-                                         o.cash_details   
+                                         o.cash_received,
+                                         o.cash_change,
+                                         o.cash_details
                                   FROM orders o
                                            JOIN order_assignments a ON o.id = a.order_id
                                   WHERE a.courier_id = ?
@@ -4638,18 +4059,15 @@ def get_courier_orders():
 
         db.close()
 
-        # Функция для преобразования заказов
         def process_orders(orders):
             processed = []
             for order in orders:
                 order_dict = dict(order)
-                # Парсим JSON поля
                 try:
                     order_dict['items_list'] = json.loads(order_dict['items'])
                 except:
                     order_dict['items_list'] = []
 
-                # Парсим адрес доставки
                 if order_dict.get('delivery_address'):
                     try:
                         order_dict['delivery_address_obj'] = json.loads(order_dict['delivery_address'])
@@ -4658,7 +4076,6 @@ def get_courier_orders():
                 else:
                     order_dict['delivery_address_obj'] = {}
 
-                # Парсим cash_details если есть
                 if order_dict.get('cash_details'):
                     try:
                         order_dict['cash_details_obj'] = json.loads(order_dict['cash_details'])
@@ -4676,9 +4093,6 @@ def get_courier_orders():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка получения заказов курьера: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -4694,10 +4108,7 @@ def api_update_order_status():
 
         conn = get_db_connection()
 
-        print(f"🔄 Обновление статуса заказа #{order_id} на {status}")
-
         if status == 'delivered':
-            # Обновляем assignment
             conn.execute('''
                          UPDATE order_assignments
                          SET status       = 'delivered',
@@ -4707,18 +4118,15 @@ def api_update_order_status():
                            AND courier_id = ?
                          ''', (photo_data, order_id, courier_id))
 
-            # Обновляем статус заказа
             conn.execute('UPDATE orders SET status = ? WHERE id = ?',
                          ('delivered', order_id))
 
             conn.commit()
             conn.close()
 
-            # Отправляем уведомление с фото
             send_order_notification(order_id, 'delivered', courier_id, photo_data)
 
         elif status == 'picked_up':
-            # Обновляем только статус
             conn.execute('''
                          UPDATE order_assignments
                          SET status           = 'picked_up',
@@ -4727,18 +4135,15 @@ def api_update_order_status():
                            AND courier_id = ?
                          ''', (order_id, courier_id))
 
-            # Обновляем статус заказа
             conn.execute('UPDATE orders SET status = ? WHERE id = ?',
                          ('picked_up', order_id))
 
             conn.commit()
             conn.close()
 
-            # Отправляем уведомление о том, что курьер забрал заказ
             send_order_notification(order_id, 'picked_up', courier_id)
 
         elif status == 'delivering':
-            # Статус "в пути"
             conn.execute('''
                          UPDATE order_assignments
                          SET status = 'delivering'
@@ -4746,18 +4151,15 @@ def api_update_order_status():
                            AND courier_id = ?
                          ''', (order_id, courier_id))
 
-            # Обновляем статус заказа
             conn.execute('UPDATE orders SET status = ? WHERE id = ?',
                          ('delivering', order_id))
 
             conn.commit()
             conn.close()
 
-            # Отправляем уведомление о том, что заказ в пути
             send_order_notification(order_id, 'delivering', courier_id)
 
         else:
-            # Простое обновление статуса
             conn.execute('''
                          UPDATE order_assignments
                          SET status = ?
@@ -4765,7 +4167,6 @@ def api_update_order_status():
                            AND courier_id = ?
                          ''', (status, order_id, courier_id))
 
-            # Обновляем статус заказа
             conn.execute('UPDATE orders SET status = ? WHERE id = ?',
                          (status, order_id))
 
@@ -4775,10 +4176,8 @@ def api_update_order_status():
         return jsonify({'success': True, 'message': f'Статус обновлен на {status}'})
 
     except Exception as e:
-        print(f"❌ Ошибка обновления статуса: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # ========== НОВЫЕ API ДЛЯ АДМИНКИ - ДЕТАЛИЗАЦИЯ ЗАКАЗОВ ==========
 @app.route('/api/admin/orders/<int:order_id>', methods=['GET'])
@@ -4788,8 +4187,7 @@ def admin_get_order_details(order_id):
     db = get_db()
     try:
         order = db.execute('''
-                           SELECT o.*,
-                                  pc.code as promo_code
+                           SELECT o.*, pc.code as promo_code
                            FROM orders o
                                     LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
                            WHERE o.id = ?
@@ -4801,7 +4199,6 @@ def admin_get_order_details(order_id):
 
         order_dict = dict(order)
 
-        # Парсим JSON поля
         if order_dict.get('items'):
             try:
                 order_dict['items'] = json.loads(order_dict['items'])
@@ -4814,7 +4211,6 @@ def admin_get_order_details(order_id):
             except:
                 order_dict['delivery_address'] = {}
 
-        # Добавляем поле updated_at для совместимости
         if 'updated_at' not in order_dict:
             order_dict['updated_at'] = order_dict['created_at']
 
@@ -4824,12 +4220,10 @@ def admin_get_order_details(order_id):
     except Exception as e:
         if db:
             db.close()
-        print(f"❌ Ошибка получения деталей заказа #{order_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/admin/orders/<int:order_id>/status', methods=['PUT'])
-
 def admin_update_order_status(order_id):
     """Изменить статус заказа в админке - БЕЗ УВЕДОМЛЕНИЙ"""
     db = get_db()
@@ -4841,20 +4235,16 @@ def admin_update_order_status(order_id):
             db.close()
             return jsonify({'error': 'Некорректный статус'}), 400
 
-        # Обновляем статус заказа (только обновляем, без уведомлений)
         db.execute('UPDATE orders SET status = ? WHERE id = ?',
                    (new_status, order_id))
         db.commit()
         db.close()
-
-        print(f"✅ Статус заказа #{order_id} изменен на '{new_status}' (без уведомления клиенту)")
 
         return jsonify({'success': True, 'status': new_status})
 
     except Exception as e:
         if db:
             db.close()
-        print(f"❌ Ошибка обновления статуса заказа #{order_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -4863,7 +4253,6 @@ def admin_cancel_order(order_id):
     """Отменить заказ в админке - БЕЗ УВЕДОМЛЕНИЙ"""
     db = get_db()
     try:
-        # Получаем текущий статус
         order = db.execute('SELECT status FROM orders WHERE id = ?', (order_id,)).fetchone()
         if not order:
             db.close()
@@ -4873,20 +4262,16 @@ def admin_cancel_order(order_id):
             db.close()
             return jsonify({'error': 'Нельзя отменить завершенный заказ'}), 400
 
-        # Обновляем статус (только отменяем, без уведомлений)
         db.execute('UPDATE orders SET status = "cancelled" WHERE id = ?',
                    (order_id,))
         db.commit()
         db.close()
-
-        print(f"✅ Заказ #{order_id} отменен (без уведомления клиенту)")
 
         return jsonify({'success': True})
 
     except Exception as e:
         if db:
             db.close()
-        print(f"❌ Ошибка отмены заказа #{order_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -4896,27 +4281,28 @@ def get_order_details(order_id):
     try:
         db = get_db()
         order = db.execute('''
-            SELECT o.*,
-                   a.status    as assignment_status,
-                   a.assigned_at,
-                   a.delivery_started,
-                   a.delivered_at,
-                   a.photo_proof,
-                   a.delivery_notes,
-                   c.full_name as courier_name,
-                   c.phone     as courier_phone,
-                   o.cash_received,
-                   o.cash_change,      
-                   o.cash_details,
-                   o.discount_amount,
-                   pc.code as promo_code,
-                   (o.total_price + COALESCE(o.delivery_cost, 0) - COALESCE(o.discount_amount, 0)) as total_with_discount
-            FROM orders o
-                LEFT JOIN order_assignments a ON o.id = a.order_id
-                LEFT JOIN couriers c ON a.courier_id = c.id
-                LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
-            WHERE o.id = ?
-        ''', (order_id,)).fetchone()
+                           SELECT o.*,
+                                  a.status                                                                        as assignment_status,
+                                  a.assigned_at,
+                                  a.delivery_started,
+                                  a.delivered_at,
+                                  a.photo_proof,
+                                  a.delivery_notes,
+                                  c.full_name                                                                     as courier_name,
+                                  c.phone                                                                         as courier_phone,
+                                  o.cash_received,
+                                  o.cash_change,
+                                  o.cash_details,
+                                  o.discount_amount,
+                                  pc.code                                                                         as promo_code,
+                                  (o.total_price + COALESCE(o.delivery_cost, 0) -
+                                   COALESCE(o.discount_amount, 0))                                                as total_with_discount
+                           FROM orders o
+                                    LEFT JOIN order_assignments a ON o.id = a.order_id
+                                    LEFT JOIN couriers c ON a.courier_id = c.id
+                                    LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
+                           WHERE o.id = ?
+                           ''', (order_id,)).fetchone()
 
         if not order:
             db.close()
@@ -4924,7 +4310,6 @@ def get_order_details(order_id):
 
         order_dict = dict(order)
 
-        # Парсим JSON поля
         try:
             order_dict['items_list'] = json.loads(order_dict['items'])
         except:
@@ -4938,7 +4323,6 @@ def get_order_details(order_id):
         else:
             order_dict['delivery_address_obj'] = {}
 
-        # Парсим cash_details если есть
         if order_dict.get('cash_details'):
             try:
                 order_dict['cash_details_obj'] = json.loads(order_dict['cash_details'])
@@ -4949,9 +4333,8 @@ def get_order_details(order_id):
         return jsonify({'success': True, 'order': order_dict})
 
     except Exception as e:
-        print(f"❌ Ошибка получения деталей заказа: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-    
+
 
 @app.route('/api/courier/profile', methods=['GET', 'PUT'])
 def courier_profile():
@@ -5037,13 +4420,11 @@ def assign_courier():
 
         db = get_db()
 
-        # Проверяем, не назначен ли уже курьер
         existing = db.execute('SELECT courier_id FROM order_assignments WHERE order_id = ?', (order_id,)).fetchone()
         if existing:
             db.close()
             return jsonify({'success': False, 'error': '1уже назначен'}), 400
 
-        # Получаем случайного активного курьера
         courier = db.execute('''
                              SELECT id, full_name, phone
                              FROM couriers
@@ -5055,7 +4436,6 @@ def assign_courier():
             db.close()
             return jsonify({'success': False, 'error': 'Нет доступных курьеров'}), 404
 
-        # Назначаем заказ
         db.execute('''
                    INSERT INTO order_assignments (order_id, courier_id, status)
                    VALUES (?, ?, 'assigned')
@@ -5063,8 +4443,6 @@ def assign_courier():
 
         db.commit()
         db.close()
-
-        print(f"✅ Заказ #{order_id} назначен курьеру #{courier['id']} ({courier['full_name']})")
 
         return jsonify({
             'success': True,
@@ -5074,7 +4452,6 @@ def assign_courier():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка назначения курьера: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -5132,7 +4509,6 @@ def get_discounts():
         return jsonify(result)
     except Exception as e:
         db.close()
-        print(f"❌ Ошибка получения скидок: {e}")
         return jsonify([])
 
 
@@ -5142,7 +4518,6 @@ def admin_discounts():
     db = get_db()
     try:
         if request.method == 'GET':
-            # Получить все скидки
             discounts = db.execute('''
                                    SELECT d.*,
                                           (SELECT COUNT(*) FROM orders WHERE discount_id = d.id) as used_count
@@ -5153,10 +4528,8 @@ def admin_discounts():
             return jsonify([dict(discount) for discount in discounts])
 
         elif request.method == 'POST':
-            # Создать новую скидку
             data = request.json
 
-            # Валидация
             if not data.get('name'):
                 return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
 
@@ -5169,7 +4542,6 @@ def admin_discounts():
             if not data.get('apply_to'):
                 return jsonify({'success': False, 'error': 'Выберите область применения'}), 400
 
-            # Вставляем скидку
             cursor = db.execute('''
                                 INSERT INTO discounts (name, discount_type, value, min_order_amount,
                                                        apply_to, target_category, target_product_id,
@@ -5205,7 +4577,6 @@ def admin_discount_detail(id):
     db = get_db()
     try:
         if request.method == 'GET':
-            # Получить скидку по ID
             discount = db.execute('SELECT * FROM discounts WHERE id = ?', (id,)).fetchone()
 
             if not discount:
@@ -5213,22 +4584,18 @@ def admin_discount_detail(id):
 
             discount_dict = dict(discount)
 
-            # Получаем использования скидки
             used_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
             discount_dict['used_count'] = used_count
 
             return jsonify(discount_dict)
 
         elif request.method == 'PUT':
-            # Обновить скидку
             data = request.json
 
-            # Проверяем существование скидки
             discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
             if not discount:
                 return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
 
-            # Валидация
             if not data.get('name'):
                 return jsonify({'success': False, 'error': 'Введите название скидки'}), 400
 
@@ -5241,42 +4608,46 @@ def admin_discount_detail(id):
             if not data.get('apply_to'):
                 return jsonify({'success': False, 'error': 'Выберите область применения'}), 400
 
-            # Обновляем скидку
             db.execute('''
-                UPDATE discounts
-                SET name = ?, discount_type = ?, value = ?, min_order_amount = ?,
-                    apply_to = ?, target_category = ?, target_product_id = ?,
-                    start_date = ?, end_date = ?, is_active = ?
-                WHERE id = ?
-            ''', (
-                data.get('name'),
-                data.get('discount_type'),
-                data.get('value', 0),
-                data.get('min_order_amount', 0),
-                data.get('apply_to', 'all'),
-                data.get('target_category'),
-                data.get('target_product_id'),
-                data.get('start_date'),
-                data.get('end_date'),
-                data.get('is_active', True),
-                id
-            ))
+                       UPDATE discounts
+                       SET name              = ?,
+                           discount_type     = ?,
+                           value             = ?,
+                           min_order_amount  = ?,
+                           apply_to          = ?,
+                           target_category   = ?,
+                           target_product_id = ?,
+                           start_date        = ?,
+                           end_date          = ?,
+                           is_active         = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name'),
+                           data.get('discount_type'),
+                           data.get('value', 0),
+                           data.get('min_order_amount', 0),
+                           data.get('apply_to', 'all'),
+                           data.get('target_category'),
+                           data.get('target_product_id'),
+                           data.get('start_date'),
+                           data.get('end_date'),
+                           data.get('is_active', True),
+                           id
+                       ))
 
             db.commit()
             return jsonify({'success': True})
 
         elif request.method == 'DELETE':
-            # Удалить скидку
             discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
             if not discount:
                 return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
 
-            # Проверяем, используется ли скидка в заказах
             usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE discount_id = ?', (id,)).fetchone()[0]
             if usage_count > 0:
-                return jsonify({'success': False, 'error': 'Нельзя удалить скидку, которая уже использовалась в заказах'}), 400
+                return jsonify(
+                    {'success': False, 'error': 'Нельзя удалить скидку, которая уже использовалась в заказах'}), 400
 
-            # Удаляем скидку
             db.execute('DELETE FROM discounts WHERE id = ?', (id,))
             db.commit()
 
@@ -5286,6 +4657,7 @@ def admin_discount_detail(id):
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
+
 
 @app.route('/api/admin/discounts/<int:id>/status', methods=['PUT'])
 def admin_discount_status(id):
@@ -5298,12 +4670,10 @@ def admin_discount_status(id):
         if is_active is None:
             return jsonify({'success': False, 'error': 'Не указан статус'}), 400
 
-        # Проверяем существование скидки
         discount = db.execute('SELECT id FROM discounts WHERE id = ?', (id,)).fetchone()
         if not discount:
             return jsonify({'success': False, 'error': 'Скидка не найдена'}), 404
 
-        # Обновляем статус
         db.execute('UPDATE discounts SET is_active = ? WHERE id = ?', (is_active, id))
         db.commit()
 
@@ -5326,11 +4696,9 @@ def admin_update_product():
         if not product_id:
             return jsonify({'success': False, 'error': 'Не указан ID товара'}), 400
 
-        # Проверяем тип товара
         product_type = data.get('product_type', 'piece')
 
         if product_type == 'weight':
-            # Для весовых товаров
             db.execute('''
                        UPDATE products
                        SET name           = ?,
@@ -5363,7 +4731,6 @@ def admin_update_product():
                            data.get('stock_weight', 0)
                        ))
         else:
-            # Для штучных товаров
             db.execute('''
                        UPDATE products
                        SET name         = ?,
@@ -5397,7 +4764,7 @@ def admin_update_product():
 
 @app.route('/api/courier/complete-delivery', methods=['POST'])
 def api_complete_delivery():
-    """Курьер завершает доставку - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Курьер завершает доставку"""
     try:
         data = request.get_json()
         order_id = data.get('order_id')
@@ -5405,27 +4772,19 @@ def api_complete_delivery():
         photo_data = data.get('photo_data')
         delivery_notes = data.get('delivery_notes')
 
-        print(f"🚚 Завершение доставки заказа #{order_id}")
-        print(f"   📷 Фото предоставлено: {'Да' if photo_data else 'Нет'}")
-
         if not order_id or not courier_id:
             return jsonify({'success': False, 'error': 'Не указан ID заказа или курьера'}), 400
 
-        # Сначала сохраняем фото если есть
         photo_url = None
         if photo_data:
             try:
-                # Сохраняем фото из base64
                 import base64
 
                 if photo_data.startswith('data:image'):
-                    # Убираем префикс
                     photo_data = photo_data.split(',')[1]
 
-                # Декодируем base64
                 photo_bytes = base64.b64decode(photo_data)
 
-                # Сохраняем файл
                 filename = f"delivery_{order_id}_{uuid.uuid4().hex[:8]}.jpg"
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
@@ -5433,23 +4792,18 @@ def api_complete_delivery():
                     f.write(photo_bytes)
 
                 photo_url = f'/static/uploads/{filename}'
-                print(f"   ✅ Фото сохранено: {photo_url}")
 
             except Exception as e:
-                print(f"   ⚠️ Ошибка сохранения фото: {e}")
                 photo_url = None
 
-        # Обновляем заказ в базе данных
         conn = get_db_connection()
 
-        # Обновляем основной статус заказа
         conn.execute('''
                      UPDATE orders
                      SET status = 'delivered'
                      WHERE id = ?
                      ''', (order_id,))
 
-        # Обновляем информацию о доставке
         conn.execute('''
                      UPDATE order_assignments
                      SET status         = 'delivered',
@@ -5460,14 +4814,12 @@ def api_complete_delivery():
                        AND courier_id = ?
                      ''', (photo_url, delivery_notes, order_id, courier_id))
 
-        # Получаем информацию о курьере
         courier_info = conn.execute('''
                                     SELECT full_name, phone
                                     FROM couriers
                                     WHERE id = ?
                                     ''', (courier_id,)).fetchone()
 
-        # Получаем информацию о заказе для уведомления
         order_info = conn.execute('''
                                   SELECT user_id
                                   FROM orders
@@ -5477,16 +4829,10 @@ def api_complete_delivery():
         conn.commit()
         conn.close()
 
-        print(f"✅ Статус заказа #{order_id} обновлен на 'delivered'")
-
-        # Отправляем уведомление клиенту
         if order_info and order_info['user_id']:
             telegram_id = order_info['user_id']
 
-            print(f"📤 Отправка уведомления клиенту {telegram_id}...")
-
             if photo_url:
-                # Отправляем с фото
                 success = send_order_delivered_with_photo_notification(
                     telegram_id=telegram_id,
                     order_id=order_id,
@@ -5495,12 +4841,17 @@ def api_complete_delivery():
                     photo_url=photo_url
                 )
 
-                if success:
-                    print(f"   ✅ Уведомление с фото отправлено клиенту {telegram_id}")
-                else:
-                    print(f"   ⚠️ Не удалось отправить уведомление с фото")
+                if not success:
+                    send_order_details_notification(
+                        telegram_id=telegram_id,
+                        order_id=order_id,
+                        items=[],
+                        status='delivered',
+                        delivery_type='courier',
+                        courier_name=courier_info['full_name'] if courier_info else 'Курьер',
+                        courier_phone=courier_info['phone'] if courier_info else 'Не указан'
+                    )
             else:
-                # Отправляем без фото
                 send_order_details_notification(
                     telegram_id=telegram_id,
                     order_id=order_id,
@@ -5510,7 +4861,6 @@ def api_complete_delivery():
                     courier_name=courier_info['full_name'] if courier_info else 'Курьер',
                     courier_phone=courier_info['phone'] if courier_info else 'Не указан'
                 )
-                print(f"   ✅ Уведомление без фото отправлено клиенту {telegram_id}")
 
         return jsonify({
             'success': True,
@@ -5519,10 +4869,8 @@ def api_complete_delivery():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка завершения доставки: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/products/weight', methods=['POST'])
 def create_weight_product():
@@ -5540,20 +4888,20 @@ def create_weight_product():
                                                   min_weight, max_weight, step_weight, stock, stock_weight)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
-            data.get('name', ''),
-            data.get('description', ''),
-            0,  # Цена будет рассчитываться динамически
-            data.get('image_url', ''),
-            data.get('category', ''),
-                                'weight',  # Тип товара
-            data.get('unit', 'кг'),
-            data.get('weight_unit', 'кг'),
-            data.get('price_per_kg', 0),
-            data.get('min_weight', 0.1),
-            data.get('max_weight', 5.0),
-            data.get('step_weight', 0.1),
-            data.get('stock', 0),
-            data.get('stock_weight', 0)
+                                data.get('name', ''),
+                                data.get('description', ''),
+                                0,
+                                data.get('image_url', ''),
+                                data.get('category', ''),
+                                'weight',
+                                data.get('unit', 'кг'),
+                                data.get('weight_unit', 'кг'),
+                                data.get('price_per_kg', 0),
+                                data.get('min_weight', 0.1),
+                                data.get('max_weight', 5.0),
+                                data.get('step_weight', 0.1),
+                                data.get('stock', 0),
+                                data.get('stock_weight', 0)
                             ))
 
         product_id = cursor.lastrowid
@@ -5613,6 +4961,7 @@ def update_weight_product(product_id):
     finally:
         db.close()
 
+
 @app.route('/api/admin/products/create', methods=['POST'])
 def admin_create_product():
     """Создать товар с поддержкой весовых товаров"""
@@ -5620,14 +4969,12 @@ def admin_create_product():
     try:
         data = request.json
 
-        # Проверяем обязательные поля
         if not data.get('name') or data.get('price') is None:
             return jsonify({'success': False, 'error': 'Заполните обязательные поля'}), 400
 
         product_type = data.get('product_type', 'piece')
 
         if product_type == 'weight':
-            # Для весовых товаров
             cursor = db.execute('''
                                 INSERT INTO products (name, description, price, image_url, category,
                                                       product_type, unit, weight_unit, price_per_unit,
@@ -5649,7 +4996,6 @@ def admin_create_product():
                                     data.get('stock_weight', 0)
                                 ))
         else:
-            # Для штучных товаров
             cursor = db.execute('''
                                 INSERT INTO products (name, description, price, image_url, category,
                                                       product_type, unit, stock)
@@ -5681,16 +5027,13 @@ def update_order(order_id):
     try:
         data = request.json
 
-        # Валидация данных
         required_fields = ['status', 'total', 'recipient_name']
         for field in required_fields:
             if field not in data:
                 return jsonify({'success': False, 'error': f'Поле {field} обязательно'}), 400
 
-        # Обновляем заказ в базе данных
         db.update_order(order_id, data)
 
-        # Отправляем уведомление в Telegram если статус изменился
         if 'status' in data:
             order = db.get_order(order_id)
             if order and order.user_id:
@@ -5730,36 +5073,32 @@ def create_promo_code():
             if field not in data:
                 return jsonify({"success": False, "error": f"Отсутствует поле: {field}"}), 400
 
-        # Генерация кода, если не предоставлен
         code = data['code'].upper().strip()
         discount_type = data['discount_type']
         value = float(data['value'])
 
-        # Проверка существования кода
         existing = db.execute('SELECT id FROM promo_codes WHERE code = ?', (code,)).fetchone()
         if existing:
             return jsonify({"success": False, "error": "Такой промокод уже существует"}), 400
 
-        # Создание промокода
         cursor = db.execute('''
-            INSERT INTO promo_codes (
-                code, discount_type, value, usage_limit, used_count,
-                min_order_amount, start_date, end_date, is_active,
-                one_per_customer, exclude_sale_items, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (
-            code,
-            discount_type,
-            value,
-            data.get('usage_limit'),
-            data.get('used_count', 0),
-            data.get('min_order_amount', 0),
-            data.get('start_date'),
-            data.get('end_date'),
-            data.get('is_active', True),
-            data.get('one_per_customer', False),
-            data.get('exclude_sale_items', False)
-        ))
+                            INSERT INTO promo_codes (code, discount_type, value, usage_limit, used_count,
+                                                     min_order_amount, start_date, end_date, is_active,
+                                                     one_per_customer, exclude_sale_items, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                            ''', (
+                                code,
+                                discount_type,
+                                value,
+                                data.get('usage_limit'),
+                                data.get('used_count', 0),
+                                data.get('min_order_amount', 0),
+                                data.get('start_date'),
+                                data.get('end_date'),
+                                data.get('is_active', True),
+                                data.get('one_per_customer', False),
+                                data.get('exclude_sale_items', False)
+                            ))
 
         promo_id = cursor.lastrowid
         db.commit()
@@ -5771,22 +5110,20 @@ def create_promo_code():
         }), 201
 
     except Exception as e:
-        print(f"❌ Ошибка создания промокода: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         db.close()
+
 
 @app.route('/api/admin/promo-codes/<int:promo_id>', methods=['DELETE'])
 def delete_promo_code(promo_id):
     """Удаление промокода"""
     db = get_db()
     try:
-        # Проверяем существование промокода
         promo = db.execute('SELECT id FROM promo_codes WHERE id = ?', (promo_id,)).fetchone()
         if not promo:
             return jsonify({"success": False, "error": "Промокод не найден"}), 404
 
-        # Проверяем, используется ли промокод в заказах
         usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE promo_code_id = ?', (promo_id,)).fetchone()[0]
         if usage_count > 0:
             return jsonify({
@@ -5794,17 +5131,16 @@ def delete_promo_code(promo_id):
                 "error": "Нельзя удалить промокод, который уже использовался в заказах"
             }), 400
 
-        # Удаляем промокод
         db.execute('DELETE FROM promo_codes WHERE id = ?', (promo_id,))
         db.commit()
 
         return jsonify({"success": True, "message": "Промокод удален"})
 
     except Exception as e:
-        print(f"❌ Ошибка удаления промокода: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         db.close()
+
 
 @app.route('/api/admin/promo-codes', methods=['GET'])
 def get_promo_codes_admin():
@@ -5824,7 +5160,6 @@ def get_promo_codes_admin():
         result = []
         for promo in promo_codes:
             promo_dict = dict(promo)
-            # Преобразуем типы данных
             if promo_dict.get('value'):
                 promo_dict['value'] = float(promo_dict['value'])
             if promo_dict.get('min_order_amount'):
@@ -5841,9 +5176,6 @@ def get_promo_codes_admin():
 
     except Exception as e:
         db.close()
-        print(f"❌ Ошибка получения промокодов: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
@@ -5853,7 +5185,6 @@ def admin_categories_tree():
     db = get_db()
     try:
         if request.method == 'GET':
-            # Получить дерево категорий
             categories = db.execute('''
                                     SELECT pc.*, d.name as discount_name
                                     FROM product_categories pc
@@ -5861,12 +5192,12 @@ def admin_categories_tree():
                                     ORDER BY pc.sort_order, pc.name
                                     ''').fetchall()
 
-            # Строим дерево
             categories_dict = {}
             root_categories = []
 
             for cat in categories:
                 cat_dict = dict(cat)
+
                 cat_dict['children'] = []
                 categories_dict[cat_dict['id']] = cat_dict
 
@@ -5880,7 +5211,6 @@ def admin_categories_tree():
             return jsonify(root_categories)
 
         elif request.method == 'POST':
-            # Создать категорию
             data = request.json
 
             if not data.get('name'):
@@ -5900,7 +5230,6 @@ def admin_categories_tree():
             return jsonify({'success': True, 'id': cursor.lastrowid})
 
         elif request.method == 'PUT':
-            # Обновить категорию
             category_id = request.args.get('id')
             data = request.json
 
@@ -5926,13 +5255,11 @@ def admin_categories_tree():
             return jsonify({'success': True})
 
         elif request.method == 'DELETE':
-            # Удалить категорию
             category_id = request.args.get('id')
 
             if not category_id:
                 return jsonify({'success': False, 'error': 'Не указан ID категории'}), 400
 
-            # Проверяем, есть ли товары в этой категории
             products_count = db.execute(
                 'SELECT COUNT(*) FROM products WHERE category = (SELECT name FROM product_categories WHERE id = ?)',
                 (category_id,)
@@ -5941,7 +5268,6 @@ def admin_categories_tree():
             if products_count > 0:
                 return jsonify({'success': False, 'error': 'Нельзя удалить категорию с товарами'}), 400
 
-            # Проверяем, есть ли подкатегории
             children_count = db.execute(
                 'SELECT COUNT(*) FROM product_categories WHERE parent_id = ?',
                 (category_id,)
@@ -5959,7 +5285,6 @@ def admin_categories_tree():
     finally:
         db.close()
 
-
 @app.route('/api/check-discount', methods=['POST'])
 def check_discount():
     """Проверить скидки для товаров в корзине"""
@@ -5972,7 +5297,6 @@ def check_discount():
 
         db = get_db()
 
-        # Получаем все активные скидки
         discounts = db.execute('''
                                SELECT d.*, da.product_id, da.category, da.apply_to_all
                                FROM discounts d
@@ -5982,7 +5306,6 @@ def check_discount():
                                  AND (d.end_date IS NULL OR d.end_date >= CURRENT_TIMESTAMP)
                                ''').fetchall()
 
-        # Применяем скидки к товарам
         item_discounts = []
         total_discount = 0
 
@@ -5991,13 +5314,11 @@ def check_discount():
             quantity = item.get('quantity', 1)
             price = item.get('price', 0)
 
-            # Ищем скидки для этого товара
             item_discount = 0
 
             for discount in discounts:
                 discount_dict = dict(discount)
 
-                # Проверяем применение скидки
                 applies = False
 
                 if discount_dict['apply_to_all']:
@@ -6005,17 +5326,14 @@ def check_discount():
                 elif discount_dict['product_id'] and discount_dict['product_id'] == product_id:
                     applies = True
                 elif discount_dict['category']:
-                    # Получаем категорию товара
                     product = db.execute('SELECT category FROM products WHERE id = ?', (product_id,)).fetchone()
                     if product and product['category'] == discount_dict['category']:
                         applies = True
 
                 if applies:
-                    # Рассчитываем скидку
                     discount_value = 0
                     if discount_dict['discount_type'] == 'percentage':
                         discount_value = price * quantity * (discount_dict['value'] / 100)
-                        # Проверяем максимальную скидку
                         if discount_dict['max_discount']:
                             discount_value = min(discount_value, discount_dict['max_discount'])
                     elif discount_dict['discount_type'] == 'fixed':
@@ -6038,7 +5356,6 @@ def check_discount():
         })
 
     except Exception as e:
-        print(f"Ошибка проверки скидок: {e}")
         return jsonify({'discounts': [], 'total_discount': 0})
 
 
@@ -6048,7 +5365,6 @@ def check_promo_code():
     db = None
     try:
         data = request.json
-        print(f"🎟️ Проверка промокода: {data}")
 
         if not data:
             return jsonify({'success': False, 'error': 'Нет данных'}), 400
@@ -6060,7 +5376,6 @@ def check_promo_code():
 
         db = get_db()
 
-        # Получаем промокод
         promo = db.execute('''
                            SELECT *
                            FROM promo_codes
@@ -6072,9 +5387,7 @@ def check_promo_code():
             return jsonify({'success': False, 'error': 'Промокод не найден'}), 404
 
         promo_dict = dict(promo)
-        print(f"✅ Найден промокод: {promo_dict}")
 
-        # Проверяем срок действия
         now = datetime.now()
         if promo_dict.get('end_date'):
             try:
@@ -6082,22 +5395,19 @@ def check_promo_code():
                 if end_date < now:
                     return jsonify({'success': False, 'error': 'Срок действия промокода истек'}), 400
             except Exception as e:
-                print(f"⚠️ Ошибка парсинга даты: {e}")
+                pass
 
-        # Проверяем лимит использований
         if promo_dict.get('usage_limit') and promo_dict.get('used_count', 0) >= promo_dict['usage_limit']:
             return jsonify({'success': False, 'error': 'Промокод закончился'}), 400
 
-        # Проверяем дату начала
         if promo_dict.get('start_date'):
             try:
                 start_date = datetime.strptime(promo_dict['start_date'], '%Y-%m-%d %H:%M:%S')
                 if start_date > now:
                     return jsonify({'success': False, 'error': 'Промокод еще не активен'}), 400
             except Exception as e:
-                print(f"⚠️ Ошибка парсинга даты начала: {e}")
+                pass
 
-        # Конвертируем типы данных
         promo_dict['value'] = float(promo_dict.get('value', 0)) if promo_dict.get('value') else 0
         promo_dict['min_order_amount'] = float(promo_dict.get('min_order_amount', 0)) if promo_dict.get(
             'min_order_amount') else 0
@@ -6110,9 +5420,6 @@ def check_promo_code():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка проверки промокода: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
     finally:
         if db:
@@ -6130,8 +5437,8 @@ def get_promo_codes():
         return jsonify(result)
     except Exception as e:
         db.close()
-        print(f"❌ Ошибка получения промокодов: {e}")
         return jsonify([])
+
 
 @app.route('/api/products/with-discounts', methods=['GET'])
 def get_products_with_discounts():
@@ -6140,7 +5447,6 @@ def get_products_with_discounts():
     try:
         category = request.args.get('category', 'all')
 
-        # Получаем товары
         if category and category != 'all':
             products = db.execute('''
                                   SELECT *
@@ -6157,7 +5463,6 @@ def get_products_with_discounts():
                                   ORDER BY created_at DESC
                                   ''').fetchall()
 
-        # Получаем активные скидки
         discounts = db.execute('''
                                SELECT d.*, da.product_id, da.category, da.apply_to_all
                                FROM discounts d
@@ -6167,20 +5472,17 @@ def get_products_with_discounts():
                                  AND (d.end_date IS NULL OR d.end_date >= CURRENT_TIMESTAMP)
                                ''').fetchall()
 
-        # Применяем скидки к товарам
         result = []
 
         for product in products:
             product_dict = dict(product)
 
-            # Рассчитываем скидку для товара
             product_discount = 0
             discounted_price = product_dict['price']
 
             for discount in discounts:
                 discount_dict = dict(discount)
 
-                # Проверяем применение скидки
                 applies = False
 
                 if discount_dict['apply_to_all']:
@@ -6211,8 +5513,6 @@ def get_products_with_discounts():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Ошибка получения товаров со скидками: {e}")
-        # Возвращаем товары без скидок при ошибке
         if 'products' in locals():
             return jsonify([dict(p) for p in products])
         return jsonify([])
@@ -6225,7 +5525,6 @@ def admin_products():
     db = get_db()
     try:
         if request.method == 'GET':
-            # Проблема: нужно добавить поддержку весовых товаров
             products = db.execute('''
                                   SELECT p.*,
                                          pc.name as category_name,
@@ -6250,14 +5549,12 @@ def admin_products():
         elif request.method == 'POST':
             data = request.json
 
-            # Общие обязательные поля
             if not data or 'name' not in data:
                 return jsonify({'success': False, 'error': 'Введите название товара'}), 400
 
             product_type = data.get('product_type', 'piece')
 
             if product_type == 'piece':
-                # ШТУЧНЫЙ ТОВАР
                 if 'price' not in data:
                     return jsonify({'success': False, 'error': 'Укажите цену товара'}), 400
 
@@ -6275,11 +5572,9 @@ def admin_products():
                      data.get('unit', 'шт')))
 
             else:
-                # ВЕСОВОЙ ТОВАР - ИСПРАВЛЕННАЯ ВЕРСИЯ
                 if 'price_per_kg' not in data:
                     return jsonify({'success': False, 'error': 'Укажите цену за кг'}), 400
 
-                # Получаем значения для весового товара
                 price_per_kg = float(data.get('price_per_kg', 0))
                 stock_weight = float(data.get('stock_weight', 0))
 
@@ -6317,7 +5612,6 @@ def admin_products():
             product_type = data.get('product_type', 'piece')
 
             if product_type == 'piece':
-                # ШТУЧНЫЙ ТОВАР
                 db.execute(
                     '''UPDATE products
                        SET name         = ?,
@@ -6339,20 +5633,17 @@ def admin_products():
                      data.get('unit', 'шт'),
                      product_id))
             else:
-                # ВЕСОВОЙ ТОВАР - ИСПРАВЛЕНО ДЛЯ РЕДАКТИРОВАНИЯ
-                # Получаем значения для весового товара
                 price_per_kg = float(data.get('price_per_kg', 0))
                 stock_weight = float(data.get('stock_weight', 0))
 
                 db.execute(
                     '''UPDATE products
-                       SET name        = ?,
-                           description = ?,
-                           price       = ?,
-                           # Используем price_per_kg как price
-                           image_url    = ?,  # URL может быть пустым
+                       SET name         = ?,
+                           description  = ?,
+                           price        = ?,
+                           image_url    = ?,
                            category     = ?,
-                           stock        = ?,  # Используем stock_weight как stock
+                           stock        = ?,
                            product_type = ?,
                            unit         = ?,
                            weight_unit  = ?,
@@ -6394,6 +5685,7 @@ def admin_products():
     finally:
         db.close()
 
+
 @app.route('/api/admin/orders', methods=['GET'])
 @rate_limit(max_requests=30)
 def api_admin_orders():
@@ -6401,20 +5693,20 @@ def api_admin_orders():
     try:
         db = get_db()
 
-        # Получаем все заказы с информацией о курьере и промокоде
         orders = db.execute('''
-            SELECT o.*,
-                   a.status    as assignment_status,
-                   c.full_name as courier_name,
-                   c.phone     as courier_phone,
-                   pc.code as promo_code,
-                   (o.total_price + COALESCE(o.delivery_cost, 0) - COALESCE(o.discount_amount, 0)) as total_with_discount
-            FROM orders o
-            LEFT JOIN order_assignments a ON o.id = a.order_id
-            LEFT JOIN couriers c ON a.courier_id = c.id
-            LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
-            ORDER BY o.created_at DESC LIMIT 100
-        ''').fetchall()
+                            SELECT o.*,
+                                   a.status                                                                        as assignment_status,
+                                   c.full_name                                                                     as courier_name,
+                                   c.phone                                                                         as courier_phone,
+                                   pc.code                                                                         as promo_code,
+                                   (o.total_price + COALESCE(o.delivery_cost, 0) -
+                                    COALESCE(o.discount_amount, 0))                                                as total_with_discount
+                            FROM orders o
+                                     LEFT JOIN order_assignments a ON o.id = a.order_id
+                                     LEFT JOIN couriers c ON a.courier_id = c.id
+                                     LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
+                            ORDER BY o.created_at DESC LIMIT 100
+                            ''').fetchall()
 
         if not orders:
             return jsonify([])
@@ -6423,7 +5715,6 @@ def api_admin_orders():
         for order in orders:
             order_dict = dict(order)
 
-            # Парсим items
             try:
                 if order_dict.get('items'):
                     order_dict['items'] = json.loads(order_dict['items'])
@@ -6432,14 +5723,12 @@ def api_admin_orders():
             except:
                 order_dict['items'] = []
 
-            # Парсим адрес доставки
             if order_dict.get('delivery_address'):
                 try:
                     order_dict['delivery_address'] = json.loads(order_dict['delivery_address'])
                 except:
                     order_dict['delivery_address'] = {}
 
-            # Форматируем дату
             if order_dict.get('created_at'):
                 try:
                     dt = datetime.strptime(order_dict['created_at'], '%Y-%m-%d %H:%M:%S')
@@ -6452,11 +5741,11 @@ def api_admin_orders():
         return jsonify(orders_list)
 
     except Exception as e:
-        print(f"❌ Ошибка получения заказов для админки: {e}")
         return jsonify([])
     finally:
         if 'db' in locals():
             db.close()
+
 
 @app.route('/api/admin/categories/manage', methods=['GET', 'POST', 'DELETE'])
 def admin_manage_categories():
@@ -6512,6 +5801,7 @@ def get_pickup_points():
     finally:
         db.close()
 
+
 @app.route('/api/user/addresses', methods=['GET', 'POST'])
 def user_addresses():
     db = get_db()
@@ -6541,19 +5831,16 @@ def user_addresses():
             count = db.execute('SELECT COUNT(*) FROM user_addresses WHERE user_id = ?', (user_id,)).fetchone()[0]
             is_default = 1 if count == 0 else data.get('is_default', 0)
 
-            # 🚨 ИСПРАВЛЕНИЕ: Добавляем недостающие поля building, entrance и comment
             cursor = db.execute('''
-                                INSERT INTO user_addresses (
-                                    user_id, city, street, house, 
-                                    building, entrance, apartment, floor, doorcode,
-                                    recipient_name, phone, comment, is_default
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                INSERT INTO user_addresses (user_id, city, street, house,
+                                                            building, entrance, apartment, floor, doorcode,
+                                                            recipient_name, phone, comment, is_default)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (
                                     user_id,
                                     data['city'],
                                     data['street'],
                                     data['house'],
-                                    # 🚨 ДОБАВЛЯЕМ ПРОПУЩЕННЫЕ ПОЛЯ:
                                     data.get('building', ''),
                                     data.get('entrance', ''),
                                     data.get('apartment', ''),
@@ -6594,11 +5881,9 @@ def api_bot_register_user():
 
         db = get_db()
 
-        # Проверяем существует ли пользователь
         existing = db.execute('SELECT id FROM telegram_users WHERE telegram_id = ?', (telegram_id,)).fetchone()
 
         if existing:
-            # Обновляем информацию
             db.execute('''
                        UPDATE telegram_users
                        SET username   = ?,
@@ -6608,7 +5893,6 @@ def api_bot_register_user():
                        WHERE telegram_id = ?
                        ''', (username, first_name, last_name, telegram_id))
         else:
-            # Создаем нового пользователя
             db.execute('''
                        INSERT INTO telegram_users (telegram_id, username, first_name, last_name)
                        VALUES (?, ?, ?, ?)
@@ -6735,7 +6019,6 @@ def admin_promo_code_detail(id):
     db = get_db()
     try:
         if request.method == 'GET':
-            # Получить промокод по ID
             promo_code = db.execute('SELECT * FROM promo_codes WHERE id = ?', (id,)).fetchone()
 
             if not promo_code:
@@ -6744,15 +6027,12 @@ def admin_promo_code_detail(id):
             return jsonify(dict(promo_code))
 
         elif request.method == 'PUT':
-            # Обновить промокод
             data = request.json
 
-            # Проверяем существование промокода
             promo_code = db.execute('SELECT id FROM promo_codes WHERE id = ?', (id,)).fetchone()
             if not promo_code:
                 return jsonify({'success': False, 'error': 'Промокод не найдена'}), 404
 
-            # Валидация
             if not data.get('code'):
                 return jsonify({'success': False, 'error': 'Введите код промокода'}), 400
 
@@ -6762,48 +6042,51 @@ def admin_promo_code_detail(id):
             if data.get('discount_type') in ['percentage', 'fixed'] and not data.get('value'):
                 return jsonify({'success': False, 'error': 'Укажите размер скидки'}), 400
 
-            # Проверяем уникальность кода (если изменился)
             existing = db.execute('SELECT id FROM promo_codes WHERE code = ? AND id != ?',
-                                (data['code'].upper(), id)).fetchone()
+                                  (data['code'].upper(), id)).fetchone()
             if existing:
                 return jsonify({'success': False, 'error': 'Такой промокод уже существует'}), 400
 
-            # Обновляем промокод
             db.execute('''
-                UPDATE promo_codes
-                SET code = ?, discount_type = ?, value = ?, usage_limit = ?,
-                    min_order_amount = ?, start_date = ?, end_date = ?,
-                    is_active = ?, one_per_customer = ?, exclude_sale_items = ?
-                WHERE id = ?
-            ''', (
-                data.get('code').upper(),
-                data.get('discount_type'),
-                data.get('value', 0),
-                data.get('usage_limit'),
-                data.get('min_order_amount', 0),
-                data.get('start_date'),
-                data.get('end_date'),
-                data.get('is_active', True),
-                data.get('one_per_customer', False),
-                data.get('exclude_sale_items', False),
-                id
-            ))
+                       UPDATE promo_codes
+                       SET code               = ?,
+                           discount_type      = ?,
+                           value              = ?,
+                           usage_limit        = ?,
+                           min_order_amount   = ?,
+                           start_date         = ?,
+                           end_date           = ?,
+                           is_active          = ?,
+                           one_per_customer   = ?,
+                           exclude_sale_items = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('code').upper(),
+                           data.get('discount_type'),
+                           data.get('value', 0),
+                           data.get('usage_limit'),
+                           data.get('min_order_amount', 0),
+                           data.get('start_date'),
+                           data.get('end_date'),
+                           data.get('is_active', True),
+                           data.get('one_per_customer', False),
+                           data.get('exclude_sale_items', False),
+                           id
+                       ))
 
             db.commit()
             return jsonify({'success': True})
 
         elif request.method == 'DELETE':
-            # Удалить промокод
             promo_code = db.execute('SELECT id FROM promo_codes WHERE id = ?', (id,)).fetchone()
             if not promo_code:
                 return jsonify({'success': False, 'error': 'Промокод не найден'}), 404
 
-            # Проверяем, используется ли промокод в заказах
             usage_count = db.execute('SELECT COUNT(*) FROM orders WHERE promo_code_id = ?', (id,)).fetchone()[0]
             if usage_count > 0:
-                return jsonify({'success': False, 'error': 'Нельзя удалить промокод, который уже использовался в заказах'}), 400
+                return jsonify(
+                    {'success': False, 'error': 'Нельзя удалить промокод, который уже использовался в заказах'}), 400
 
-            # Удаляем промокод
             db.execute('DELETE FROM promo_codes WHERE id = ?', (id,))
             db.commit()
 
@@ -6826,12 +6109,10 @@ def admin_promo_code_status_api(id):
         if is_active is None:
             return jsonify({'success': False, 'error': 'Не указан статус'}), 400
 
-        # Проверяем существование промокода
         promo_code = db.execute('SELECT id FROM promo_codes WHERE id = ?', (id,)).fetchone()
         if not promo_code:
             return jsonify({'success': False, 'error': 'Промокод не найден'}), 404
 
-        # Обновляем статус
         db.execute('UPDATE promo_codes SET is_active = ? WHERE id = ?', (is_active, id))
         db.commit()
 
@@ -6842,6 +6123,7 @@ def admin_promo_code_status_api(id):
     finally:
         db.close()
 
+
 # ========== API ДЛЯ ДЕРЕВА КАТЕГОРИЙ ==========
 
 @app.route('/api/admin/categories/tree', methods=['GET', 'POST'])
@@ -6850,23 +6132,20 @@ def admin_categories_tree_api():
     db = get_db()
     try:
         if request.method == 'GET':
-            # Получить дерево категорий
             categories = db.execute('''
-                SELECT pc.*,
-                       d.name as discount_name
-                FROM product_categories pc
-                LEFT JOIN discounts d ON pc.discount_id = d.id
-                ORDER BY pc.sort_order, pc.name
-            ''').fetchall()
+                                    SELECT pc.*,
+                                           d.name as discount_name
+                                    FROM product_categories pc
+                                             LEFT JOIN discounts d ON pc.discount_id = d.id
+                                    ORDER BY pc.sort_order, pc.name
+                                    ''').fetchall()
 
-            # Строим дерево
             categories_dict = {}
             root_categories = []
 
             for cat in categories:
                 cat_dict = dict(cat)
                 cat_dict['children'] = []
-                # Получаем количество товаров в категории
                 product_count = db.execute(
                     'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
                     (cat_dict['name'], cat_dict['id'])
@@ -6885,14 +6164,11 @@ def admin_categories_tree_api():
             return jsonify(root_categories)
 
         elif request.method == 'POST':
-            # Создать новую категорию
             data = request.json
 
-            # Валидация
             if not data.get('name'):
                 return jsonify({'success': False, 'error': 'Введите название категории'}), 400
 
-            # Проверяем уникальность имени
             existing = db.execute(
                 'SELECT id FROM product_categories WHERE name = ?',
                 (data['name'],)
@@ -6901,25 +6177,23 @@ def admin_categories_tree_api():
             if existing:
                 return jsonify({'success': False, 'error': 'Категория с таким именем уже существует'}), 400
 
-            # Создаем категорию
             cursor = db.execute('''
-                INSERT INTO product_categories (
-                    name, parent_id, discount_id, sort_order,
-                    description, icon, color,
-                    seo_title, seo_description, seo_keywords
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data.get('name'),
-                data.get('parent_id'),
-                data.get('discount_id'),
-                data.get('sort_order', 0),
-                data.get('description'),
-                data.get('icon'),
-                data.get('color', '#667eea'),
-                data.get('seo_title'),
-                data.get('seo_description'),
-                data.get('seo_keywords')
-            ))
+                                INSERT INTO product_categories (name, parent_id, discount_id, sort_order,
+                                                                description, icon, color,
+                                                                seo_title, seo_description, seo_keywords)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ''', (
+                                    data.get('name'),
+                                    data.get('parent_id'),
+                                    data.get('discount_id'),
+                                    data.get('sort_order', 0),
+                                    data.get('description'),
+                                    data.get('icon'),
+                                    data.get('color', '#667eea'),
+                                    data.get('seo_title'),
+                                    data.get('seo_description'),
+                                    data.get('seo_keywords')
+                                ))
 
             category_id = cursor.lastrowid
             db.commit()
@@ -6938,20 +6212,18 @@ def admin_category_tree_detail_api(id):
     db = get_db()
     try:
         if request.method == 'GET':
-            # Получить категорию по ID
             category = db.execute('''
-                SELECT pc.*,
-                       d.name as discount_name
-                FROM product_categories pc
-                LEFT JOIN discounts d ON pc.discount_id = d.id
-                WHERE pc.id = ?
-            ''', (id,)).fetchone()
+                                  SELECT pc.*,
+                                         d.name as discount_name
+                                  FROM product_categories pc
+                                           LEFT JOIN discounts d ON pc.discount_id = d.id
+                                  WHERE pc.id = ?
+                                  ''', (id,)).fetchone()
 
             if not category:
                 return jsonify({'success': False, 'error': 'Категория не найдена'}), 404
 
             category_dict = dict(category)
-            # Получаем количество товаров в категории
             product_count = db.execute(
                 'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
                 (category_dict['name'], id)
@@ -6959,15 +6231,14 @@ def admin_category_tree_detail_api(id):
             category_dict['product_count'] = product_count
             category_dict['has_products'] = product_count > 0
 
-            # Получаем детей категории
             children = db.execute('''
-                SELECT pc.*,
-                       d.name as discount_name
-                FROM product_categories pc
-                LEFT JOIN discounts d ON pc.discount_id = d.id
-                WHERE pc.parent_id = ?
-                ORDER BY pc.sort_order, pc.name
-            ''', (id,)).fetchall()
+                                  SELECT pc.*,
+                                         d.name as discount_name
+                                  FROM product_categories pc
+                                           LEFT JOIN discounts d ON pc.discount_id = d.id
+                                  WHERE pc.parent_id = ?
+                                  ORDER BY pc.sort_order, pc.name
+                                  ''', (id,)).fetchall()
 
             for child in children:
                 child_dict = dict(child)
@@ -6983,19 +6254,15 @@ def admin_category_tree_detail_api(id):
             return jsonify(category_dict)
 
         elif request.method == 'PUT':
-            # Обновить категорию
             data = request.json
 
-            # Проверяем существование категории
             category = db.execute('SELECT id FROM product_categories WHERE id = ?', (id,)).fetchone()
             if not category:
                 return jsonify({'success': False, 'error': 'Категория не найдена'}), 404
 
-            # Валидация
             if not data.get('name'):
                 return jsonify({'success': False, 'error': 'Введите название категории'}), 400
 
-            # Проверяем уникальность имени
             existing = db.execute(
                 'SELECT id FROM product_categories WHERE name = ? AND id != ?',
                 (data['name'], id)
@@ -7004,37 +6271,41 @@ def admin_category_tree_detail_api(id):
             if existing:
                 return jsonify({'success': False, 'error': 'Категория с таким именем уже существует'}), 400
 
-            # Обновляем категорию
             db.execute('''
-                UPDATE product_categories
-                SET name        = ?,parent_id = ?,discount_id = ?,sort_order = ?,
-                    description = ?,icon = ?,color = ?,
-                    seo_title   = ?,seo_description = ?,seo_keywords = ?
-                WHERE id = ?
-            ''', (
-                data.get('name'),
-                data.get('parent_id'),
-                data.get('discount_id'),
-                data.get('sort_order', 0),
-                data.get('description'),
-                data.get('icon'),
-                data.get('color', '#667eea'),
-                data.get('seo_title'),
-                data.get('seo_description'),
-                data.get('seo_keywords'),
-                id
-            ))
+                       UPDATE product_categories
+                       SET name            = ?,
+                           parent_id       = ?,
+                           discount_id     = ?,
+                           sort_order      = ?,
+                           description     = ?,
+                           icon            = ?,
+                           color           = ?,
+                           seo_title       = ?,
+                           seo_description = ?,
+                           seo_keywords    = ?
+                       WHERE id = ?
+                       ''', (
+                           data.get('name'),
+                           data.get('parent_id'),
+                           data.get('discount_id'),
+                           data.get('sort_order', 0),
+                           data.get('description'),
+                           data.get('icon'),
+                           data.get('color', '#667eea'),
+                           data.get('seo_title'),
+                           data.get('seo_description'),
+                           data.get('seo_keywords'),
+                           id
+                       ))
 
             db.commit()
             return jsonify({'success': True})
 
         elif request.method == 'DELETE':
-            # Удалить категорию
             category = db.execute('SELECT id FROM product_categories WHERE id = ?', (id,)).fetchone()
             if not category:
                 return jsonify({'success': False, 'error': 'Категория не найдена'}), 404
 
-            # Проверяем, есть ли товары в этой категории
             product_count = db.execute(
                 'SELECT COUNT(*) FROM products WHERE category = ? OR category_id = ?',
                 (category['name'], id)
@@ -7042,7 +6313,6 @@ def admin_category_tree_detail_api(id):
             if product_count > 0:
                 return jsonify({'success': False, 'error': 'Нельзя удалить категорию с товарами'}), 400
 
-            # Проверяем, есть ли подкатегории
             children_count = db.execute(
                 'SELECT COUNT(*) FROM product_categories WHERE parent_id = ?',
                 (id,)
@@ -7050,7 +6320,6 @@ def admin_category_tree_detail_api(id):
             if children_count > 0:
                 return jsonify({'success': False, 'error': 'Нельзя удалить категорию с подкатегориями'}), 400
 
-            # Удаляем категорию
             db.execute('DELETE FROM product_categories WHERE id = ?', (id,))
             db.commit()
 
@@ -7074,7 +6343,6 @@ def apply_discounts():
 
         db = get_db()
 
-        # Получаем все активные скидки
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         discounts = db.execute('''
                                SELECT *
@@ -7093,20 +6361,17 @@ def apply_discounts():
             quantity = item.get('quantity', 1)
             price = item.get('price', 0)
 
-            # Ищем скидку для товара
             best_discount = None
             best_discount_value = 0
 
             for discount in discounts:
                 discount_dict = dict(discount)
 
-                # Проверяем применение скидки
                 applies = False
 
                 if discount_dict['apply_to'] == 'all':
                     applies = True
                 elif discount_dict['apply_to'] == 'category':
-                    # Получаем категорию товара
                     product = db.execute('SELECT category FROM products WHERE id = ?', (product_id,)).fetchone()
                     if product and product['category'] == discount_dict['target_category']:
                         applies = True
@@ -7115,14 +6380,12 @@ def apply_discounts():
                         applies = True
 
                 if applies:
-                    # Рассчитываем скидку
                     discount_value = 0
                     if discount_dict['discount_type'] == 'percentage':
                         discount_value = price * quantity * (discount_dict['value'] / 100)
                     elif discount_dict['discount_type'] == 'fixed':
                         discount_value = discount_dict['value'] * quantity
 
-                    # Если это лучшая скидка для товара
                     if discount_value > best_discount_value:
                         best_discount_value = discount_value
                         best_discount = discount_dict
@@ -7155,8 +6418,8 @@ def apply_discounts():
         })
 
     except Exception as e:
-        print(f"❌ Ошибка расчета скидок: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/security/logs', methods=['GET'])
 def get_security_logs():
@@ -7164,14 +6427,15 @@ def get_security_logs():
     try:
         db = get_db()
         logs = db.execute('''
-            SELECT * FROM security_logs 
-            ORDER BY created_at DESC 
-            LIMIT 100
-        ''').fetchall()
+                          SELECT *
+                          FROM security_logs
+                          ORDER BY created_at DESC LIMIT 100
+                          ''').fetchall()
         db.close()
         return jsonify([dict(log) for log in logs])
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/security/clear-failed-logins', methods=['POST'])
 def clear_failed_logins():
@@ -7191,17 +6455,15 @@ def handle_order_completed_callback_webhook(call):
     try:
         order_id = int(call['data'].replace('order_completed_', ''))
 
-        # Обновляем статус заказа
         db = get_db()
         db.execute('UPDATE orders SET status = ? WHERE id = ?',
                    ('completed', order_id))
         db.commit()
 
-        # Получаем информацию о заказе для отправки уведомления клиенту
         order = db.execute('''
                            SELECT o.*, u.username
                            FROM orders o
-                           LEFT JOIN telegram_users u ON o.user_id = u.telegram_id
+                                    LEFT JOIN telegram_users u ON o.user_id = u.telegram_id
                            WHERE o.id = ?
                            ''', (order_id,)).fetchone()
         db.close()
@@ -7209,7 +6471,6 @@ def handle_order_completed_callback_webhook(call):
         if order:
             telegram_id = order['user_id']
             if telegram_id:
-                # Отправляем уведомление клиенту, что заказ выдан
                 BOT_TOKEN = os.getenv('BOT_TOKEN', '8325707242:AAHklanhfvOEUN9EaD9XyB4mB7AMPNZZnsM')
                 if BOT_TOKEN:
                     message = f"✅ *ЗАКАЗ #{order_id} ВЫДАН*\n\n" \
@@ -7223,10 +6484,8 @@ def handle_order_completed_callback_webhook(call):
                         'parse_mode': 'Markdown'
                     }, timeout=5)
 
-        # Ответ админу
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         if BOT_TOKEN:
-            # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
             requests.post(answer_url, json={
                 'callback_query_id': call['id'],
@@ -7234,7 +6493,6 @@ def handle_order_completed_callback_webhook(call):
                 'show_alert': True
             }, timeout=5)
 
-            # Обновляем сообщение админа
             message = call['message']
             edit_url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
             requests.post(edit_url, json={
@@ -7247,27 +6505,23 @@ def handle_order_completed_callback_webhook(call):
         return jsonify({'ok': True})
 
     except Exception as e:
-        print(f"❌ Ошибка в handle_order_completed_callback_webhook: {e}")
         return jsonify({'ok': False, 'error': str(e)})
+
 
 def handle_order_ready_callback_webhook(call):
     """Обработка кнопки 'Заказ готов' через вебхук"""
     try:
         order_id = int(call['data'].replace('order_ready_', ''))
 
-        # Обновляем статус заказа
         db = get_db()
         db.execute('UPDATE orders SET status = ? WHERE id = ?',
                    ('ready_for_pickup', order_id))
         db.commit()
 
-        # Отправляем уведомление клиенту что заказ готов
         send_order_ready_notification(order_id)
 
-        # Ответ админу
         BOT_TOKEN = os.getenv('BOT_TOKEN')
         if BOT_TOKEN:
-            # Ответ на callback query
             answer_url = f'https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery'
             requests.post(answer_url, json={
                 'callback_query_id': call['id'],
@@ -7275,7 +6529,6 @@ def handle_order_ready_callback_webhook(call):
                 'show_alert': True
             }, timeout=5)
 
-            # Обновляем сообщение админа с новыми кнопками
             message = call['message']
             edit_url = f'https://api.telegram.org/bot{BOT_TOKEN}/editMessageText'
             requests.post(edit_url, json={
@@ -7299,20 +6552,18 @@ def handle_order_ready_callback_webhook(call):
         return jsonify({'ok': True})
 
     except Exception as e:
-        print(f"❌ Ошибка в handle_order_ready_callback_webhook: {e}")
         return jsonify({'ok': False, 'error': str(e)})
 
 
 # ========== ЗАПУСК С БЕЗОПАСНОСТЬЮ ==========
 if __name__ == '__main__':
-    # Настройки безопасности
     app.config.update(
         SESSION_COOKIE_SECURE=True,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
         PERMANENT_SESSION_LIFETIME=1800,
-        MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB максимум
+        MAX_CONTENT_LENGTH=16 * 1024 * 1024
     )
 
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)  # debug=False для продакшена
+    app.run(host='0.0.0.0', port=port, debug=False)

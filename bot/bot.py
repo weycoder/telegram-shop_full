@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Конфигурация
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://telegram-shop-full.onrender.com/')
+WEBAPP_URL = os.getenv('WEBAPP_URL', 'https://smof-shop.ru/')
 API_BASE_URL = WEBAPP_URL.rstrip('/')
 
 print(f"🔍 Токен бота: {BOT_TOKEN}")
@@ -1960,7 +1960,7 @@ async def courier_take_order(user, query, order_id):
                             f"4. Подтвердите доставку с фото",
                             parse_mode='Markdown',
                             reply_markup=InlineKeyboardMarkup([[
-                                InlineKeyboardButton("🚀 КУРЬЕР ПАНЕЛЬ", web_app=WebAppInfo(url="https://telegram-shop-full.onrender.com/courier")),
+                                InlineKeyboardButton("🚀 КУРЬЕР ПАНЕЛЬ", web_app=WebAppInfo(url="https://smof-shop.ru/courier")),
                                 InlineKeyboardButton("📦 Детали заказа", callback_data=f"courier_details_{order_id}")
                             ]])
                         )
