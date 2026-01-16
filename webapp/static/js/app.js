@@ -2971,38 +2971,12 @@ async editOrder(orderId) {
                 </div>
             </div>
         `;
-
         // Автоматическое поднятие экрана при фокусе на поле
         setTimeout(() => {
-            const inputs = document.querySelectorAll('#recipientName, #recipientPhone, #city, #street, #house, #apartment, #floor, #doorcode');
+            const inputs = document.querySelectorAll('#recipientName, #city, #street, #house, #building, #entrance, #apartment, #floor, #doorcode');
 
+            // Обработчики только для текстовых полей, НЕ для телефона
             inputs.forEach(input => {
-                input.addEventListener('focus', () => {
-                    // Плавное поднятие экрана
-                    setTimeout(() => {
-                        const rect = input.getBoundingClientRect();
-                        const isElementInViewport = (
-                            rect.top >= 0 &&
-                            rect.left >= 0 &&
-                            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-                        );
-
-                        if (!isElementInViewport) {
-                            input.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'center'
-                            });
-                        }
-                        this.addPhoneInputMask(); // Добавляем маску ввода телефона
-                        const firstInput = document.getElementById('recipientName');
-                        if (firstInput) {
-                            firstInput.focus();
-                        }
-                    }, 100);
-                });
-
-                // Автоматическое скрытие клавиатуры при нажатии Enter
                 input.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
@@ -3018,10 +2992,24 @@ async editOrder(orderId) {
                 });
             });
 
+            // Отдельная обработка для поля телефона
+            const phoneInput = document.getElementById('recipientPhone');
+            if (phoneInput) {
+                // Удаляем Enter-переход для телефона
+                phoneInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // НЕ переходим к следующему полю для телефона
+                    }
+                });
+
+                // Маска ввода для телефона
+                this.addPhoneInputMask(phoneInput);
+            }
+
             // Автофокус на первом поле
             const firstInput = document.getElementById('recipientName');
             if (firstInput) {
-                firstInput.focus();
                 firstInput.focus();
             }
         }, 100);
